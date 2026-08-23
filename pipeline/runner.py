@@ -26,7 +26,8 @@ import yaml
 from .assets import AssetResolver, MasterAsset
 from .brief import Brief, Variant, load_brief, stable_seed
 from .storage import PUBLIC_ROOT, StorageError, default_storage, get_storage
-from .checks import Finding, Verdict, evaluate, preflight_brief
+from .checks import (Finding, Verdict, compliance_score, evaluate,
+                     preflight_brief)
 from .compose import Composer
 from .providers import get_provider
 
@@ -44,6 +45,10 @@ class VariantResult:
     # because `s3://bucket/key` is an identifier and not a URL -- the two look
     # interchangeable in a manifest and exactly one of them works in a browser.
     share_url: str = ""
+    # 0-100 conformance to the rules in checks.py. Recorded next to the
+    # verdict, never instead of it -- the verdict decides shipping, the score
+    # only orders a review queue.
+    score: int = 100
     findings: list[dict] = field(default_factory=list)
     font_family: str = ""
     message: str = ""
@@ -204,6 +209,11 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
             target=store.uri(key_prefix + "/"),
             share=store.share_url(f"{key_prefix}/manifest.json"))
     composer = Composer(brand)
+    # Where per-stage thumbnails go. Inside the run folder, so a run is still
+    # one self-contained directory you can zip, and named with a leading
+    # underscore so it sorts away from the deliverables somebody came here to
+    # find.
+    stage_dir = os.path.join(out_dir, "_stages")
 
     # --- 3. one master per product ----------------------------------------
     masters: dict[str, MasterAsset] = {}
@@ -251,7 +261,15 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
             locale=v.market.locale, ratio=v.ratio.id)
         comp = composer.compose(
             master.path, v, path,
-            on_stage=lambda name, _v=v: log("stage", stage=name, variant=_v.id))
+            # `_v=v` binds the loop variable at definition time. Without it
+            # every closure would report the LAST variant, because Python
+            # closes over the name and not the value -- a classic way to get
+            # eighteen stage events that all claim to be the same creative.
+            on_stage=(lambda name, params=None, ms=0.0, preview="", _v=v:
+                      log("stage", stage=name, variant=_v.id,
+                          params=params or {}, ms=round(ms, 1),
+                          preview=preview)),
+            stage_dir=stage_dir, stage_key=v.id)
         res = evaluate(comp, v, brand, brief.prohibited_terms)
         log("stage", stage="checks", variant=v.id,
             rules=[f["rule"] for f in [x.as_dict() for x in res.findings]])
@@ -282,7 +300,7 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
             variant_id=v.id, product_id=v.product.id, locale=v.market.locale,
             ratio=v.ratio.id, path=os.path.relpath(path, out_dir),
             stored_uri=stored_uri, share_url=share_url,
-            verdict=res.verdict.value,
+            verdict=res.verdict.value, score=compliance_score(res.findings),
             findings=[f.as_dict() for f in res.findings],
             font_family=comp.font_family, message=comp.message,
             dominant_hex=comp.dominant_hex, master_origin=master.origin))
@@ -293,6 +311,7 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
         # app shows creatives as they land rather than in one batch at the
         # end, and it should not have to guess a path to do it.
         log("variant", variant=v.id, verdict=res.verdict.value,
+            score=compliance_score(res.findings),
             product=v.product.id, locale=v.market.locale, ratio=v.ratio.id,
             message=v.market.message, out_dir=out_dir,
             path=os.path.relpath(path, out_dir).replace(os.sep, "/"),

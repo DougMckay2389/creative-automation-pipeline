@@ -22,6 +22,7 @@ while the artwork is wrong.
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass, field
 
 from PIL import Image, ImageDraw, ImageFont
@@ -92,6 +93,56 @@ def _subject_box(img: Image.Image) -> tuple[int, int, int, int]:
     return (int(cx0 * sx), int(ry0 * sy), int(cx1 * sx), int(ry1 * sy))
 
 
+# --------------------------------------------------------------------------
+# The numbers the template is made of.
+#
+# These were literals scattered through compose() -- 0.42 here, 190 there,
+# 1.6 in a loop. That was fine while nothing outside this file needed to know
+# them, and stopped being fine the moment the UI started showing each stage
+# and what it did: a panel that says "scrim strength 0.745" has to be reading
+# the value the code actually used, or it is decoration pretending to be
+# instrumentation. Naming them here means there is exactly one place a value
+# lives, and `stage_params()` reports from the same constants compose() runs
+# on.
+# --------------------------------------------------------------------------
+
+# cut to spec
+SUBJECT_BIAS_V = 0.45      # crop centre, as a fraction down the new frame
+SAFE_MARGIN = 0.07         # of the short edge, kept clear on every side
+
+# legibility
+SCRIM_HEIGHT = 0.42        # of frame height
+SCRIM_ALPHA = 190          # peak alpha, 0-255
+SCRIM_FALLOFF = 1.6        # gamma on the gradient; >1 holds the top clearer
+
+# market copy
+TYPE_START = 0.085         # first type size tried, as a fraction of short edge
+LINE_HEIGHT = 1.28         # multiple of type size
+MAX_LINES = 4
+COPY_AREA = 0.62           # of the scrim's height the copy block may fill
+
+
+PREVIEW_EDGE = 420         # long edge of a stage thumbnail, in pixels
+
+
+def _save_preview(img: Image.Image, stage_dir: str, key: str,
+                  seq: int, name: str) -> str:
+    """Write a small JPEG of the frame mid-compose, return its relative path.
+
+    Deliberately small and lossy. There are six of these per deliverable and
+    eighteen deliverables in the sample brief -- over a hundred images whose
+    only job is to be looked at in a 130px box. At full resolution that is
+    hundreds of megabytes of disk to render a contact sheet.
+    """
+    os.makedirs(stage_dir, exist_ok=True)
+    thumb = img.convert("RGB").copy()
+    thumb.thumbnail((PREVIEW_EDGE, PREVIEW_EDGE), Image.LANCZOS)
+    fname = f"{key}-{seq}-{name}.jpg"
+    dest = os.path.join(stage_dir, fname)
+    thumb.save(dest, quality=78, optimize=True)
+    return fname
+
+
 def crop_to_ratio(img: Image.Image, target_w: int, target_h: int) -> Image.Image:
     """Crop to the target aspect, keeping the subject centred, then resize."""
     tw, th = target_w / target_h, img.width / img.height
@@ -106,7 +157,7 @@ def crop_to_ratio(img: Image.Image, target_w: int, target_h: int) -> Image.Image
         new_h = int(img.width / tw)
         # Bias upward: product shots put the subject above centre, and a
         # straight centre crop tends to cut the cap off a bottle.
-        y0 = int(min(max(scy - new_h * 0.45, 0), img.height - new_h))
+        y0 = int(min(max(scy - new_h * SUBJECT_BIAS_V, 0), img.height - new_h))
         box = (0, y0, img.width, y0 + new_h)
 
     return img.crop(box).resize((target_w, target_h), Image.LANCZOS)
@@ -194,37 +245,73 @@ class Composer:
         return self._logo
 
     def compose(self, master_path: str, variant: Variant, out_path: str,
-                on_stage=None) -> Composition:
+                on_stage=None, stage_dir: str = "",
+                stage_key: str = "") -> Composition:
         """Compose one deliverable.
 
-        `on_stage(name)` is an optional callback fired as each real stage
-        completes. It exists so a UI can light up a node graph from actual
+        `on_stage(name, params, ms, preview)` is an optional callback fired as
+        each real stage completes. It exists so a UI can light up from actual
         pipeline progress rather than from a timer -- an animation that is not
         driven by the work it depicts is a lie, and somebody will ask.
+
+        Pass `stage_dir` to also write a small JPEG of the frame after every
+        stage. Off by default: the CLI does not need eighteen extra folders of
+        thumbnails, and a library should not litter by default.
         """
-        tick = on_stage or (lambda _n: None)
+        sink = on_stage or (lambda *_a, **_k: None)
         r = variant.ratio
+
+        # Each tick carries three things a UI needs and could not otherwise
+        # get: the numbers this stage ran on, how long it took, and a PICTURE
+        # of the frame at that instant. The picture is the part that matters --
+        # a progress graph tells you a stage ran; a thumbnail tells you what it
+        # did, which is the only way to see that the scrim landed in the wrong
+        # place or the crop ate the cap off a bottle.
+        t_prev = time.perf_counter()
+        seq = [0]
+
+        def tick(name, params=None, image=None):
+            nonlocal t_prev
+            now = time.perf_counter()
+            ms = (now - t_prev) * 1000.0
+            t_prev = now
+            seq[0] += 1
+            preview = ""
+            if stage_dir and image is not None:
+                try:
+                    preview = _save_preview(image, stage_dir, stage_key,
+                                            seq[0], name)
+                except Exception:                                # noqa: BLE001
+                    # A preview is an aid, never the deliverable. Losing one
+                    # must not lose the creative it was previewing.
+                    preview = ""
+            sink(name, params=params or {}, ms=ms, preview=preview)
+
         base = Image.open(master_path).convert("RGB")
         canvas = crop_to_ratio(base, r.width, r.height).convert("RGBA")
-        tick("crop")
+        tick("crop", {"Vertical subject bias": SUBJECT_BIAS_V,
+                      "Safe margin": SAFE_MARGIN,
+                      "Target": f"{r.width}x{r.height}"}, canvas)
         draw = ImageDraw.Draw(canvas)
         warnings: list[str] = []
 
         short_edge = min(r.width, r.height)
-        margin = int(short_edge * 0.07)
+        margin = int(short_edge * SAFE_MARGIN)
 
         # --- scrim ---------------------------------------------------------
         # Text over an arbitrary photograph is a contrast lottery. A gradient
         # scrim across the lower third makes legibility a property of the
         # template rather than of whatever the model happened to generate.
-        scrim_h = int(r.height * 0.42)
+        scrim_h = int(r.height * SCRIM_HEIGHT)
         scrim = Image.new("RGBA", (r.width, scrim_h), (0, 0, 0, 0))
         sd = ImageDraw.Draw(scrim)
         for i in range(scrim_h):
-            a = int(190 * (i / scrim_h) ** 1.6)
+            a = int(SCRIM_ALPHA * (i / scrim_h) ** SCRIM_FALLOFF)
             sd.line([(0, i), (r.width, i)], fill=(10, 12, 16, a))
         canvas.alpha_composite(scrim, (0, r.height - scrim_h))
-        tick("scrim")
+        tick("scrim", {"Scrim height": SCRIM_HEIGHT,
+                       "Scrim strength": round(SCRIM_ALPHA / 255, 3),
+                       "Scrim falloff": SCRIM_FALLOFF}, canvas)
 
         # --- message -------------------------------------------------------
         rf = font_for(variant.market.locale, variant.market.message, self.typography)
@@ -232,12 +319,12 @@ class Composer:
             warnings.append("CJK market rendered with a Latin face")
 
         text_max_w = r.width - 2 * margin
-        text_max_h = int(scrim_h * 0.62)
+        text_max_h = int(scrim_h * COPY_AREA)
         font, lines = _fit_message(
             draw, variant.market.message, rf, text_max_w, text_max_h,
-            start_px=int(short_edge * 0.085))
+            start_px=int(short_edge * TYPE_START))
 
-        line_h = font.size * 1.28
+        line_h = font.size * LINE_HEIGHT
         block_h = line_h * len(lines)
         y = r.height - margin - block_h
         widest = 0.0
@@ -249,7 +336,12 @@ class Composer:
         # Measure the type we actually drew, not the size we asked for.
         probe = font.getbbox("Hxg")
         cap_px = float(probe[3] - probe[1]) if probe else float(font.size)
-        tick("message")
+        tick("message", {"Starting type size": TYPE_START,
+                         "Line height": LINE_HEIGHT,
+                         "Maximum lines": MAX_LINES,
+                         "Copy area": COPY_AREA,
+                         "Lines drawn": len(lines),
+                         "Face": rf.family}, canvas)
 
         # --- logo ----------------------------------------------------------
         logo_box = None
@@ -268,14 +360,20 @@ class Composer:
             # Clearspace actually available on the tightest side, in logo heights.
             clear_ratio = min(lx, ly, r.width - (lx + lw), r.height - (ly + lh)) / max(1, lh)
 
-        tick("logo")
+        tick("logo", {"Logo width": float(self.logo_cfg.get("scale", 0.16)),
+                      "Minimum clearspace": float(
+                          self.logo_cfg.get("min_clearspace", 0.5)),
+                      "Clearspace achieved": round(clear_ratio, 2),
+                      "Present": "yes" if logo is not None else "NO"}, canvas)
 
         out = canvas.convert("RGB")
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         out.save(out_path, quality=92, optimize=True)
 
         dom = dominant_colors(out)
-        tick("measure")
+        tick("measure", {"Dominant colours": " ".join(dom[:3]),
+                         "Type cap height": f"{cap_px:.0f}px",
+                         "Output": f"{r.width}x{r.height}"}, out)
 
         return Composition(
             path=out_path, width=r.width, height=r.height,

@@ -37,6 +37,42 @@ class Verdict(str, Enum):
     BLOCK = "block"
 
 
+def compliance_score(findings) -> int:
+    """One number for "how clean is this creative", 0-100.
+
+    A deliberately blunt rubric, stated here so it can be argued with:
+
+        blocker  -35    it cannot ship
+        major    -12    a human has to look
+        minor     -4    worth noting, ship anyway
+
+    It exists because a wall of eighteen thumbnails needs a way to say "this
+    one first" at a glance, and a verdict alone only has three values -- two
+    creatives can both be `review` while one has a single soft palette drift
+    and the other has four findings.
+
+    What it is NOT is a quality judgement. It measures conformance to the
+    rules in this file and nothing else; a perfectly on-brand, on-spec,
+    entirely boring creative scores 100. The verdict, not the score, is what
+    decides whether something ships -- which is why the two are always shown
+    together and the score never appears on its own.
+
+    Accepts Findings or their dicts, because the manifest round-trips through
+    JSON and a scoring function that only works before serialisation is a
+    scoring function you cannot recompute.
+    """
+    cost = {Severity.BLOCKER: 35, Severity.MAJOR: 12, Severity.MINOR: 4}
+    total = 100
+    for f in findings:
+        sev = getattr(f, "severity", None)
+        if sev is None and isinstance(f, dict):
+            sev = f.get("severity")
+        if isinstance(sev, str):
+            sev = Severity(sev)
+        total -= cost.get(sev, 0)
+    return max(0, min(100, total))
+
+
 @dataclass
 class Finding:
     rule_id: str

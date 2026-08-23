@@ -111,7 +111,8 @@ def _is_stale() -> bool:
 # --------------------------------------------------------------------------
 
 STATE: dict = {"running": False, "lines": [], "summary": None, "error": None,
-               "report": None, "graph": {}, "seq": 0, "landed": []}
+               "report": None, "graph": {}, "seq": 0, "landed": [],
+               "stages": {}}
 LOCK = threading.Lock()
 
 # The live server object, so /api/shutdown can stop it. Set in main().
@@ -157,6 +158,21 @@ EVENT_NODE = {
 }
 STAGE_NODE = {"crop": "crop", "scrim": "scrim", "message": "message",
               "logo": "logo", "measure": "measure", "checks": "checks"}
+
+# What each pipeline stage is called on screen, and the order they run in.
+#
+# The internal names are what the code does; these are what a creative person
+# would call it. "scrim" is jargon for the gradient that keeps type readable,
+# so the panel says "legibility" -- the stage's PURPOSE, which is what someone
+# reviewing the output needs, while the code keeps the name of the mechanism.
+STAGE_LABELS = [
+    ("crop",    "cut to spec",  "#e2a13d"),
+    ("scrim",   "legibility",   "#5b8dd6"),
+    ("message", "market copy",  "#c77bd0"),
+    ("logo",    "brand mark",   "#4bbfa4"),
+    ("measure", "measure",      "#d8c04a"),
+    ("checks",  "checks",       "#7f8a99"),
+]
 
 
 def _reduce(rec: dict) -> None:
@@ -215,6 +231,19 @@ def _on_event(rec: dict) -> None:
         # land instead of waiting for the whole run. Newest first, because
         # that is the order the gallery shows them in and doing it here means
         # the page does not have to re-sort on every poll.
+        # Stage records, kept per variant so the results panel can show what
+        # each stage did to THIS creative. Keyed by variant id because stages
+        # from eighteen deliverables arrive interleaved -- they are produced in
+        # order per creative, but the stream is one flat sequence.
+        if rec.get("event") == "stage" and rec.get("variant"):
+            STATE["stages"].setdefault(rec["variant"], []).append({
+                "stage": rec.get("stage"),
+                "params": rec.get("params") or {},
+                "ms": rec.get("ms", 0),
+                "preview": rec.get("preview", ""),
+                "rules": rec.get("rules") or [],
+            })
+
         if rec.get("event") == "variant":
             # stored_uri and share_url were missing from this list, which is
             # why the cloud chip only ever appeared after a run finished: the
@@ -223,7 +252,7 @@ def _on_event(rec: dict) -> None:
             # out. The gallery is not supposed to change when the run ends.
             STATE["landed"].insert(0, {
                 k: rec.get(k) for k in
-                ("variant", "verdict", "product", "locale", "ratio",
+                ("variant", "verdict", "score", "product", "locale", "ratio",
                  "message", "path", "out_dir", "findings",
                  "stored_uri", "share_url")})
 
@@ -461,6 +490,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json({"running": STATE["running"],
                                    "lines": STATE["lines"],
                                    "landed": STATE["landed"],
+                                   "stages": STATE["stages"],
+                                   "stage_labels": STAGE_LABELS,
                                    "stale": _is_stale(),
                                    "graph": STATE["graph"],
                                    "summary": STATE["summary"],
@@ -711,7 +742,8 @@ class Handler(SimpleHTTPRequestHandler):
                 if STATE["running"]:
                     return self._json({"error": "a run is already in progress"}, 409)
                 STATE.update(running=True, lines=[], summary=None, error=None,
-                             report=None, graph={}, seq=0, landed=[])
+                             report=None, graph={}, seq=0, landed=[],
+                             stages={})
             p = self._safe(body.get("path", ""))
             if not p:
                 with LOCK:

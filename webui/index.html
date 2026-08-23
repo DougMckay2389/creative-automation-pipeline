@@ -303,6 +303,93 @@ a.rep{font-size:13px;color:var(--accent)}
        text-align:right;line-height:1.3}
 .prow2 .mstrip{padding:0;flex:1;min-width:0}
 
+/* ---- results: one panel per market ----
+   The dark strip is not decoration. The pipeline is the part of this tool
+   that normally has to be taken on trust, so it gets the visual weight of an
+   instrument panel while everything around it stays paper-light -- the eye
+   goes to the thing worth inspecting. */
+.mpanel{background:var(--card);border:1px solid var(--line);border-radius:13px;
+  margin-top:18px;overflow:hidden}
+.mphead{display:flex;align-items:baseline;gap:11px;padding:13px 16px;flex-wrap:wrap}
+.mphead .loc{font:600 10px var(--mono);letter-spacing:.1em;text-transform:uppercase;
+  background:var(--ink);color:#fff;border-radius:5px;padding:4px 8px}
+.mpregion{font:700 16px var(--sans);letter-spacing:-.01em;color:var(--ink)}
+.mpmsg{font:italic 13px var(--sans);color:var(--ink2)}
+.mpflag{font:600 9px var(--mono);letter-spacing:.12em;color:#4a5d45;
+  background:#e8efe6;border-radius:4px;padding:4px 8px}
+.mpcount{margin-left:auto;font:11px var(--mono);color:var(--muted)}
+.mpcount b{color:var(--review)}
+
+.mptabs{display:flex;gap:4px;padding:0 16px;flex-wrap:wrap}
+.mptab{display:flex;flex-direction:column;gap:2px;align-items:flex-start;
+  border:1px solid var(--line);border-bottom:0;background:#f4f2ed;
+  border-radius:9px 9px 0 0;padding:8px 14px;cursor:pointer;text-align:left}
+.mptab .tabname{font:600 12.5px var(--sans);color:var(--ink2)}
+.mptab .tabdim{font:9.5px var(--mono);color:var(--muted)}
+.mptab:hover{background:#efece5}
+.mptab.on{background:#1b1f25;border-color:#1b1f25}
+.mptab.on .tabname{color:#fff}
+.mptab.on .tabdim{color:#93a0ae}
+
+/* ---- the pipeline strip ---- */
+.mpstage{background:#1b1f25;padding:14px 16px;border-top:1px solid #2a3038}
+.stwrap{overflow-x:auto;padding-bottom:6px}
+.strail{display:flex;align-items:stretch;gap:0;min-width:min-content}
+.starrow{flex:0 0 26px;align-self:center;height:1px;background:#39414c;position:relative}
+.starrow::after{content:'';position:absolute;right:0;top:-3px;
+  border-left:6px solid #39414c;border-top:3px solid transparent;
+  border-bottom:3px solid transparent}
+.stcard{flex:0 0 236px;background:#23282f;border:1px solid #2f3640;border-radius:9px;
+  display:flex;flex-direction:column;overflow:hidden}
+.sthead{display:flex;align-items:center;gap:7px;padding:9px 11px;
+  border-bottom:1px solid #2f3640}
+.stdot{width:8px;height:8px;border-radius:50%;flex:none}
+.stname{font:600 12px var(--sans);color:#e4e9ef}
+.stshot{height:104px;background:#12161b;display:flex;align-items:center;
+  justify-content:center;overflow:hidden}
+.stshot img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+.stshot.none{font:10px var(--mono);color:#5f6a78;text-align:center;line-height:1.6}
+.stbody{padding:9px 11px;display:flex;flex-direction:column;gap:5px;flex:1}
+.strow{display:flex;align-items:baseline;gap:8px;
+  font:10.5px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.stk{color:#8b96a4;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.stv{color:#dfe6ee;font-weight:600;font-variant-numeric:tabular-nums}
+.strules{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
+.strules code{font:9.5px ui-monospace,Menlo,Consolas,monospace;color:#c8d2dd;
+  background:#2f3640;border-radius:4px;padding:2px 5px}
+.stms{padding:7px 11px;border-top:1px solid #2f3640;
+  font:10px ui-monospace,Menlo,Consolas,monospace;color:#6f7a88;
+  font-variant-numeric:tabular-nums}
+.stempty{font:11.5px var(--mono);color:#7b8593;padding:18px 4px;line-height:1.7}
+
+/* ---- deliverables ---- */
+.mpdel{padding:13px 16px 16px}
+.mpdelhead{font:700 9.5px var(--mono);letter-spacing:.14em;color:var(--muted);
+  margin-bottom:9px}
+.mpdelrow{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px}
+.deltile{position:relative;flex:0 0 132px;border:1px solid var(--line);
+  border-radius:9px;overflow:hidden;background:#f2f0ea;cursor:pointer;padding:0;
+  display:block}
+.deltile.on{border-color:var(--ink);box-shadow:0 0 0 2px rgba(27,31,37,.16)}
+.delimg{display:block;height:132px;background:#e9e6de}
+.delimg img{width:100%;height:100%;object-fit:cover;display:block}
+/* Its own solid colours, not the .b-* chips used on light cards.
+   Those are pale-on-pale by design and vanish over a photograph; a verdict
+   that is hard to read is a verdict nobody acts on. Specificity is raised
+   deliberately so this wins over the shared chip rules. */
+.delbadge{position:absolute;top:6px;left:6px;font:700 8.5px var(--mono);
+  letter-spacing:.08em;text-transform:uppercase;border-radius:4px;padding:3px 6px;
+  color:#fff;border:0}
+.delbadge.b-pass{background:#2f7a34;color:#fff}
+.delbadge.b-review{background:#a8700c;color:#fff}
+.delbadge.b-block{background:#b23434;color:#fff}
+.delscore{position:absolute;top:6px;right:6px;font:700 10px var(--mono);
+  background:rgba(18,22,27,.78);color:#fff;border-radius:4px;padding:3px 6px;
+  font-variant-numeric:tabular-nums}
+.delcap{display:block;font:9.5px var(--mono);color:var(--muted);padding:5px 6px;
+  text-align:center;background:#fff}
+
 /* ---- where a creative lives ---- */
 .card{cursor:pointer}
 .card .where{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}
@@ -819,6 +906,9 @@ function renderForm(){
 
   syncYaml();
   paintProductStates();
+  // The channel names and regions the results panels label their tabs with
+  // live only in the brief, so they are indexed whenever it is rendered.
+  indexSpecs();
 }
 
 /* What will actually happen to each product, said plainly and shown.
@@ -1412,6 +1502,12 @@ function colour(line){
   return esc(line);
 }
 
+/* Per-stage records for the results panels, and the display names for them.
+   Kept from the last poll so the final render can build the pipeline strip
+   without asking the server again for something it has already sent. */
+let LAST_STAGES = {};
+let LAST_LABELS = [];
+
 async function tick(){
   const s = await (await fetch('/api/progress')).json();
   const el = $('#log');
@@ -1420,6 +1516,8 @@ async function tick(){
   drawFlow(s.graph);
   paintLanded(s.landed);          // creatives appear as they land
   paintStale(s.stale);
+  if (s.stages) LAST_STAGES = s.stages;
+  if (s.stage_labels) LAST_LABELS = s.stage_labels;
   if(!s.running){
     clearInterval(poll); poll=null;
     $('#run').disabled=false; $('#dot').classList.remove('live');
@@ -1553,46 +1651,171 @@ function render(sum, report){
   const order = [];
   for (const r of sum.results) if (!order.includes(r.locale)) order.push(r.locale);
 
-  const card = (r) => cardHtml(r, base);
+  // Everything the panels need, indexed once. LAST_RUN outlives this call
+  // because clicking a tab or a deliverable repaints one panel from it rather
+  // than re-rendering the whole results section, which would scroll the page
+  // out from under you mid-inspection.
+  LAST_RUN = {sum, base, region: REGION_BY_LOCALE};
 
-  // Product order, taken the same way as market order: first appearance in
-  // the results, which is the order the brief lists them.
-  const prodOrder = [];
-  for (const r of sum.results) {
-    const p = r.product_id || r.product;
-    if (!prodOrder.includes(p)) prodOrder.push(p);
-  }
-
-  for (const locale of order) {
-    const inMarket = sum.results.filter(r => r.locale === locale);
-    const bad = inMarket.filter(r => r.verdict !== 'pass').length;
-    // The market's line belongs to the market, not to each creative, so it
-    // sits on the header rather than being repeated under every tile.
-    const msg = (inMarket[0] || {}).message || '';
-
-    const body = prodOrder.map(prod => {
-      const mine = inMarket.filter(r => (r.product_id || r.product) === prod)
-                           .slice().reverse();       // newest leftmost
-      if (!mine.length) return '';
-      return `<div class="prow2" data-prod="${esc(prod)}">
-        <div class="pname">${esc(prod)}</div>
-        <div class="mstrip">${mine.map(card).join('')}</div>
-      </div>`;
-    }).join('');
-
-    html += `<div class="mrow" data-loc="${esc(locale)}">
-      <div class="mhead">
-        <span class="loc">${esc(locale)}</span>
-        <span class="msg">${esc(msg)}</span>
-        <span class="mcount">${inMarket.length} creative${inMarket.length===1?'':'s'}${
-          bad ? ` · <b>${bad} to review</b>` : ''}</span>
-      </div>
-      <div class="mbody">${body}</div>
-    </div>`;
-  }
+  html += order.map(locale => marketPanel(locale, sum, base)).join('');
   $('#results').innerHTML = html;
   SEEN.clear();                     // the final render owns the DOM from here
 }
+
+/* ------------------------------------------------------------------ *
+ * One market, as a panel
+ *
+ * The shape mirrors how somebody actually reviews a campaign: pick a market,
+ * pick a placement, look at how that creative was built, then scan everything
+ * the market produced.
+ *
+ *   header       locale, region, the market's own line of copy
+ *   tabs         one per aspect ratio, labelled with the CHANNEL from the
+ *                brief -- "Instagram feed 1080x1080" means something to a
+ *                marketer; "1:1" means something to a developer
+ *   pipeline     what each compose stage did to the selected creative, with
+ *                the real numbers it ran on and a thumbnail of the frame at
+ *                that moment. This is the part that makes the pipeline
+ *                inspectable instead of asking you to trust it.
+ *   deliverables every creative the market produced, verdict and score
+ *
+ * Clicking a deliverable re-points the pipeline strip at it, so the two
+ * halves are one instrument rather than two lists.
+ * ------------------------------------------------------------------ */
+
+let LAST_RUN = null;
+const REGION_BY_LOCALE = {};
+
+function marketPanel(locale, sum, base){
+  const inMarket = sum.results.filter(r => r.locale === locale);
+  if (!inMarket.length) return '';
+  const bad = inMarket.filter(r => r.verdict !== 'pass').length;
+  const msg = (inMarket[0] || {}).message || '';
+  const region = REGION_BY_LOCALE[locale] || '';
+
+  // Ratios in the order the brief lists them, not alphabetical -- 1:1 before
+  // 9:16 before 16:9 is a decision somebody made in the brief.
+  const ratios = [];
+  for (const r of inMarket) if (!ratios.includes(r.ratio)) ratios.push(r.ratio);
+  const selected = inMarket.find(r => r.ratio === ratios[0]) || inMarket[0];
+
+  return `<div class="mpanel" data-loc="${esc(locale)}">
+    <div class="mphead">
+      <span class="loc">${esc(locale)}</span>
+      <span class="mpregion">${esc(region || locale)}</span>
+      <span class="mpmsg">&ldquo;${esc(msg)}&rdquo;</span>
+      <span class="mpflag" title="every stage is measured on the rendered
+pixels, and nothing is auto-approved">CHECKED &middot; EVERY STAGE</span>
+      <span class="mpcount">${inMarket.length} creative${inMarket.length===1?'':'s'}${
+        bad ? ` &middot; <b>${bad} to review</b>` : ''}</span>
+    </div>
+    <div class="mptabs">${ratios.map((rt, i) => {
+      const one = inMarket.find(x => x.ratio === rt) || {};
+      const spec = SPEC_BY_RATIO[rt] || {};
+      return `<button class="mptab${i === 0 ? ' on' : ''}" data-ratio="${esc(rt)}"
+                data-loc="${esc(locale)}">
+        <span class="tabname">${esc(spec.channel || rt)}</span>
+        <span class="tabdim">${spec.width ? spec.width + '&times;' + spec.height : esc(rt)}</span>
+      </button>`;
+    }).join('')}</div>
+    <div class="mpstage" data-stage-host="${esc(locale)}">${stageStrip(selected, base)}</div>
+    <div class="mpdel">
+      <div class="mpdelhead">DELIVERABLES</div>
+      <div class="mpdelrow">${inMarket.map(r => deliverableTile(r, base, r === selected)).join('')}</div>
+    </div>
+  </div>`;
+}
+
+/* Aspect-ratio specs, so a tab can say "Instagram feed 1080x1080" rather than
+   "1:1". Filled from the brief on screen, which is the only place the channel
+   name exists -- the run results carry the ratio id and nothing else. */
+const SPEC_BY_RATIO = {};
+function indexSpecs(){
+  const rs = (BRIEF && BRIEF.aspect_ratios) || [];
+  for (const r of rs) if (r && r.id) SPEC_BY_RATIO[r.id] =
+    {channel: r.channel || '', width: r.width, height: r.height};
+  const ms = (BRIEF && BRIEF.markets) || [];
+  for (const m of ms) if (m && m.locale) REGION_BY_LOCALE[m.locale] = m.region || '';
+}
+
+function stageStrip(r, base){
+  if (!r) return '';
+  const stages = (LAST_STAGES && LAST_STAGES[r.variant_id || r.variant]) || [];
+  if (!stages.length) {
+    return `<div class="stempty">No stage previews for this creative.
+      They are written during a run &mdash; re-run to populate them.</div>`;
+  }
+  const labels = Object.fromEntries((LAST_LABELS || []).map(
+    ([k, label, colour]) => [k, {label, colour}]));
+
+  return `<div class="stwrap"><div class="strail">
+    ${stages.map((s, i) => {
+      const meta = labels[s.stage] || {label: s.stage, colour: '#7f8a99'};
+      const rows = Object.entries(s.params || {}).map(([k, v]) =>
+        `<div class="strow"><span class="stk">${esc(k)}</span>
+           <span class="stv">${esc(v)}</span></div>`).join('');
+      const rules = (s.rules || []).length
+        ? `<div class="strules">${s.rules.map(x => `<code>${esc(x)}</code>`).join(' ')}</div>`
+        : '';
+      const shot = s.preview
+        ? `<div class="stshot"><img loading="lazy"
+             src="${base}_stages/${encodeURIComponent(s.preview)}" alt=""></div>`
+        : `<div class="stshot none">no image<br>at this stage</div>`;
+      return `${i ? '<div class="starrow"></div>' : ''}
+        <div class="stcard">
+          <div class="sthead"><span class="stdot" style="background:${meta.colour}"></span>
+            <span class="stname">${esc(meta.label)}</span></div>
+          ${shot}
+          <div class="stbody">${rows}${rules}</div>
+          <div class="stms">${s.ms < 1 ? '&lt;1ms' : Math.round(s.ms) + 'ms'}</div>
+        </div>`;
+    }).join('')}
+  </div></div>`;
+}
+
+function deliverableTile(r, base, on){
+  const rel = String(r.path).replace(/\\/g,'/');
+  const cls = {pass:'b-pass', review:'b-review', block:'b-block'}[r.verdict] || 'b-review';
+  const score = (r.score === undefined || r.score === null) ? '' : r.score;
+  return `<button class="deltile${on ? ' on' : ''}" data-variant="${esc(r.variant_id || r.variant)}"
+      title="${esc(rel)}">
+    <span class="delimg"><img loading="lazy" src="${base}${rel}" alt=""></span>
+    <span class="delbadge ${cls}">${esc(r.verdict)}</span>
+    ${score !== '' ? `<span class="delscore">${score}</span>` : ''}
+    <span class="delcap">${esc(r.ratio)}</span>
+  </button>`;
+}
+
+/* Tabs and deliverable tiles both re-point the pipeline strip. Delegated from
+   #results because the panels are replaced wholesale on every render. */
+$('#results').addEventListener('click', (e) => {
+  const tab = e.target.closest('.mptab');
+  const tile = e.target.closest('.deltile');
+  if (!tab && !tile) return;
+  if (!LAST_RUN) return;
+  const panel = e.target.closest('.mpanel');
+  if (!panel) return;
+  const locale = panel.dataset.loc;
+  const inMarket = LAST_RUN.sum.results.filter(x => x.locale === locale);
+
+  let chosen;
+  if (tab) {
+    chosen = inMarket.find(x => x.ratio === tab.dataset.ratio);
+    panel.querySelectorAll('.mptab').forEach(t => t.classList.toggle('on', t === tab));
+  } else {
+    const id = tile.dataset.variant;
+    chosen = inMarket.find(x => (x.variant_id || x.variant) === id);
+    // Picking a deliverable also moves the tab, because the strip it is about
+    // to show belongs to that placement -- leaving the tab behind would say
+    // two different things at once.
+    panel.querySelectorAll('.mptab').forEach(
+      t => t.classList.toggle('on', chosen && t.dataset.ratio === chosen.ratio));
+  }
+  if (!chosen) return;
+  panel.querySelectorAll('.deltile').forEach(d => d.classList.toggle(
+    'on', d.dataset.variant === (chosen.variant_id || chosen.variant)));
+  panel.querySelector('.mpstage').innerHTML = stageStrip(chosen, LAST_RUN.base);
+});
 
 drawFlow({});
 $('#brief').addEventListener('change', loadBrief);

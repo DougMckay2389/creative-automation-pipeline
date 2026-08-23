@@ -38,6 +38,22 @@ BRIEF = "campaigns/aurora-spring.yaml"
 BRAND = "brandkit/brand.yaml"
 
 
+def deliverables(root: str) -> list[str]:
+    """The creatives, and only the creatives.
+
+    A run folder holds more images than deliverables: `_stages/` collects a
+    thumbnail after every compose stage so the app can show what each one did.
+    Counting every .jpg under the tree conflated the two and made "18
+    creatives" quietly become "108 images" -- a test that still passes for the
+    wrong reason is worse than one that fails, so it measures what it claims.
+    """
+    out = []
+    for base, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if not d.startswith("_")]
+        out += [os.path.join(base, f) for f in files if f.endswith(".jpg")]
+    return out
+
+
 # --- brief -----------------------------------------------------------------
 
 def test_brief_loads_and_expands():
@@ -138,9 +154,8 @@ def test_a_storage_failure_does_not_lose_the_run():
     assert summary.storage and len(summary.storage["errors"]) == summary.variants_planned, \
         "and every failure must be recorded rather than swallowed"
     assert summary.storage["objects"] == 0
-    on_disk = sum(len([f for f in fs if f.endswith(".jpg")])
-                  for _, _, fs in os.walk(summary.output_dir))
-    assert on_disk == summary.variants_planned, "the local folder must be complete"
+    assert len(deliverables(summary.output_dir)) == summary.variants_planned, \
+        "the local folder must be complete"
 
 
 def test_brief_rejects_duplicate_ids():
@@ -794,9 +809,19 @@ def test_full_run_produces_every_deliverable():
         assert s.generative_calls == 2, "must not generate per variant"
         assert sorted({r.master_origin for r in s.results}) == \
             ["generated", "resurfaced"], "the sample brief should show both paths"
-        jpgs = [f for _r, _d, fs in os.walk(tmp) for f in fs if f.endswith(".jpg")]
+        jpgs = deliverables(tmp)
         assert len(jpgs) == 18, f"expected 18 creatives, found {len(jpgs)}"
         assert sum(s.counts.values()) == 18
+        # Deliverables are foldered by product then aspect ratio, which the
+        # exercise asks for explicitly -- so it is asserted, not assumed.
+        rels = {os.path.relpath(p, s.output_dir).replace(os.sep, "/") for p in jpgs}
+        assert "hydra-glow-serum/1x1/hydra-glow-serum_en-US_1x1.jpg" in rels, \
+            f"unexpected output layout: {sorted(rels)[:3]}"
+        # And every stage left a preview behind, six per deliverable.
+        stages = [f for f in os.listdir(os.path.join(s.output_dir, "_stages"))
+                  if f.endswith(".jpg")]
+        assert len(stages) == 18 * 5, \
+            f"expected a preview per image-producing stage, found {len(stages)}"
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
