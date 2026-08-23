@@ -26,12 +26,15 @@ difference between "he built a script" and "he understands the problem."
 > deliverable. Two products, three markets, three aspect ratios is eighteen
 > deliverables — so the obvious pipeline makes eighteen generative calls.
 >
-> Mine makes one.
+> Mine makes two.
 >
-> One product already has a photograph, so it is reused; the creative team's
-> own asset always beats a generated approximation. The other product is
-> generated once at master resolution, and all nine of its deliverables are
-> composed from that master locally.
+> One product already has an approved photograph. That bottle is never
+> re-invented — it goes to the model as a reference image and only the surface
+> around it is rebuilt, because marketing needs it on volcanic rock this month
+> and marble next month, and re-shooting is the cost the whole exercise exists
+> to remove. The other product has no asset, so it is generated once at master
+> resolution. Every market and every aspect ratio is then composed from those
+> two masters locally.
 >
 > That matters because generation is the only slow, expensive, rate-limited
 > step in the whole system. Firefly Services documents four requests a minute
@@ -39,17 +42,19 @@ difference between "he built a script" and "he understands the problem."
 > minute. So the interesting engineering isn't calling the API — it's deciding
 > what *not* to send it."
 
-Then run `python run.py plan` on screen. It prints `generative 1` next to
+Then run `python run.py plan` on screen. It prints `generative 2` next to
 `deliverables 18` before anything is spent. That single line does most of your
-persuading for you.
+persuading for you — and note the ratio is the point, not the number: add a
+fourth market and it is 24 deliverables for the same 2 calls, because markets
+and ratios are free and only products cost anything.
 
 **Numbers to have cold:**
 
 | | |
 |---|---|
 | Deliverables from the sample brief | 18 (2 products × 3 markets × 3 ratios) |
-| Generative calls | 1 |
-| Products reused from disk | 1 |
+| Generative calls | 2 (one resurfaced, one generated) |
+| Products whose approved photo is preserved | 1 |
 | Tests | 38, no pytest required |
 | Rules in the gate | 8 (`SPEC-001..003`, `BRAND-001..003`, `LEGAL-001`, `SYS-00x`) |
 | Firefly default rate limit | 4 requests/minute |
