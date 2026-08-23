@@ -10,6 +10,13 @@
   --pass:#0ca30c; --review:#fab219; --block:#d03b3b;
 }
 *{box-sizing:border-box}
+/* The hidden attribute only sets display:none at the USER-AGENT level, so any
+   rule of ours that sets display beats it -- and a hidden element with
+   position:fixed;inset:0 becomes an invisible sheet over the whole page that
+   swallows every click. That happened: the closed asset modal kept
+   display:flex and nothing on the page could be clicked, Run included.
+   One line, and the whole class of bug is gone. */
+[hidden]{display:none !important}
 body{margin:0;background:var(--bg);color:var(--ink);
  font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
 .wrap{max-width:1220px;margin:0 auto;padding:26px 22px 70px}
@@ -158,6 +165,7 @@ a.rep{font-size:13px;color:var(--accent)}
 /* ---- the detail view ---- */
 #assetmodal{position:fixed;inset:0;z-index:60;background:rgba(18,20,15,.55);
  display:flex;align-items:center;justify-content:center;padding:26px}
+#assetmodal[hidden]{display:none}
 .amcard{background:var(--card);border-radius:14px;max-width:960px;width:100%;
  max-height:100%;overflow:auto;box-shadow:0 24px 70px rgba(0,0,0,.35)}
 .amhead{display:flex;align-items:center;gap:11px;padding:13px 17px;border-bottom:1px solid var(--line)}
