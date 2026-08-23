@@ -228,7 +228,7 @@ a.rep{font-size:13px;color:var(--accent)}
  display:flex;align-items:center;gap:10px}
 .flowpanel h2 .hint{font-weight:600;letter-spacing:0;text-transform:none;font-size:11.5px;
  color:var(--muted);margin-left:auto}
-.flowscroll{overflow-x:auto;background:
+.flowscroll{overflow-x:auto;padding:6px 0 2px;background:
   radial-gradient(circle at 1px 1px, rgba(0,0,0,.075) 1px, transparent 0) 0 0/22px 22px;
  background-color:#f4f2ed}
 svg.flow{display:block}
@@ -300,8 +300,8 @@ generated fresh from its current subject and surface, with a seed salted by the 
   <h2>Pipeline flow
     <span class="hint">driven by real pipeline events &mdash; the same records written to run.log.jsonl</span>
   </h2>
-  <div class="flowscroll"><svg class="flow" id="flow" width="1180" height="500"
-       viewBox="0 0 1180 500" role="img" aria-label="pipeline flow diagram"></svg></div>
+  <div class="flowscroll"><svg class="flow" id="flow" width="1180" height="544"
+       viewBox="0 0 1180 544" role="img" aria-label="pipeline flow diagram"></svg></div>
 </div>
 
 
@@ -340,7 +340,10 @@ let poll = null;
    ids. State comes from /api/progress -> graph, which the server folds
    from the pipeline's own event stream.
 ------------------------------------------------------------------ */
-const NW = 158, NH = 60, DY = 26;   // DY: room for the group labels
+const NW = 158, NH = 60, DY = 46;   // DY: room for the group labels
+// DY was 26, which put the first group label's baseline at y=6 -- its cap
+// height sat above the viewBox and the text was shaved off by the top
+// border. 46 puts the baseline at 26 with the caps starting around 16.
 const NODES = [
   {id:'brief',     x:14,  y:34,  ic:'📄', t:'Campaign brief',  s:'YAML in',            c:'#7C8B72'},
   {id:'preflight', x:196, y:34,  ic:'🛡', t:'Pre-flight',      s:'0 credits',    c:'#7C8B72'},
@@ -403,8 +406,8 @@ function drawFlow(graph){
   g1.appendChild(el('rect',{class:'grpbox',x:366,y:DY-14,width:182,height:236}));
   const l1 = el('text',{class:'grplab',x:372,y:DY-20});
   l1.textContent='WHERE THE IMAGE COMES FROM'; g1.appendChild(l1);
-  g1.appendChild(el('rect',{class:'grpbox',x:2,y:DY+286,width:942,height:88}));
-  const l2 = el('text',{class:'grplab',x:8,y:DY+280});
+  g1.appendChild(el('rect',{class:'grpbox',x:10,y:DY+286,width:942,height:88}));
+  const l2 = el('text',{class:'grplab',x:16,y:DY+280});
   l2.textContent='PER DELIVERABLE — RUNS ONCE FOR EVERY OUTPUT FILE'; g1.appendChild(l2);
   svg.appendChild(g1);
 
