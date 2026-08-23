@@ -181,7 +181,17 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
             findings=[f.as_dict() for f in res.findings],
             font_family=comp.font_family, message=comp.message,
             dominant_hex=comp.dominant_hex, master_origin=master.origin))
-        log("variant", variant=v.id, verdict=res.verdict.value)
+        # Everything the UI needs to show this creative the moment it exists.
+        #
+        # The event used to carry the id and the verdict, which is enough to
+        # advance a progress graph and not enough to draw the thing. The local
+        # app shows creatives as they land rather than in one batch at the
+        # end, and it should not have to guess a path to do it.
+        log("variant", variant=v.id, verdict=res.verdict.value,
+            product=v.product.id, locale=v.market.locale, ratio=v.ratio.id,
+            message=v.market.message, out_dir=out_dir,
+            path=os.path.relpath(path, out_dir).replace(os.sep, "/"),
+            findings=[f.as_dict() for f in res.findings])
 
     summary = RunSummary(
         run_id=run_id, campaign_id=brief.campaign_id, provider=provider_name,

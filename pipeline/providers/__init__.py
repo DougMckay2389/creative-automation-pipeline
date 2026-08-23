@@ -23,12 +23,33 @@ Three consequences, and they are the reason to do it this way:
 """
 from __future__ import annotations
 
+import os
+
 from .base import GenerationRequest, GenerationResult, Provider, ProviderError
 
 __all__ = [
     "Provider", "GenerationRequest", "GenerationResult", "ProviderError",
-    "get_provider", "available_providers",
+    "get_provider", "available_providers", "provider_status", "default_provider",
+    "CREDENTIALS",
 ]
+
+# What each adapter needs in the environment before it can do anything.
+#
+# Registration only fails on an IMPORT error, so every adapter shows up in
+# available_providers() whether or not it can run -- which is how the app
+# ended up offering `gemini` in a dropdown that could only answer
+# "unknown provider". Credentials are checked in each adapter's __init__,
+# which is the right place to enforce them and the wrong place to ask.
+CREDENTIALS: dict[str, list[str]] = {
+    "mock": [],
+    "cloudflare": ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"],
+    "gemini": ["GEMINI_API_KEY"],
+    "firefly": ["FIREFLY_CLIENT_ID", "FIREFLY_CLIENT_SECRET"],
+}
+
+# Preferred when more than one is usable. Cloudflare first: it is the one
+# this repo is set up against, it is cheap, and it honours a seed.
+PREFERENCE = ("cloudflare", "firefly", "gemini")
 
 _REGISTRY = {}
 
@@ -59,6 +80,36 @@ def available_providers() -> list[str]:
     if not _REGISTRY:
         _register()
     return sorted(_REGISTRY)
+
+
+def provider_status() -> list[dict]:
+    """Every adapter, and whether it could actually run right now.
+
+    Reports what is MISSING by name rather than a bare boolean, so a caller
+    can tell somebody which variable to set instead of "not configured".
+    Values are never read back out -- only presence is ever reported.
+    """
+    out = []
+    for name in available_providers():
+        needs = CREDENTIALS.get(name, [])
+        missing = [k for k in needs if not (os.environ.get(k) or "").strip()]
+        out.append({"name": name, "requires": needs, "missing": missing,
+                    "configured": not missing})
+    return out
+
+
+def default_provider() -> str:
+    """The best provider that can actually run.
+
+    Falls back to `mock`, which needs nothing -- so a reviewer who cloned this
+    two minutes ago still gets a working default, and somebody with a key gets
+    the real model without having to remember a flag.
+    """
+    have = {p["name"] for p in provider_status() if p["configured"]}
+    for name in PREFERENCE:
+        if name in have:
+            return name
+    return "mock"
 
 
 def get_provider(name: str, **kwargs) -> Provider:

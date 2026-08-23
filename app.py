@@ -30,7 +30,8 @@ from urllib.parse import unquote, urlparse
 from pipeline.brief import BriefError, load_brief
 from pipeline.env import load_dotenv
 from pipeline.checks import preflight_brief
-from pipeline.providers import available_providers
+from pipeline.providers import (CREDENTIALS, default_provider,
+                                provider_status)
 from pipeline.report import write_report
 from pipeline.runner import run_campaign
 
@@ -44,7 +45,7 @@ HOST, PORT = "127.0.0.1", 8765
 # --------------------------------------------------------------------------
 
 STATE: dict = {"running": False, "lines": [], "summary": None, "error": None,
-               "report": None, "graph": {}, "seq": 0}
+               "report": None, "graph": {}, "seq": 0, "landed": []}
 LOCK = threading.Lock()
 
 # Which pipeline event advances which node on the flow canvas. The graph is
@@ -108,6 +109,15 @@ def _on_event(rec: dict) -> None:
     """Sink handed to the runner. Called on the worker thread."""
     with LOCK:
         _reduce(rec)
+        # Finished creatives are kept so the browser can draw them as they
+        # land instead of waiting for the whole run. Newest first, because
+        # that is the order the gallery shows them in and doing it here means
+        # the page does not have to re-sort on every poll.
+        if rec.get("event") == "variant":
+            STATE["landed"].insert(0, {
+                k: rec.get(k) for k in
+                ("variant", "verdict", "product", "locale", "ratio",
+                 "message", "path", "out_dir", "findings")})
 
 
 def _do_run(brief_path: str, provider: str) -> None:
@@ -185,7 +195,8 @@ class Handler(SimpleHTTPRequestHandler):
             briefs = sorted(os.path.relpath(p, ROOT).replace("\\", "/")
                             for p in glob.glob(os.path.join(ROOT, "campaigns", "*.yaml")))
             return self._json({"briefs": briefs,
-                               "providers": available_providers(),
+                               "providers": provider_status(),
+                               "default_provider": default_provider(),
                                "cwd": ROOT})
 
         if route == "/api/brief":
@@ -213,6 +224,7 @@ class Handler(SimpleHTTPRequestHandler):
             with LOCK:
                 return self._json({"running": STATE["running"],
                                    "lines": STATE["lines"],
+                                   "landed": STATE["landed"],
                                    "graph": STATE["graph"],
                                    "summary": STATE["summary"],
                                    "report": STATE["report"],
@@ -252,6 +264,43 @@ class Handler(SimpleHTTPRequestHandler):
                 fh.write(body.get("text", ""))
             return self._json({"ok": True})
 
+        if route == "/api/credentials":
+            """Write provider credentials into .env.
+
+            Three things make this defensible rather than reckless, and all
+            three are load-bearing:
+
+              * the server binds 127.0.0.1 only, so nothing off this machine
+                can reach it;
+              * the key names are checked against CREDENTIALS, so this writes
+                the four variables the adapters read and nothing else -- a
+                request naming PATH or AWS_SECRET_ACCESS_KEY is refused;
+              * a value goes IN and never comes back out. No route returns a
+                credential, and the UI only ever learns "configured: true".
+
+            .env is gitignored, which is checked by a test.
+            """
+            name = str(body.get("provider", ""))
+            allowed = CREDENTIALS.get(name)
+            if not allowed:
+                return self._json({"error": f"unknown provider '{name}'"}, 400)
+            values = body.get("values") or {}
+            unknown = [k for k in values if k not in allowed]
+            if unknown:
+                return self._json(
+                    {"error": f"{name} does not use: {', '.join(sorted(unknown))}"}, 400)
+
+            clean = {k: str(v).strip() for k, v in values.items() if str(v).strip()}
+            if not clean:
+                return self._json({"error": "nothing to save"}, 400)
+            try:
+                _write_env(clean)
+            except OSError as exc:
+                return self._json({"error": f"could not write .env: {exc}"}, 500)
+            os.environ.update(clean)          # live, so no restart is needed
+            return self._json({"ok": True, "providers": provider_status(),
+                               "default_provider": default_provider()})
+
         if route == "/api/plan":
             p = self._safe(body.get("path", ""))
             if not p:
@@ -275,7 +324,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if STATE["running"]:
                     return self._json({"error": "a run is already in progress"}, 409)
                 STATE.update(running=True, lines=[], summary=None, error=None,
-                             report=None, graph={}, seq=0)
+                             report=None, graph={}, seq=0, landed=[])
             p = self._safe(body.get("path", ""))
             if not p:
                 with LOCK:
@@ -286,6 +335,37 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json({"ok": True})
 
         return self._json({"error": "unknown route"}, 404)
+
+
+def _write_env(values: dict[str, str], path: str = ".env") -> None:
+    """Update KEY=VALUE lines in .env, leaving everything else alone.
+
+    Rewritten in place rather than appended, so setting a key twice does not
+    leave two lines where the last one silently wins. Comments and ordering
+    survive, because that file is also documentation -- it is the first thing
+    somebody reads when working out which variable a provider wants.
+    """
+    p = os.path.join(ROOT, path)
+    lines = []
+    if os.path.isfile(p):
+        with open(p, "r", encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+
+    remaining = dict(values)
+    for i, line in enumerate(lines):
+        stripped = line.lstrip()
+        if stripped.startswith("#") or "=" not in stripped:
+            continue
+        key = stripped.split("=", 1)[0].strip()
+        if key in remaining:
+            lines[i] = f"{key}={remaining.pop(key)}"
+    for key, val in remaining.items():                 # keys not already there
+        lines.append(f"{key}={val}")
+
+    tmp = p + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines).rstrip("\n") + "\n")
+    os.replace(tmp, p)                                 # atomic; never a half file
 
 
 def main() -> None:

@@ -232,6 +232,33 @@ def load_brief(path: str) -> Brief:
             channel=str(r.get("channel") or ""),
         ))
 
+    # Nothing downstream keys on anything but these ids, so a duplicate is not
+    # a stylistic problem -- it is silent data loss.
+    #
+    # output_path_for() builds <product>/<ratio>/<product>_<locale>_<ratio>.jpg.
+    # Two aspect_ratios entries sharing an id therefore write the SAME file,
+    # and the second quietly overwrites the first: the run reports the full
+    # deliverable count, the folder holds fewer files than it claims, and
+    # nobody notices until a channel is missing an asset. Same for a repeated
+    # product id or locale.
+    #
+    # Found by the brief form, which made adding a second "16:9" a single
+    # click -- a good argument for validating the data rather than trusting
+    # the editor.
+    for label, values in (("products", [p.id for p in products]),
+                          ("markets", [m.locale for m in markets]),
+                          ("aspect_ratios", [r.id for r in ratios])):
+        seen, dupes = set(), []
+        for v in values:
+            if v in seen and v not in dupes:
+                dupes.append(v)
+            seen.add(v)
+        if dupes:
+            raise BriefError(
+                f"{label}: duplicated {'entry' if len(dupes) == 1 else 'entries'} "
+                f"{', '.join(repr(d) for d in dupes)} - each must be unique, "
+                f"because two of them would write the same output file")
+
     return Brief(
         campaign_id=str(campaign_id),
         campaign_name=str(camp.get("name") or campaign_id),

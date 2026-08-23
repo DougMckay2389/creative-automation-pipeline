@@ -1,0 +1,58 @@
+campaign:
+  id: "aurora-spring-2026"
+  name: "Aurora Spring Refresh"
+  brand: "Aurora"
+
+default_message: "Your skin, wide awake."
+
+products:
+  - id: "hydra-glow-serum"
+    name: "HydraGlow Serum"
+    asset: "campaigns/assets/hydra-glow-serum.png"
+    subject: "a bell shaped semi frosted glass jar with fresh spices inside  with a matte white cap"
+    surface: "red desert stone with soft water droplets and fire under the stone"
+  - id: "velvet-matte-lip"
+    name: "Velvet Matte Lip"
+    asset: "campaigns/assets/velvet-matte-lip.png"
+    subject: "a slim matte pink  lipstick bullet, cap off, angled upright"
+    surface: "brushed steel on fire"
+
+markets:
+  - locale: "en-US"
+    region: "North America"
+    audience: "Women 25-40, skincare-led routine, shops DTC and Sephora"
+    message: "Your skin, wide awake."
+  - locale: "ja-JP"
+    region: "Japan"
+    audience: "Women 20-35, Tokyo metro, layered skincare routine, value texture and subtlety"
+    message: "肌が、目を覚ます。"
+  - locale: "de-DE"
+    region: "DACH"
+    audience: "Women 28-45, ingredient-literate, price-aware, pharmacy channel"
+    message: "Wach für deine Haut."
+
+aspect_ratios:
+  - id: "1:1"
+    width: 1080
+    height: 1080
+    channel: "Instagram feed"
+  - id: "9:16"
+    width: 1080
+    height: 1920
+    channel: "Stories / Reels"
+  - id: "16:9"
+    width: 1920
+    height: 1080
+    channel: "YouTube / display"
+  - id: "4:5"
+    width: 980
+    height: 1150
+    channel: "Retail shelf / PDP"
+
+prohibited_terms:
+  - "clinically proven"
+  - "guaranteed"
+  - "miracle"
+  - "cures"
+  - "anti-aging"
+  - "100%"

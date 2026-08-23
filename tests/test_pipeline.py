@@ -46,6 +46,35 @@ def test_brief_loads_and_expands():
     assert len({v.id for v in b.variants()}) == b.variant_count
 
 
+def test_brief_rejects_duplicate_ids():
+    """A repeated id is silent data loss, not a style problem.
+
+    output_path_for() keys on product, locale and ratio, so two aspect_ratios
+    entries sharing an id write the same file: the run reports the full
+    deliverable count and the folder holds fewer files than it claims. The
+    brief form makes adding a second "16:9" one click, which is exactly why
+    this is enforced on the data rather than in the editor.
+    """
+    import yaml
+    base = yaml.safe_load(open(BRIEF, encoding="utf-8"))
+
+    for field, dupe in (("aspect_ratios", {"id": "16:9", "width": 1920, "height": 1080}),
+                        ("products", dict(base["products"][0])),
+                        ("markets", dict(base["markets"][0]))):
+        raw = yaml.safe_load(open(BRIEF, encoding="utf-8"))
+        raw[field] = raw[field] + [dupe]
+        path = os.path.join(tempfile.mkdtemp(), "dupe.yaml")
+        with open(path, "w", encoding="utf-8") as fh:
+            yaml.safe_dump(raw, fh, allow_unicode=True)
+        try:
+            load_brief(path)
+        except BriefError as exc:
+            assert field in str(exc), f"{field}: error must name the field, got {exc}"
+            assert "same output file" in str(exc), "and must say why it matters"
+        else:
+            raise AssertionError(f"{field}: a duplicated id must be rejected")
+
+
 def test_brief_rejects_single_product():
     import yaml
     raw = yaml.safe_load(open(BRIEF, encoding="utf-8"))

@@ -75,8 +75,34 @@ see at a glance that (for example) the cache did not hit on a cold run.
 
 **It is driven by the pipeline's own events** — the same records written to
 `run.log.jsonl`, fed to the browser through `/api/progress`. Nothing on the
-canvas is on a timer, so it cannot show a stage that did not happen. Finished creatives appear as a gallery with their verdicts,
-and the full report is one click away.
+canvas is on a timer, so it cannot show a stage that did not happen. Finished creatives land below the brief and the run log
+— one row per market, in the order the markets appear in the brief, each row
+carrying that market's own line and its own count of what needs review. A flat
+grid of eighteen files reads as eighteen unrelated files; the unit a regional
+lead actually cares about is "everything going out in my market", so that is
+the unit on screen. Every thumbnail is letterboxed into the same band, which
+lines the captions up and lets you compare the three *crops* side by side.
+
+The rows fill in **while the run is going**, newest on the left. That is fed
+by the pipeline's own `variant` event rather than by a timer, so a tile cannot
+appear for a creative that does not exist yet — and only unseen ids are drawn
+on each poll, because re-rendering the gallery every tick restarts every image
+load and makes the page flicker. The full report is one click away.
+
+### Providers and keys
+
+The dropdown lists every adapter and says which ones can actually run; the
+ones missing credentials are disabled rather than offered. It defaults to the
+best provider that works — `cloudflare` when it is configured, `mock` when
+nothing is, so a reviewer who cloned this two minutes ago still gets a working
+default and somebody with a key gets the real model without remembering a flag.
+
+**API keys** opens a panel that writes credentials into `.env`. Three things
+make that defensible rather than reckless: the server binds `127.0.0.1` only;
+the key names are checked against a registry, so it writes the variables the
+adapters read and refuses anything else; and a value goes in and never comes
+back out — no route returns a credential, and the panel is only ever told
+whether one is set.
 
 The app is a thin layer — it calls the same `load_brief`, `preflight_brief`
 and `run_campaign` functions the CLI calls, so the demo and the tool cannot

@@ -90,6 +90,30 @@ pre.console .ok{color:#7ee787}.console .warn{color:#ffc866}.console .bad{color:#
  border-radius:11px;padding:11px 14px;margin-top:14px}
 .note b{color:var(--ink)}
 .err{background:#fff5f5;border-color:#f2c9c9;color:#8a2b2b}
+/* ---- one row per market ----
+   A flat grid of eighteen tiles reads as eighteen unrelated files. The unit a
+   regional lead cares about is "everything going out in MY market", so that
+   is the unit on screen: one strip per locale, in brief order. */
+.mrow{margin-top:14px;border:1px solid var(--line);border-radius:12px;background:var(--card);
+      overflow:hidden}
+.mhead{display:flex;align-items:baseline;gap:10px;padding:9px 13px;
+       border-bottom:1px solid var(--line);background:#faf9f6}
+.mhead .loc{font:700 11px var(--mono);letter-spacing:.06em;background:var(--ink);color:#fff;
+            padding:3px 8px;border-radius:5px}
+.mhead .msg{font-size:12.5px;color:var(--ink)}
+.mhead .mcount{margin-left:auto;font:11px var(--mono);color:var(--muted)}
+.mhead .mcount b{color:var(--review)}
+.mstrip{display:flex;gap:11px;padding:12px 13px;overflow-x:auto;align-items:stretch}
+.mstrip .card{flex:0 0 176px;display:flex;flex-direction:column}
+/* A fixed band for the thumbnail, not a fixed card.
+   Three aspect ratios in one row means a 9:16 tile is nearly three times the
+   height of a 16:9 one, and the row stops reading as a row. Letterboxing each
+   thumbnail into the same band lines the captions up and lets you compare the
+   CROPS, which is the thing worth comparing. */
+.mstrip .card .ph{height:150px;padding:6px}
+.mstrip .card img{max-height:100%;max-width:100%;width:auto;object-fit:contain}
+.mstrip .card .m{flex:1}
+
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:13px;margin-top:14px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:11px;overflow:hidden}
 .card .ph{background:#eeece6;display:flex;align-items:center;justify-content:center;padding:8px}
@@ -108,6 +132,28 @@ pre.console .ok{color:#7ee787}.console .warn{color:#ffc866}.console .bad{color:#
 a.rep{font-size:13px;color:var(--accent)}
 .tag{font-size:10.5px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);
  color:var(--ink2);background:#f7f5f1;margin-left:6px}
+
+/* ---- provider keys ---- */
+.keylink{border:0;background:transparent;color:var(--accent);font:600 11px var(--sans);
+ cursor:pointer;padding:0 0 0 7px;text-decoration:underline}
+#keypanel{background:var(--card);border:1px solid var(--line);border-radius:12px;
+ padding:14px 16px;margin:14px 0}
+#keypanel h3{margin:0 0 4px;font-size:13px}
+#keypanel .sub{font-size:11.5px;color:var(--muted);margin-bottom:11px}
+.prov{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)}
+.prov:first-of-type{border-top:0}
+.prov .nm{font:600 12.5px var(--sans);min-width:96px}
+.prov .st{font:10px var(--mono);letter-spacing:.05em;text-transform:uppercase;
+ padding:2px 7px;border-radius:99px}
+.prov .st.on{background:rgba(12,163,12,.1);color:var(--pass)}
+.prov .st.off{background:#f2efe9;color:var(--muted)}
+.prov .fields{display:flex;gap:7px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
+.prov input{padding:5px 9px;border:1px solid var(--line);border-radius:6px;font:11.5px var(--mono);
+ width:212px;background:#fff}
+.prov button{padding:5px 12px;border:1px solid var(--ink);background:var(--ink);color:#fff;
+ border-radius:6px;font:600 11.5px var(--sans);cursor:pointer}
+.prov button:disabled{opacity:.45;cursor:default}
+#keymsg{font:11.5px var(--sans);margin-top:9px}
 
 /* ---- flow canvas ---- */
 .flowpanel{background:var(--card);border:1px solid var(--line);border-radius:12px;
@@ -155,7 +201,8 @@ svg.flow{display:block}
 <div class="bar">
   <div class="f"><label for="brief">Campaign brief</label>
     <select id="brief"></select></div>
-  <div class="f"><label for="provider">Image provider</label>
+  <div class="f"><label for="provider">Image provider
+      <button id="keys" class="keylink" type="button">API keys</button></label>
     <select id="provider"></select></div>
   <button id="plan">Plan &mdash; what would this cost?</button>
   <button id="run" class="primary">Run pipeline</button>
@@ -163,6 +210,7 @@ svg.flow{display:block}
   <button id="save">Save brief</button>
 </div>
 
+<div id="keypanel" hidden></div>
 <div id="planout"></div>
 
 <div class="flowpanel">
@@ -194,6 +242,9 @@ and produces the same pixels every time.</pre>
   </div>
 </div>
 
+<!-- Under the brief and the run log, and filled in DURING the run: each
+     creative is prepended to its market's row as it lands, so the newest is
+     the leftmost and the row grows to the right. -->
 <div id="results"></div>
 
 </div>
@@ -320,7 +371,7 @@ async function init(){
   const r = await (await fetch('/api/init')).json();
   const bs = $('#brief'), ps = $('#provider');
   bs.innerHTML = r.briefs.map(b=>`<option value="${b}">${b}</option>`).join('');
-  ps.innerHTML = r.providers.map(p=>`<option value="${p}"${p==='mock'?' selected':''}>${p}${p==='mock'?' — offline, no key':''}</option>`).join('');
+  paintProviders(r);
   await loadBrief();
 }
 
@@ -622,7 +673,7 @@ async function doSave(){
 
 async function doRun(){
   await doSave();
-  $('#results').innerHTML=''; $('#log').textContent='';
+  $('#results').innerHTML=''; $('#log').textContent=''; SEEN.clear();
   $('#run').disabled = true; $('#dot').classList.add('live');
   running = true; drawFlow({});
   const r = await (await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -644,11 +695,70 @@ async function tick(){
   el.innerHTML = s.lines.map(colour).join('\n');
   el.scrollTop = el.scrollHeight;
   drawFlow(s.graph);
+  paintLanded(s.landed);          // creatives appear as they land
   if(!s.running){
     clearInterval(poll); poll=null;
     $('#run').disabled=false; $('#dot').classList.remove('live');
     running = false; drawFlow(s.graph);
     if(s.summary) render(s.summary, s.report);
+  }
+}
+
+/* One creative, as a tile. Shared by the live path and the final render so
+   the gallery cannot change shape when the run finishes. */
+function cardHtml(r, base){
+  const cls = {pass:'b-pass',review:'b-review',block:'b-block'}[r.verdict];
+  const f = (r.findings||[]).map(x=>
+    `<div><code>${esc(x.rule)}</code> → ${esc(x.routes_to)}</div>`).join('');
+  return `<div class="card" data-v="${esc(r.variant || r.variant_id || '')}">
+    <div class="ph"><img loading="lazy" src="${base}${String(r.path).replace(/\\/g,'/')}" alt=""></div>
+    <div class="m"><span class="badge ${cls}">${esc(r.verdict)}</span>
+    <div class="t">${esc(r.product || r.product_id || '')} · ${esc(r.ratio)}</div>
+    <div style="color:var(--muted);margin-top:3px">${
+      esc(r.font_family || '')}${r.font_family ? ' · ' : ''}${
+      r.master_origin ? 'master: ' + esc(r.master_origin) : ''}</div>
+    ${f}</div></div>`;
+}
+
+/* Draw creatives as they land.
+ *
+ * `landed` arrives newest-first from the server, so walking it in reverse and
+ * prepending each one leaves the newest on the LEFT of its market's row. Only
+ * ids that are not on screen yet are drawn, which makes this safe to call on
+ * every poll -- the alternative, re-rendering the gallery each tick, restarts
+ * every image load and makes the page flicker. */
+const SEEN = new Set();
+
+function paintLanded(landed){
+  if (!landed || !landed.length) return;
+  const host = $('#results');
+  for (let i = landed.length - 1; i >= 0; i--) {
+    const r = landed[i];
+    if (SEEN.has(r.variant)) continue;
+    SEEN.add(r.variant);
+
+    let row = host.querySelector(`.mrow[data-loc="${CSS.escape(r.locale)}"]`);
+    if (!row) {
+      row = document.createElement('div');
+      row.className = 'mrow';
+      row.dataset.loc = r.locale;
+      row.innerHTML = `
+        <div class="mhead">
+          <span class="loc">${esc(r.locale)}</span>
+          <span class="msg">${esc(r.message || '')}</span>
+          <span class="mcount"></span>
+        </div>
+        <div class="mstrip"></div>`;
+      host.appendChild(row);                 // markets appear in brief order
+    }
+    const base = '/out/' + String(r.out_dir).replace(/\\/g,'/') + '/';
+    row.querySelector('.mstrip').insertAdjacentHTML('afterbegin', cardHtml(r, base));
+
+    const strip = row.querySelector('.mstrip');
+    const bad = strip.querySelectorAll('.badge:not(.b-pass)').length;
+    const n = strip.querySelectorAll('.card').length;
+    row.querySelector('.mcount').innerHTML =
+      `${n} creative${n===1?'':'s'}${bad ? ` · <b>${bad} to review</b>` : ''}`;
   }
 }
 
@@ -664,18 +774,36 @@ function render(sum, report){
   if(report) html += `<div class="note">Full run report: <a class="rep" href="/out/${report}" target="_blank">${esc(report)}</a>
    &nbsp;·&nbsp; nothing here is auto-approved &mdash; every finding routes to a named desk.</div>`;
   const base = '/out/' + sum.output_dir.replace(/\\/g,'/') + '/';
-  html += `<div class="grid">` + sum.results.map(r=>{
-    const cls = {pass:'b-pass',review:'b-review',block:'b-block'}[r.verdict];
-    const f = (r.findings||[]).map(x=>`<div><code>${esc(x.rule)}</code> → ${esc(x.routes_to)}</div>`).join('');
-    return `<div class="card">
-      <div class="ph"><img loading="lazy" src="${base}${r.path.replace(/\\/g,'/')}" alt=""></div>
-      <div class="m"><span class="badge ${cls}">${esc(r.verdict)}</span>
-      <div class="t">${esc(r.ratio)} · ${esc(r.locale)}</div>
-      <div>${esc(r.message)}</div>
-      <div style="color:var(--muted);margin-top:3px">${esc(r.font_family)} · master: ${esc(r.master_origin)}</div>
-      ${f}</div></div>`;
-  }).join('') + `</div>`;
+
+  // Grouped into a row per market, in the order the markets appear in the
+  // brief. That order is taken from first appearance in sum.results rather
+  // than from the form -- the pipeline walks products, then markets, then
+  // ratios, so the first product's block lists every market in YAML order,
+  // and reading it from the results means this cannot disagree with the run
+  // even if somebody edited the brief while it was going.
+  const order = [];
+  for (const r of sum.results) if (!order.includes(r.locale)) order.push(r.locale);
+
+  const card = (r) => cardHtml(r, base);
+
+  for (const locale of order) {
+    const rows = sum.results.filter(r => r.locale === locale).slice().reverse();
+    const bad  = rows.filter(r => r.verdict !== 'pass').length;
+    // The market's line is a property of the market, not of each creative, so
+    // it belongs on the row rather than repeated under all six tiles.
+    const msg = (rows[0] || {}).message || '';
+    html += `<div class="mrow">
+      <div class="mhead">
+        <span class="loc">${esc(locale)}</span>
+        <span class="msg">${esc(msg)}</span>
+        <span class="mcount">${rows.length} creative${rows.length===1?'':'s'}${
+          bad ? ` · <b>${bad} to review</b>` : ''}</span>
+      </div>
+      <div class="mstrip">${rows.map(card).join('')}</div>
+    </div>`;
+  }
   $('#results').innerHTML = html;
+  SEEN.clear();                     // the final render owns the DOM from here
 }
 
 drawFlow({});
@@ -683,6 +811,96 @@ $('#brief').addEventListener('change', loadBrief);
 $('#plan').addEventListener('click', doPlan);
 $('#save').addEventListener('click', doSave);
 $('#run').addEventListener('click', doRun);
+/* ------------------------------------------------------------------ *
+ * Providers and their keys
+ *
+ * The dropdown used to list every adapter that IMPORTED, which is not the
+ * same as every adapter that can run: picking `gemini` with no key produced
+ * "unknown provider 'gemini'. available: mock" at the bottom of a stack
+ * trace, several seconds into a run. The server now reports what each one is
+ * missing, so the list can say so up front and the default can be the best
+ * provider that actually works.
+ * ------------------------------------------------------------------ */
+let PROVIDERS = [];
+
+function paintProviders(r){
+  PROVIDERS = r.providers || [];
+  const sel = $('#provider'), keep = sel.value;
+  sel.innerHTML = PROVIDERS.map(p=>{
+    const note = p.name === 'mock' ? ' — offline, no key'
+               : p.configured      ? ''
+               : ' — needs a key';
+    return `<option value="${p.name}"${p.configured?'':' disabled'}>${p.name}${note}</option>`;
+  }).join('');
+  // Keep the user's pick if it still works; otherwise take the server's
+  // preference, which is cloudflare when it is configured and mock when
+  // nothing is.
+  const stillOk = PROVIDERS.some(p=>p.name===keep && p.configured);
+  sel.value = stillOk ? keep : (r.default_provider || 'mock');
+}
+
+const LABEL = {
+  CLOUDFLARE_ACCOUNT_ID:'Account ID', CLOUDFLARE_API_TOKEN:'API token',
+  GEMINI_API_KEY:'API key',
+  FIREFLY_CLIENT_ID:'Client ID', FIREFLY_CLIENT_SECRET:'Client secret',
+};
+
+function paintKeys(){
+  const rows = PROVIDERS.filter(p=>p.requires.length).map(p=>`
+    <div class="prov" data-prov="${p.name}">
+      <span class="nm">${p.name}</span>
+      <span class="st ${p.configured?'on':'off'}">${p.configured?'configured':'no key'}</span>
+      <span class="fields">
+        ${p.requires.map(k=>`<input type="password" data-k="${k}" autocomplete="off"
+           placeholder="${LABEL[k]||k}${p.missing.includes(k)?'':' — set, leave blank to keep'}">`).join('')}
+        <button data-save="${p.name}">Save</button>
+      </span>
+    </div>`).join('');
+  $('#keypanel').innerHTML = `
+    <h3>Provider credentials</h3>
+    <div class="sub">Written to <code>.env</code> on this machine, which is gitignored.
+      This server listens on 127.0.0.1 only, and no route ever reads a key back
+      out — the panel is told whether one is set, never what it is.</div>
+    ${rows}
+    <div id="keymsg"></div>`;
+}
+
+$('#keys').addEventListener('click', () => {
+  const panel = $('#keypanel');
+  panel.hidden = !panel.hidden;
+  if (!panel.hidden) paintKeys();
+});
+
+$('#keypanel').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-save]');
+  if (!btn) return;
+  const row = btn.closest('.prov');
+  const values = {};
+  row.querySelectorAll('input[data-k]').forEach(i => {
+    if (i.value.trim()) values[i.dataset.k] = i.value.trim();
+  });
+  if (!Object.keys(values).length) {
+    $('#keymsg').innerHTML = `<span style="color:var(--muted)">Nothing entered.</span>`;
+    return;
+  }
+  btn.disabled = true;
+  const res = await (await fetch('/api/credentials', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({provider: btn.dataset.save, values})})).json();
+  btn.disabled = false;
+  if (res.error) {
+    $('#keymsg').innerHTML = `<span style="color:var(--block)">${esc(res.error)}</span>`;
+    return;
+  }
+  // Clear the inputs immediately: there is no reason for a secret to sit in
+  // the DOM after it has been saved.
+  row.querySelectorAll('input[data-k]').forEach(i => i.value = '');
+  paintProviders(res);
+  paintKeys();
+  $('#keymsg').innerHTML =
+    `<span style="color:var(--pass)">Saved. ${esc(btn.dataset.save)} is ready — no restart needed.</span>`;
+});
+
 init();
 </script>
 </body></html>
