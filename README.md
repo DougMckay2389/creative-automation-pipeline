@@ -304,6 +304,73 @@ Read`, and roll it once the review is done.
 Without a key the zip still runs — the offline provider needs no credentials —
 and `examples/cloudflare-run/` is a committed real run either way.
 
+### Seeing what the pipeline did
+
+The results view is a panel per market: a tab per aspect ratio labelled with
+the **channel** from the brief, a strip showing what every compose stage did to
+the selected creative, and the market's deliverables with verdict and score.
+Clicking a deliverable re-points the strip at it.
+
+```
+cut to spec  →  legibility  →  market copy  →  brand mark  →  measure
+[thumbnail]     [thumbnail]    [thumbnail]     [thumbnail]    [thumbnail]
+bias   0.45     height  0.42   type    0.085   width   0.16   colours …
+margin 0.07     strength 0.745 leading 1.28    clear   0.5
+                falloff  1.6   lines       2   achieved 1.6
+69ms            20ms           20ms            26ms           45ms
+```
+
+**Every number there is the number the code ran on.** Those constants used to
+be literals scattered through `compose()` — `0.42` here, `190` there, `1.6`
+inside a loop. That was fine until a panel started claiming "scrim strength
+0.745", because a panel reporting a *copy* of a value is decoration pretending
+to be instrumentation. They are named constants now, and the stage reports read
+from the same ones the compositor uses.
+
+`compose()` also writes a 420px JPEG after each stage into `<run>/_stages/`. A
+progress graph tells you a stage ran; a thumbnail tells you what it **did** —
+which is the only way to see that the scrim landed in the wrong place or the
+crop ate the cap off a bottle.
+
+The score beside each verdict is `compliance_score()`: 100 less 35 per blocker,
+12 per major, 4 per minor. It exists because eighteen thumbnails need a way to
+say "this one first" and a verdict only has three values. It measures
+conformance to the rules in `checks.py` and **is not a quality judgement** — a
+perfectly on-brand, on-spec, entirely boring creative scores 100 — so it never
+appears without the verdict next to it.
+
+### Analytics — and the loop back into the brief
+
+The exercise lists five business goals. Four are about producing creative
+faster and more consistently; the fifth is *"learn what content, creative and
+localization drives the best business outcomes"*. That one is a loop, not a
+report: performance should decide what you make **next**.
+
+> **Every figure on the Analytics tab is synthetic.** Nothing connects to Meta,
+> TikTok, X or Google. It is generated from a fixed seed so it is identical on
+> every machine, and it is labelled as sample data in four places — the module
+> docstring, the API payload, a standing banner, and a badge on every market.
+
+A real integration would need the Meta Graph API (`insights` edge), the TikTok
+Business API, the X Ads API (paid tier) and the Search Console API — all
+per-market, all rate-limited, all returning a different shape for the same
+idea, which is exactly the argument for an adapter layer like `providers/` and
+`storage/`. `pipeline/insights.py` is deliberately shaped like one.
+
+What makes it more than a dashboard is that it ends in a **diff you can apply**:
+
+| Recommendation | Effect on the brief |
+|---|---|
+| Placement order | Aspect ratios reorder so the best performer is produced first |
+| Surface treatment | The winning treatment is written into the products' surface prompts |
+
+Reorder, **never drop** — removing a placement because eight weeks of data
+disliked it is the kind of over-fitting a media team would rightly refuse.
+Every recommendation carries the evidence that produced it, because one you
+cannot interrogate is one you should not take. CTR is impression-weighted: a 4%
+CTR on 900 views must not outrank 2% on 900,000, and un-weighted averages are
+how dashboards end up recommending whatever has the smallest sample.
+
 ### Uploading and reusing product images
 
 The brief's first data source is *"campaign briefs and assets uploaded
