@@ -30,8 +30,13 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo   Starting. Your browser will open at http://127.0.0.1:8765
-echo   Close this window to stop the app.
+REM  Arguments are passed straight through, so the launcher does not need to
+REM  learn a new flag every time app.py does:
+REM    start.bat              app window if Chrome/Edge is present, else a tab
+REM    start.bat --browser    force a normal browser tab
+REM    start.bat --no-open    start the server and open nothing
+echo   Starting at http://127.0.0.1:8765
+echo   Closing the app window stops it.
 echo.
-%PY% app.py
+%PY% app.py %*
 pause

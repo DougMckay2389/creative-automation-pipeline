@@ -21,7 +21,9 @@ import json
 import mimetypes
 import os
 import re
+import shutil
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -123,6 +125,7 @@ SERVER = None
 # A bare "is something listening?" is not enough to justify stopping it -- the
 # whole point is to be certain it is us before doing anything.
 APP_ID = "creative-automation-pipeline"
+APP_VERSION = "1.0"
 
 # Where uploaded product photography lands.
 #
@@ -413,7 +416,8 @@ class Handler(SimpleHTTPRequestHandler):
             default_brief = ("campaigns/aurora-spring.yaml"
                              if "campaigns/aurora-spring.yaml" in briefs
                              else (briefs[0] if briefs else ""))
-            return self._json({"briefs": briefs,
+            return self._json({"version": APP_VERSION,
+                               "briefs": briefs,
                                "default_brief": default_brief,
                                "providers": provider_status(),
                                "default_provider": default_provider(),
@@ -1069,6 +1073,128 @@ def _ask_previous_copy_to_stand_down(port: int) -> str:
             probe.close()
     return "unreachable"
 
+# --------------------------------------------------------------------------
+# Opening it as an application rather than a browser tab
+#
+# A tab is the wrong frame for this. It puts an address bar, a bookmarks bar
+# and eleven other tabs around a tool whose whole job is judging images, and
+# it means the first thing an audience sees when you demo is your browsing
+# history. Chromium's `--app=` mode gives a chromeless window with no tab
+# strip and no omnibox, which is what "open it like Photoshop" actually means
+# in a tool that has no business shipping Electron.
+#
+# The alternative was pywebview or Electron. Both were rejected for the same
+# reason the rest of this repo has three dependencies: the README promises an
+# install a reviewer can complete, and "pip install pywebview" fails
+# differently on every platform (it wants pythonnet on Windows, PyGObject or
+# Qt on Linux). This needs nothing that is not already on the machine, and
+# degrades to a normal tab when no Chromium browser exists.
+#
+# `--user-data-dir` is not optional here. Without it, a Chrome that is
+# already running just hands the URL to the existing process, which ignores
+# --window-size and can open it as a tab anyway. With it, the window is its
+# own process with its own state -- so it starts at the size asked for, and
+# it carries none of the user's extensions, cookies or bookmarks into the
+# screen share.
+# --------------------------------------------------------------------------
+
+APP_WINDOW = (1500, 960)
+APP_PROFILE = os.path.join(ROOT, ".cache", "appwindow")
+
+
+def _chromium_binaries() -> list[str]:
+    """Every Chromium-family browser this machine might have, best first.
+
+    Chrome before Edge before Brave is not a preference about browsers -- it
+    is the order in which `--app` behaves most predictably, and Edge is second
+    because on Windows it is the one that is definitely installed.
+    """
+    out: list[str] = []
+    if sys.platform == "win32":
+        roots = [os.environ.get("PROGRAMFILES", r"C:\Program Files"),
+                 os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"),
+                 os.environ.get("LOCALAPPDATA", "")]
+        rel = [r"Google\Chrome\Application\chrome.exe",
+               r"Microsoft\Edge\Application\msedge.exe",
+               r"BraveSoftware\Brave-Browser\Application\brave.exe",
+               r"Chromium\Application\chrome.exe"]
+        for r in rel:
+            for base in roots:
+                if base:
+                    out.append(os.path.join(base, r))
+    elif sys.platform == "darwin":
+        out += ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+                "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+                "/Applications/Chromium.app/Contents/MacOS/Chromium"]
+    else:
+        for name in ("google-chrome", "google-chrome-stable", "chromium",
+                     "chromium-browser", "microsoft-edge", "brave-browser"):
+            found = shutil.which(name)
+            if found:
+                out.append(found)
+    return [p for p in out if p and os.path.isfile(p)]
+
+
+def _open_app_window(url: str) -> bool:
+    """Launch the chromeless window. Returns False if there is nothing to launch."""
+    exes = _chromium_binaries()
+    if not exes:
+        return False
+
+    os.makedirs(APP_PROFILE, exist_ok=True)
+    w, h = APP_WINDOW
+    cmd = [exes[0],
+           f"--app={url}",
+           f"--user-data-dir={APP_PROFILE}",
+           f"--window-size={w},{h}",
+           "--no-first-run",
+           "--no-default-browser-check",
+           "--disable-features=Translate,MediaRouter"]
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL)
+    except OSError:
+        return False
+
+    print(f"  opened as an app window ({os.path.basename(exes[0])})")
+    print("  closing the window stops the server\n")
+    threading.Thread(target=_quit_when_window_closes, args=(proc, url),
+                     daemon=True).start()
+    return True
+
+
+def _quit_when_window_closes(proc, url: str) -> None:
+    """Closing the window quits the app -- unless a run is in flight.
+
+    An application you have to go and Ctrl-C in a terminal after closing its
+    window is not an application, it is a server with a nice front end. But
+    the guard matters more than the convenience: shutting down mid-run would
+    abandon a half-written output folder and waste generative calls that have
+    already been paid for. Same rule the port handshake follows -- a run in
+    progress is never interrupted by a convenience.
+    """
+    try:
+        proc.wait()
+    except Exception:                                             # noqa: BLE001
+        return
+    if STATE.get("running"):
+        print("\n  Window closed, but a run is still going -- left running so it")
+        print("  can finish. Press Ctrl-C once it is done, or reopen:")
+        print(f"    {url}\n")
+        return
+    print("\n  window closed - stopping\n")
+    if SERVER is not None:
+        threading.Thread(target=SERVER.shutdown, daemon=True).start()
+
+
+def _open_in_browser(url: str) -> None:
+    try:
+        webbrowser.open(url)
+    except Exception:                                             # noqa: BLE001
+        pass
+
+
 
 def main() -> None:
     port = PORT
@@ -1125,11 +1251,21 @@ def main() -> None:
     print("  Douglas McKay - doug@dougmckay.info")
     print(f"  running at  {url}")
     print("  press Ctrl-C to stop\n")
-    if "--no-open" not in sys.argv:
-        try:
-            webbrowser.open(url)
-        except Exception:
-            pass
+
+    mode = ("none"    if "--no-open" in sys.argv else
+            "browser" if "--browser" in sys.argv else
+            "app"     if "--app"     in sys.argv else "auto")
+    if mode in ("app", "auto"):
+        opened = _open_app_window(url)
+        if not opened and mode == "app":
+            print("  No Chrome, Edge, Chromium or Brave was found, so there is")
+            print("  no app window to open. It is running -- open it yourself:")
+            print(f"    {url}\n")
+        elif not opened:
+            _open_in_browser(url)
+    elif mode == "browser":
+        _open_in_browser(url)
+
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

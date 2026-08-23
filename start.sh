@@ -17,6 +17,11 @@ fi
 echo "  Checking dependencies..."
 $PY -m pip install -q --disable-pip-version-check -r requirements.txt
 
-echo "  Starting. Your browser will open at http://127.0.0.1:8765"
-echo "  Press Ctrl-C to stop."
-exec $PY app.py
+# Arguments pass straight through, so the launcher does not need to learn a
+# new flag every time app.py does:
+#   ./start.sh              app window if Chrome/Edge is present, else a tab
+#   ./start.sh --browser    force a normal browser tab
+#   ./start.sh --no-open    start the server and open nothing
+echo "  Starting at http://127.0.0.1:8765"
+echo "  Closing the app window stops it; Ctrl-C also works."
+exec $PY app.py "$@"

@@ -676,6 +676,74 @@ runner — which is why the logic lives in `pipeline/` and not in `app.py`.
 
 ---
 
+### Opening as an application, and the splash
+
+**In plain words.** It opens in its own window with no address bar, on a
+splash that tells you what it found on your machine. Closing the window stops
+it.
+
+**Technically.** Chromium's `--app=<url>` mode, launched with `subprocess.Popen`
+against whichever of Chrome, Edge, Brave or Chromium is installed, with a
+throwaway `--user-data-dir` under `.cache/`. A daemon thread waits on that
+process and shuts the server down when it exits.
+
+**The three decisions worth defending:**
+
+1. **Not Electron, not pywebview.** Same argument as everywhere else in this
+   repo: the exercise asks me to "help the interviewers set up and run the app
+   locally", so the install story *is* part of the product. Electron is a
+   hundred megabytes and a build step. `pip install pywebview` wants pythonnet
+   on Windows and PyGObject or Qt on Linux, and fails differently on each.
+   `--app` mode needs a browser the machine already has, and degrades to a
+   normal tab when there isn't one.
+
+2. **`--user-data-dir` is not optional.** Without it, a Chrome that is already
+   running just hands the URL to the existing process, which ignores
+   `--window-size` and can open it as a tab anyway — so the feature works on
+   your machine, where you closed Chrome to test it, and silently doesn't on
+   the reviewer's. With a dedicated profile the window is its own process at
+   the size asked for, and carries none of your extensions, cookies or
+   bookmarks into a screen share.
+
+3. **Closing the window stops the server — unless a run is going.** An app you
+   have to go and Ctrl-C in a terminal after closing its window is not an app,
+   it is a server with a nice front end. But the guard matters more than the
+   convenience: shutting down mid-run abandons a half-written output folder
+   and wastes generative calls already paid for. That is the same rule the
+   port handshake follows, and stating it as a rule — *a run in progress is
+   never interrupted by a convenience* — is better than defending two
+   coincidentally similar behaviours.
+
+**The splash, and why the list is real.**
+
+It looks like the creative-suite convention on purpose: dark plate, product
+name, author, version, and a list of what is initialising. The list is the
+part that matters, and every line resolves against an actual request —
+`/api/init` for the server, the providers and storages it reports, then
+`/api/brief`. Each spins while in flight, ticks with a one-line summary, and
+turns red with the reason on failure.
+
+> "The splash reports the real startup sequence. It is the third place in
+> this app where I refused to animate something that isn't driven by the work
+> it depicts — the flow canvas and the stage strip are the other two. And it
+> pays for itself the first time somebody else runs this: 'none configured —
+> offline renderer only' is exactly what a new user needs to see, and a splash
+> that fades out on a timer regardless has thrown that away before they read
+> it."
+
+`MIN_SPLASH` is the one honest concession: against a warm local server the
+whole sequence finishes in about 40ms, and a panel that appears and vanishes
+inside a frame reads as a rendering fault. It delays the *fade*, never the
+work and never the reporting.
+
+**A bug this shipped with for ten minutes, worth telling:** the summary text
+used `class="note"`, which is already this page's info-callout class — padded
+card, coloured left rule. Four one-line summaries rendered as four grey boxes.
+It is a good small illustration of the cost of a single-file app with a flat
+class namespace, and the fix (`.spnote`) is the boring correct one.
+
+---
+
 ### `pipeline/insights.py` + the Analytics tab — the loop back
 
 **In plain words.** The brief tells the pipeline what to make. This tab is the

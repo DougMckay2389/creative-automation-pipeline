@@ -865,6 +865,86 @@ header.topbar .ghlink{margin-left:0;align-self:center;flex:none}
 
 .pane{padding-top:18px}
 .pane[hidden]{display:none}
+
+/* ==========================================================================
+   Splash
+
+   Modelled on the creative-suite convention: a dark plate with the product
+   name, the author, a version, and a list of what is being initialised.
+
+   The list is the part that matters, and it is REAL. Photoshop's splash
+   names the things it is loading; a splash that runs a scripted animation
+   for a fixed 1.4 seconds is a progress bar that is lying, and this repo has
+   already argued twice that an animation not driven by the work it depicts
+   is worthless (the flow canvas, the stage strip). Each line here resolves
+   when its actual request comes back, and turns red with the reason when one
+   fails -- which is also the only way a first-time reviewer finds out their
+   port is taken or their brief will not parse.
+   ========================================================================== */
+
+#splash{
+  position:fixed;inset:0;z-index:400;background:var(--g50);
+  display:flex;align-items:center;justify-content:center;
+  transition:opacity .34s ease;
+}
+#splash[hidden]{display:none}
+#splash.out{opacity:0;pointer-events:none}
+
+.splcard{
+  width:min(540px,calc(100% - 40px));
+  background:linear-gradient(160deg,#2b2b2e 0%,var(--g75) 46%,#241f2b 100%);
+  border:1px solid var(--g300);border-radius:10px;box-shadow:var(--shadow-lg);
+  padding:34px 34px 26px;position:relative;overflow:hidden;
+}
+/* The wash behind the mark. Static -- a pulsing gradient on a splash that is
+   usually up for under a second reads as a rendering glitch. */
+.splcard::before{
+  content:'';position:absolute;top:-90px;right:-70px;width:280px;height:280px;
+  background:radial-gradient(circle,rgba(177,76,255,.20),transparent 68%);
+  pointer-events:none;
+}
+.splmark{display:flex;align-items:center;gap:13px;margin-bottom:22px}
+.splmark svg{width:42px;height:42px;flex:none}
+.spltitle{font:600 19px/1.25 var(--sans);letter-spacing:-.02em;color:var(--g900)}
+.splby{font:11.5px var(--sans);color:var(--g600);margin-top:3px}
+.splby a{color:var(--g600);text-decoration:none}
+.splby a:hover{color:var(--accent-hi)}
+
+/* min-height reserves exactly the four rows so the card cannot resize as the
+   summaries arrive. A splash that changes height while you read it is worse
+   than one that is slightly too tall. */
+.splsteps{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;
+  list-style:none;min-height:80px}
+.splstep{display:flex;align-items:center;gap:9px;
+  font:11.5px var(--mono);color:var(--g500);transition:color .18s}
+.splstep.on{color:var(--g700)}
+.splstep.ok{color:var(--g800)}
+.splstep.err{color:var(--block)}
+.splstep .ic{width:13px;height:13px;flex:none;display:flex;
+  align-items:center;justify-content:center;font-size:11px}
+.splstep .ic i{display:block;width:5px;height:5px;border-radius:50%;
+  background:var(--g400)}
+.splstep.on .ic i{width:11px;height:11px;border-radius:50%;background:none;
+  border:2px solid var(--g400);border-top-color:var(--accent);
+  animation:sp .7s linear infinite}
+.splstep.ok  .ic{color:var(--pass)}
+.splstep.err .ic{color:var(--block)}
+/* .spnote, not .note -- `.note` is already this page's info-callout class
+   (padded card, coloured left rule), so reusing the name turned four one-line
+   summaries into four grey boxes. Generic class names in a single-file app
+   are a collision waiting to happen; this one collided immediately. */
+.splstep .spnote{margin-left:auto;color:var(--g500);font-size:10.5px;
+  text-align:right;max-width:58%;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.splstep.err .spnote{color:var(--block)}
+
+.splfoot{display:flex;align-items:center;gap:10px;margin-top:22px;
+  padding-top:14px;border-top:1px solid var(--g300);
+  font:10px var(--mono);color:var(--g500)}
+.splver{margin-left:auto}
+.splretry{background:var(--accent);border:0;color:#fff;border-radius:var(--r);
+  padding:5px 13px;font:500 11.5px var(--sans);cursor:pointer}
+.splretry:hover{background:var(--accent-hi)}
 </style>
 </head><body>
 <!-- Four panes, one visible at a time, switched by the tabs in the top bar.
@@ -878,6 +958,38 @@ header.topbar .ghlink{margin-left:0;align-self:center;flex:none}
 
      Run and the status dot stay in the chrome rather than in a pane, because
      starting a run is the one thing you want to do from anywhere. -->
+<!-- The splash. Present in the markup rather than injected, so it is painted
+     on the FIRST frame -- building it in JS means a flash of the empty app
+     underneath while the script parses, which is the one thing a splash
+     exists to prevent. Every step below resolves against a real request. -->
+<div id="splash">
+  <div class="splcard">
+    <div class="splmark">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <defs><linearGradient id="ffgs" x1="0" y1="1" x2="1" y2="0">
+          <stop offset="0%"  stop-color="#ff3f7f"/>
+          <stop offset="48%" stop-color="#ff7a29"/>
+          <stop offset="100%" stop-color="#b14cff"/>
+        </linearGradient></defs>
+        <path fill="url(#ffgs)" d="M12 .8c.35 4.2 1.5 6.9 3.3 8.6 1.7 1.6 4.3 2.4 7.9 2.6
+          -3.6.2-6.2 1-7.9 2.6-1.8 1.7-2.95 4.4-3.3 8.6-.35-4.2-1.5-6.9-3.3-8.6C7 13 4.4 12.2.8
+          12c3.6-.2 6.2-1 7.9-2.6C10.5 7.7 11.65 5 12 .8z"/>
+        <circle cx="19.4" cy="4.6" r="2.1" fill="url(#ffgs)" opacity=".85"/>
+      </svg>
+      <div>
+        <div class="spltitle">FDE Social Content<br>Agentic Automation &amp; Analytics</div>
+        <div class="splby">Douglas McKay ·
+          <a href="mailto:doug@dougmckay.info">doug@dougmckay.info</a></div>
+      </div>
+    </div>
+    <ul class="splsteps" id="splsteps"></ul>
+    <div class="splfoot">
+      <span id="splfootnote">starting</span>
+      <span class="splver" id="splver"></span>
+    </div>
+  </div>
+</div>
+
 <header class="topbar">
 <!-- The bar spans the window; .topinner holds its contents to the same width
      and padding as .wrap, so the brandmark lines up with the panels below.
@@ -1153,17 +1265,133 @@ function drawFlow(graph){
 let running = false;
 
 
+/* ------------------------------------------------------------------ *
+ * Startup, and the splash that reports it
+ *
+ * The steps below are the real startup sequence, not a scripted animation.
+ * Each one is a promise; its line spins while the request is in flight, ticks
+ * with a one-line summary of what came back, and turns red with the reason if
+ * it fails. That last case is the point: the first time somebody runs this on
+ * their own machine, "no image provider is configured" or "this brief will not
+ * parse" is exactly what they need to be told, and a splash that fades out
+ * regardless has thrown that away before they saw it.
+ *
+ * MIN_SPLASH exists because on a warm local server this whole sequence
+ * finishes in under 80ms, and a panel that appears and vanishes inside one
+ * frame reads as a rendering fault rather than a splash. It delays the fade,
+ * never the work, and never the reporting -- the steps tick when they
+ * actually resolve.
+ * ------------------------------------------------------------------ */
+
+const MIN_SPLASH = 950;
+const SPLASH_T0 = Date.now();
+
+const STEPS = [
+  {id: 'server',   label: 'local server'},
+  {id: 'provider', label: 'image providers'},
+  {id: 'storage',  label: 'storage backends'},
+  {id: 'brief',    label: 'campaign brief'},
+];
+
+function paintSteps(){
+  $('#splsteps').innerHTML = STEPS.map(s => `
+    <li class="splstep ${s.state || ''}" data-step="${s.id}">
+      <span class="ic">${s.state === 'ok'  ? '✓'
+                       : s.state === 'err' ? '✕' : '<i></i>'}</span>
+      <span>${esc(s.label)}</span>
+      <span class="spnote">${esc(s.note || '')}</span>
+    </li>`).join('');
+}
+
+function step(id, state, note){
+  const s = STEPS.find(x => x.id === id);
+  if (!s) return;
+  s.state = state;
+  if (note !== undefined) s.note = note;
+  paintSteps();
+  // The footer follows the list rather than repeating it: whichever step is
+  // in flight, or how long the whole thing took once nothing is.
+  const busy = STEPS.find(x => x.state === 'on');
+  const ms = Date.now() - SPLASH_T0;
+  $('#splfootnote').textContent = busy
+    ? 'loading ' + busy.label
+    // Milliseconds under a second: against a warm local server this whole
+    // sequence is ~40ms, and "ready in 0.0s" reads like a broken timer.
+    : 'ready in ' + (ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`);
+}
+
+async function closeSplash(){
+  const wait = Math.max(0, MIN_SPLASH - (Date.now() - SPLASH_T0));
+  await new Promise(r => setTimeout(r, wait));
+  const el = $('#splash');
+  el.classList.add('out');
+  setTimeout(() => { el.hidden = true; }, 360);
+}
+
+function splashFailed(msg){
+  // Left on screen deliberately. There is nothing behind it worth showing if
+  // the server never answered, and a retry is one button rather than a
+  // reload the user has to think of.
+  $('#splfootnote').innerHTML =
+    `<span style="color:var(--block)">${esc(msg)}</span>`;
+  const b = document.createElement('button');
+  b.className = 'splretry'; b.textContent = 'Retry';
+  b.onclick = () => location.reload();
+  $('#splfootnote').after(b);
+}
+
 async function init(){
-  const r = await (await fetch('/api/init')).json();
-  const bs = $('#brief'), ps = $('#provider');
+  paintSteps();
+  step('server', 'on');
+
+  let r;
+  try {
+    r = await (await fetch('/api/init')).json();
+  } catch (e) {
+    step('server', 'err', 'no answer on this port');
+    return splashFailed('The app could not reach its own server.');
+  }
+  $('#splver').textContent = 'v' + (r.version || '1.0');
+  step('server', 'ok', r.briefs.length + ' brief'
+       + (r.briefs.length === 1 ? '' : 's') + ' found');
+
+  const bs = $('#brief');
   bs.innerHTML = r.briefs.map(b=>`<option value="${b}">${b}</option>`).join('');
   // The server names the default rather than letting the first option win by
   // sort order. A scratch brief dropped into campaigns/ should not quietly
   // become the thing "press Run" runs.
   if (r.default_brief && r.briefs.includes(r.default_brief)) bs.value = r.default_brief;
+
+  // Providers and storage are reported, not just counted: "1 of 4 configured"
+  // is the sentence that stops somebody wondering later why every run came
+  // out of the offline renderer.
+  const ready = (r.providers || []).filter(p => p.configured);
+  step('provider', ready.length ? 'ok' : 'err',
+       ready.length ? `${ready.length} of ${r.providers.length} configured · ${r.default_provider}`
+                    : 'none configured — offline renderer only');
+  // `local` is always configured -- it is the run folder itself -- so it is
+  // not what this line is reporting. The question is whether anything gets
+  // MIRRORED, which is the difference between a shareable URL and a folder.
+  const mirrors = (r.storages || []).filter(s => s.configured && s.name !== 'local');
+  step('storage', 'ok', mirrors.length
+       ? 'local + ' + mirrors.map(s => s.name).join(' + ') + ' mirror'
+       : 'local only — nothing mirrored');
+
   paintProviders(r);
   paintStale(r.stale);
-  await loadBrief();
+
+  step('brief', 'on');
+  try {
+    await loadBrief();
+  } catch (e) {
+    step('brief', 'err', String(e).slice(0, 60));
+    return splashFailed('The brief could not be loaded.');
+  }
+  step('brief', BRIEF ? 'ok' : 'err',
+       BRIEF ? `${(BRIEF.products||[]).length} products × ${(BRIEF.markets||[]).length} markets`
+             : 'will not parse — opened the YAML tab');
+
+  await closeSplash();
 }
 
 /* ------------------------------------------------------------------ *

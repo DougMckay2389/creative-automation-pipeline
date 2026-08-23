@@ -50,8 +50,37 @@ Every requirement, and the code and test that carries it.
 ## Run it — the app
 
 Double-click **`start.bat`** (Windows) or **`start.sh`** (macOS/Linux). It
-checks the three dependencies, starts a local server and opens
-<http://127.0.0.1:8765>.
+checks the three dependencies, starts a local server on
+<http://127.0.0.1:8765>, and opens it **as an application window** — no tab
+strip, no address bar, no eleven other tabs around a tool whose job is judging
+images. Closing the window stops the server, unless a run is still going, in
+which case it is left alone to finish.
+
+That is Chromium's `--app` mode, not Electron and not pywebview. Both were
+rejected for the reason the rest of this repo has three dependencies: the
+README promises an install a reviewer can actually complete, and
+`pip install pywebview` fails differently on every platform. This uses a
+browser the machine already has, in its own throwaway profile so the window
+starts at a known size and carries none of your extensions or bookmarks into a
+screen share. If no Chromium-family browser is found it falls back to a normal
+tab and says so.
+
+| | |
+|---|---|
+| `start.bat` / `./start.sh` | app window if Chrome, Edge, Brave or Chromium is present; a browser tab if not |
+| `--browser` | force a normal browser tab |
+| `--no-open` | start the server and open nothing |
+| `--app` | require the app window; say so rather than falling back |
+| `--port N` | run somewhere other than 8765 |
+
+It opens on a splash that lists what it is initialising — the local server,
+which image providers are configured, whether anything is being mirrored, and
+whether the brief parses. Those lines are the real startup sequence rather
+than a timed animation: each ticks when its request comes back and turns red
+with the reason if it fails. The first time somebody runs this on their own
+machine, *"none configured — offline renderer only"* is exactly what they need
+to be told, and a splash that fades out regardless has thrown that away before
+they saw it.
 
 From there: pick a brief, press **Plan** to see what a run would cost before
 spending anything, edit the brief, then **Run pipeline** and watch it move
