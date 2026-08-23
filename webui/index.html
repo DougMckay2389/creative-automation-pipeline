@@ -162,6 +162,35 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .pcfield.live input,.pcfield.live textarea{border-color:#3c5578;background:#fbfcfe}
 .pcfield.inert input,.pcfield.inert textarea{opacity:.45;background:#f4f2ed}
 .pcfield .sub{font:9.5px var(--mono);color:var(--muted);margin-top:3px}
+
+/* ---- uploading and reusing images ---- */
+.assetbtns{display:flex;gap:6px;margin-top:6px}
+.abtn{flex:1;border:1px solid var(--line);background:#fff;color:var(--ink2);
+  border-radius:7px;padding:5px 8px;font:600 11px var(--sans);cursor:pointer}
+.abtn:hover{border-color:var(--accent);color:var(--accent);background:#fff}
+/* The thumbnail is a drop target and a picker, so it has to LOOK like one --
+   an invisible affordance is not an affordance. */
+.pcimg .shot{cursor:pointer;transition:border-color .12s,background-color .12s}
+.pcimg .shot:hover{border-color:var(--accent)}
+.pcimg .shot.dropping{border:2px dashed var(--accent);background:#fdf6ee}
+
+#librarymodal{position:fixed;inset:0;z-index:70;background:rgba(18,20,15,.55);
+  display:flex;align-items:center;justify-content:center;padding:26px}
+#librarymodal[hidden]{display:none}
+#librarymodal .amcard{max-width:760px}
+.libbody{padding:14px 17px;max-height:62vh;overflow-y:auto}
+.libgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:10px}
+.libitem{display:flex;flex-direction:column;gap:5px;padding:8px;cursor:pointer;
+  border:1px solid var(--line);border-radius:9px;background:#fff;text-align:center}
+.libitem:hover{border-color:var(--accent);background:#fffaf4}
+.libthumb{display:block;width:100%;aspect-ratio:1;border-radius:6px;overflow:hidden;
+  background:#f2f0ea}
+.libthumb img{width:100%;height:100%;object-fit:cover;display:block}
+.libname{font:600 10.5px var(--sans);color:var(--ink);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.libmeta{font:9.5px var(--mono);color:var(--muted)}
+.libempty{font:12px var(--sans);color:var(--muted);text-align:center;padding:30px 10px;
+  line-height:1.7}
 .fsec>h3{margin:0 0 8px;font:700 10.5px var(--mono);letter-spacing:.1em;
          text-transform:uppercase;color:var(--muted)}
 .frow{display:grid;grid-template-columns:118px 1fr;gap:9px;align-items:center;margin-bottom:6px}
@@ -426,6 +455,11 @@ generated fresh from its current subject and surface, with a seed salted by the 
 </div>
 
 <div id="assetmodal" hidden></div>
+<div id="librarymodal" hidden></div>
+<!-- One file input, reused by every product card. Rendering one per card
+     would mean N hidden inputs to keep in sync for no benefit; the card that
+     opened it is remembered on the element itself. -->
+<input type="file" id="filepick" accept="image/png,image/jpeg,image/webp" hidden>
 <div id="stalebanner" hidden></div>
 <div id="keypanel" hidden></div>
 <div id="planout"></div>
@@ -702,7 +736,8 @@ function renderForm(){
           </div>
           <div class="pcbody">
             <div class="pcimg">
-              <div class="shot" data-shot-for="${i}">checking&hellip;</div>
+              <div class="shot" data-shot-for="${i}" data-drop="${i}"
+                   title="drop an image here, or click to choose one">checking&hellip;</div>
               <div class="shotcap" data-shotcap-for="${i}"></div>
             </div>
             <div class="pcctl">
@@ -726,6 +761,10 @@ function renderForm(){
                 <label>Source image</label>
                 <input data-p="products.${i}.asset" value="${val(p.asset)}"
                   placeholder="campaigns/assets/thing.png">
+                <div class="assetbtns">
+                  <button type="button" class="abtn" data-upload="${i}">Upload image…</button>
+                  <button type="button" class="abtn" data-library="${i}">Choose existing…</button>
+                </div>
               </div>
             </div>
           </div>
@@ -911,6 +950,160 @@ async function paintProductStates(){
 /* Does this product's asset really exist on disk? Filled by
    paintProductStates so nothing asks the server twice for one answer. */
 const ASSET_EXISTS = {};
+
+/* ------------------------------------------------------------------ *
+ * Uploading and reusing product images
+ *
+ * The brief's first data source is "campaign briefs and assets uploaded
+ * manually", and its first requirement is to reuse those assets when they
+ * exist. Both halves need a way in that is not "type a relative path from
+ * memory and hope you spelled it right":
+ *
+ *   Upload image…     put a new photograph on disk and point this product at it
+ *   Choose existing…  a grid of what has already been uploaded — this is the
+ *                     reuse half, and it only works if you can SEE them
+ *   drag and drop     onto the thumbnail, because that is what people try
+ *
+ * All three end at the same place: `products[i].asset` gets a path, and the
+ * card repaints so the mode switch and the prompts reflect the new reality.
+ * ------------------------------------------------------------------ */
+
+function setAsset(i, path){
+  const p = BRIEF && BRIEF.products && BRIEF.products[i];
+  if (!p) return;
+  p.asset = path;
+  // A product that had no image was necessarily in "generate" mode, and that
+  // flag would now be a lie -- it would ignore the file just uploaded, which
+  // is a baffling thing for an upload to do. Clearing it means the card lands
+  // on "photo as shot", the safe reading of "here is my product photograph".
+  delete p.regenerate_product;
+  renderForm();
+}
+
+function uploadNote(i, msg, bad){
+  const cap = document.querySelector(`[data-shotcap-for="${i}"]`);
+  if (!cap) return;
+  cap.textContent = msg;
+  cap.style.color = bad ? 'var(--block)' : 'var(--muted)';
+}
+
+async function uploadFile(i, file){
+  if (!file) return;
+  uploadNote(i, 'uploading…');
+  // readAsDataURL gives "data:<mime>;base64,<payload>" -- the payload after
+  // the comma is what the server wants. Reading as base64 in the browser and
+  // sending JSON avoids hand-parsing multipart in a stdlib HTTP handler,
+  // where a subtly wrong boundary parser corrupts binary in ways that only
+  // show up much later as "the image looks funny".
+  const b64 = await new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result).split(',')[1] || '');
+    fr.onerror = () => reject(fr.error);
+    fr.readAsDataURL(file);
+  }).catch(() => null);
+  if (!b64) { uploadNote(i, 'could not read that file', true); return; }
+
+  let r;
+  try {
+    r = await (await fetch('/api/upload', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name: file.name, data: b64})})).json();
+  } catch { uploadNote(i, 'upload failed', true); return; }
+
+  if (r.error) { uploadNote(i, r.error, true); return; }
+  // The server may have renamed it to avoid clobbering an existing file, so
+  // trust the path it returns rather than the one we sent.
+  setAsset(i, r.path);
+}
+
+/* ---- the file picker, shared by every card ---- */
+$('#filepick').addEventListener('change', (e) => {
+  const idx = e.target.dataset.for;
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';                    // so re-picking the same file fires
+  if (idx !== undefined && file) uploadFile(+idx, file);
+});
+
+/* ---- buttons on the card ---- */
+$('#formpane').addEventListener('click', (e) => {
+  const up = e.target.closest('[data-upload]');
+  if (up) {
+    const fp = $('#filepick');
+    fp.dataset.for = up.dataset.upload;
+    fp.click();
+    return;
+  }
+  const shot = e.target.closest('[data-drop]');
+  if (shot) {                              // clicking the thumbnail also picks
+    const fp = $('#filepick');
+    fp.dataset.for = shot.dataset.drop;
+    fp.click();
+    return;
+  }
+  const lib = e.target.closest('[data-library]');
+  if (lib) openLibrary(+lib.dataset.library);
+});
+
+/* ---- drag and drop onto the thumbnail ---- */
+$('#formpane').addEventListener('dragover', (e) => {
+  const shot = e.target.closest('[data-drop]');
+  if (!shot) return;
+  e.preventDefault();                      // required, or the drop never fires
+  shot.classList.add('dropping');
+});
+$('#formpane').addEventListener('dragleave', (e) => {
+  const shot = e.target.closest('[data-drop]');
+  if (shot) shot.classList.remove('dropping');
+});
+$('#formpane').addEventListener('drop', (e) => {
+  const shot = e.target.closest('[data-drop]');
+  if (!shot) return;
+  e.preventDefault();
+  shot.classList.remove('dropping');
+  const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (file) uploadFile(+shot.dataset.drop, file);
+});
+// Without these the browser navigates away to the dropped file, silently
+// losing whatever was on screen -- including unsaved brief edits.
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => e.preventDefault());
+
+/* ---- the reuse library ---- */
+async function openLibrary(i){
+  const m = $('#librarymodal');
+  m.dataset.for = i;
+  m.innerHTML = `<div class="amcard" role="dialog" aria-modal="true">
+      <div class="amhead"><b>Choose an existing image</b>
+        <button class="x" data-libclose aria-label="close">&times;</button></div>
+      <div class="libbody">loading…</div></div>`;
+  m.hidden = false;
+
+  let r;
+  try { r = await (await fetch('/api/assets')).json(); }
+  catch { r = {assets: []}; }
+
+  const items = r.assets || [];
+  m.querySelector('.libbody').innerHTML = items.length
+    ? `<div class="libgrid">${items.map(a => `
+        <button type="button" class="libitem" data-pick="${esc(a.path)}">
+          <span class="libthumb"><img src="/out/${encodeURI(a.path)}" alt="" loading="lazy"></span>
+          <span class="libname" title="${esc(a.path)}">${esc(a.name)}</span>
+          <span class="libmeta">${a.broken ? 'unreadable'
+            : (a.width + '×' + a.height + ' · ' + Math.round(a.bytes/1024) + ' KB')}</span>
+        </button>`).join('')}</div>`
+    : `<div class="libempty">Nothing uploaded yet.<br>
+         Use <b>Upload image…</b>, or drop a file onto a product thumbnail.</div>`;
+}
+
+$('#librarymodal').addEventListener('click', (e) => {
+  const m = $('#librarymodal');
+  if (e.target === m || e.target.closest('[data-libclose]')) { m.hidden = true; return; }
+  const pick = e.target.closest('[data-pick]');
+  if (pick) {
+    m.hidden = true;
+    setAsset(+m.dataset.for, pick.dataset.pick);
+  }
+});
 
 /* The surface prompts that sit directly above Run.
  *

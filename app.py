@@ -14,10 +14,13 @@ the product cannot drift apart.
 """
 from __future__ import annotations
 
+import base64
 import glob
+import io
 import json
 import mimetypes
 import os
+import re
 import socket
 import sys
 import threading
@@ -26,6 +29,7 @@ import traceback
 import webbrowser
 
 import yaml
+from PIL import Image
 
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError
@@ -38,7 +42,7 @@ from pipeline.checks import preflight_brief
 from pipeline.providers import (CREDENTIALS, default_provider,
                                 provider_status)
 from pipeline.storage import (STORAGE_CREDENTIALS, StorageError,
-                              get_storage, storage_status)
+                              default_storage, get_storage, storage_status)
 from pipeline.report import write_report
 from pipeline.runner import run_campaign
 
@@ -117,6 +121,24 @@ SERVER = None
 # A bare "is something listening?" is not enough to justify stopping it -- the
 # whole point is to be certain it is us before doing anything.
 APP_ID = "creative-automation-pipeline"
+
+# Where uploaded product photography lands.
+#
+# The same folder the sample brief already points at, deliberately: an upload
+# and a file someone dropped in by hand are the same kind of thing, and giving
+# uploads their own special directory would create two places to look for one
+# concept.
+ASSET_DIR = os.path.join(ROOT, "campaigns", "assets")
+
+# What Pillow can open AND the pipeline can composite. WEBP and JPEG are here
+# because that is what phones and stock libraries actually produce; the list
+# is checked against the decoded bytes as well, never the extension alone.
+ASSET_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
+
+MAX_UPLOAD_MB = 25
+# base64 inflates by 4/3. Comparing against the ENCODED length lets an
+# oversize upload be rejected before it is decoded into memory.
+MAX_UPLOAD_B64 = int(MAX_UPLOAD_MB * 1024 * 1024 * 4 / 3) + 1024
 
 # Which pipeline event advances which node on the flow canvas. The graph is
 # driven entirely by events the pipeline actually emits -- the same records
@@ -312,6 +334,35 @@ class Handler(SimpleHTTPRequestHandler):
                                "stale": _is_stale(),
                                "cwd": ROOT})
 
+        if route == "/api/assets":
+            """Every product image already uploaded, for reuse.
+
+            "Reuse them when available" is the brief's requirement, and reuse
+            only happens if somebody can FIND the asset. A path typed from
+            memory is not findable; a grid of thumbnails is. Dimensions come
+            back too, because whether a source shot is 1024 square or a 300px
+            thumbnail changes what the pipeline can do with it.
+            """
+            out = []
+            for full in sorted(glob.glob(os.path.join(ASSET_DIR, "*"))):
+                if not os.path.isfile(full):
+                    continue
+                if os.path.splitext(full)[1].lower() not in ASSET_EXTS:
+                    continue
+                rel = os.path.relpath(full, ROOT).replace("\\", "/")
+                item = {"path": rel, "name": os.path.basename(full),
+                        "bytes": os.path.getsize(full)}
+                try:
+                    with Image.open(full) as im:
+                        item["width"], item["height"] = im.size
+                except Exception:                                # noqa: BLE001
+                    # Listed anyway, flagged. A file that will not open is
+                    # exactly what somebody needs to be told about -- silently
+                    # hiding it turns "my image vanished" into a mystery.
+                    item["broken"] = True
+                out.append(item)
+            return self._json({"assets": out, "dir": ASSET_DIR})
+
         if route == "/api/whoami":
             """Who is answering on this port?
 
@@ -490,6 +541,112 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json({"ok": True, "providers": provider_status(),
                                "storages": storage_status(),
                                "default_provider": default_provider()})
+
+        if route == "/api/upload":
+            """Take a product image from the browser and put it on disk.
+
+            **Base64 in JSON, not multipart.** Multipart would mean
+            hand-parsing boundaries in a stdlib HTTP handler (`cgi` is
+            deprecated and gone in 3.13), and a subtly wrong parser corrupts
+            binary payloads in ways that surface much later as "the image
+            looks funny". Base64 costs 33% on the wire for files that are a
+            megabyte or two, over localhost. That is a good trade for a local
+            tool, and it is the sort of trade worth making explicitly.
+
+            The order of checks below is the design: cheap and cheerful first,
+            then the one that actually proves anything.
+            """
+            raw = str(body.get("name") or "").strip()
+            data_b64 = str(body.get("data") or "")
+            if not raw or not data_b64:
+                return self._json({"error": "need a name and file data"}, 400)
+
+            # 1. Name. Basename only, so "../../.env" cannot escape, and a
+            #    conservative character set so nothing downstream has to worry
+            #    about quoting a filename in a path, a URL or a YAML string.
+            stem, ext = os.path.splitext(os.path.basename(raw))
+            ext = ext.lower()
+            if ext not in ASSET_EXTS:
+                return self._json(
+                    {"error": f"{ext or 'that'} is not a supported image type "
+                              f"({', '.join(sorted(ASSET_EXTS))})"}, 400)
+            stem = re.sub(r"[^a-zA-Z0-9._-]+", "-", stem).strip("-.") or "asset"
+
+            # 2. Size, checked BEFORE decoding. Decoding first would mean
+            #    allocating whatever was sent in order to find out it was too
+            #    big, which is the wrong way round.
+            if len(data_b64) > MAX_UPLOAD_B64:
+                return self._json(
+                    # ASCII hyphen, not an em dash. This string can end up on a
+                    # Windows console, where cp1252 turns a stray em dash into
+                    # mojibake -- an error message that is itself broken is a
+                    # bad way to tell somebody their file is too big.
+                    {"error": f"too large - the limit is {MAX_UPLOAD_MB} MB"}, 413)
+            try:
+                blob = base64.b64decode(data_b64, validate=True)
+            except Exception:                                    # noqa: BLE001
+                return self._json({"error": "the upload was not valid base64"}, 400)
+
+            # 3. Is it REALLY an image? The extension is a claim and the MIME
+            #    type the browser sent is a claim; only decoding it is
+            #    evidence. Everything downstream -- the thumbnail, the
+            #    resolver, the compositor -- assumes Pillow can open this, so
+            #    the moment to find out is now, not three stages later.
+            try:
+                with Image.open(io.BytesIO(blob)) as probe:
+                    probe.verify()
+                with Image.open(io.BytesIO(blob)) as probe:
+                    width, height = probe.size
+                    fmt = probe.format
+            except Exception:                                    # noqa: BLE001
+                return self._json(
+                    {"error": "that file is not an image Pillow can read"}, 400)
+
+            os.makedirs(ASSET_DIR, exist_ok=True)
+            # 4. Never silently overwrite. Two people photographing two
+            #    products both end up with "product.png", and losing the first
+            #    one to the second is a data-loss bug wearing a convenience
+            #    costume.
+            dest = os.path.join(ASSET_DIR, stem + ext)
+            n = 2
+            while os.path.exists(dest):
+                dest = os.path.join(ASSET_DIR, f"{stem}-{n}{ext}")
+                n += 1
+
+            tmp = dest + ".part"
+            try:
+                with open(tmp, "wb") as fh:
+                    fh.write(blob)
+                os.replace(tmp, dest)        # atomic; never a half-written file
+            except OSError as exc:
+                return self._json({"error": f"could not save: {exc}"}, 500)
+
+            rel = os.path.relpath(dest, ROOT).replace("\\", "/")
+
+            # 5. Mirror the INPUT to object storage too, when it is
+            #    configured. The brief asks for storage of "generated or
+            #    transient assets" -- an uploaded hero shot is the input that
+            #    every deliverable descends from, so a bucket holding the
+            #    outputs but not the source it came from is only half an
+            #    archive. Private prefix, not the shared one: this is somebody
+            #    else's product photography, not a deliverable to hand out.
+            stored = ""
+            try:
+                st = get_storage(default_storage())
+                if st.name != "local":
+                    obj = st.put(f"assets/{os.path.basename(dest)}", blob,
+                                 mimetypes.guess_type(dest)[0] or "image/png")
+                    stored = obj.uri
+            except (StorageError, Exception):                    # noqa: BLE001
+                # An upload that reached disk succeeded. The mirror is a bonus
+                # and must never turn a working upload into a failed one.
+                stored = ""
+
+            return self._json({"ok": True, "path": rel,
+                               "name": os.path.basename(dest),
+                               "width": width, "height": height,
+                               "format": fmt, "bytes": len(blob),
+                               "stored_uri": stored})
 
         if route == "/api/shutdown":
             """Stand down so a newly started copy can take the port.

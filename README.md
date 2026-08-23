@@ -304,6 +304,54 @@ Read`, and roll it once the review is done.
 Without a key the zip still runs — the offline provider needs no credentials —
 and `examples/cloudflare-run/` is a committed real run either way.
 
+### Uploading and reusing product images
+
+The brief's first data source is *"campaign briefs and assets uploaded
+manually"*, and its first requirement is to **reuse those assets when
+available**. Both halves need a way in that is not "type a relative path from
+memory and hope you spelled it right", so each product card has three:
+
+- **Upload image…** — puts a new photograph on disk and points the product at it
+- **Choose existing…** — a grid of everything already uploaded, with thumbnails
+  and dimensions. This is the *reuse* half, and reuse only happens if you can
+  see what you already have
+- **Drag and drop** onto the product thumbnail, because that is what people try
+  first
+
+All three land in the same place: `products[i].asset` gets a path, the card
+repaints, and the mode switch unlocks the two positions that need a photograph.
+
+Uploads go to `campaigns/assets/` — the same folder the sample brief already
+points at, because a file someone dropped in by hand and a file uploaded
+through the app are the same kind of thing, and giving uploads their own
+directory would create two places to look for one concept.
+
+**It is base64 in JSON, not multipart.** Multipart would mean hand-parsing
+boundaries in a stdlib HTTP handler (`cgi` is deprecated and gone in 3.13), and
+a subtly wrong parser corrupts binary in ways that surface much later as "the
+image looks funny". Base64 costs 33% on the wire, for a couple of megabytes,
+over localhost. That is a good trade here and a bad one at scale — worth
+stating rather than leaving implied.
+
+Four checks, in this order, because the cheap ones should not be paid for by
+the expensive one:
+
+| Check | Why |
+|---|---|
+| Extension against an allow-list | Cheapest possible rejection |
+| Size, before decoding | Decoding first would allocate the thing you are about to refuse |
+| **Pillow can actually open it** | The extension is a claim; only decoding is evidence |
+| Name is a sanitised basename | `../../../.env.png` becomes `env.png` and stays in the folder |
+
+A filename that already exists is **never overwritten** — it becomes `-2`, `-3`.
+Two people photographing two products both produce `product.png`, and losing
+the first to the second is data loss wearing a convenience costume.
+
+Uploaded inputs are mirrored to object storage too, under a **private**
+`assets/` prefix rather than the shareable one — a bucket holding the outputs
+but not the source they descend from is only half an archive, and someone
+else's product photography is not a deliverable to hand out.
+
 ### Keep the approved product, change the world around it
 
 Reuse used to be all-or-nothing: a product either had a photograph on disk and
