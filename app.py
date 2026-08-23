@@ -37,6 +37,7 @@ from urllib.parse import unquote, urlparse
 from urllib.request import Request, urlopen
 
 from pipeline.brief import BriefError, load_brief
+from pipeline import insights
 from pipeline.env import load_dotenv
 from pipeline.checks import preflight_brief
 from pipeline.providers import (CREDENTIALS, default_provider,
@@ -362,6 +363,29 @@ class Handler(SimpleHTTPRequestHandler):
                                "storages": storage_status(),
                                "stale": _is_stale(),
                                "cwd": ROOT})
+
+        if route == "/api/insights":
+            """Synthetic channel history for every market in a brief.
+
+            Marked `synthetic: true` in the payload and labelled as sample
+            data everywhere it is drawn. Nothing here reaches Meta, TikTok, X
+            or Google -- see pipeline/insights.py for what a real integration
+            would take.
+            """
+            rel = unquote(urlparse(self.path).query.split("path=", 1)[-1])
+            p = self._safe(rel)
+            if not p or not os.path.isfile(p):
+                return self._json({"error": "not found"}, 404)
+            try:
+                b = load_brief(p)
+            except BriefError as exc:
+                return self._json({"error": str(exc)}, 200)
+            ratios = [r.id for r in b.ratios]
+            return self._json({
+                "synthetic": True,
+                "ratios": ratios,
+                "markets": [insights.report(m.locale, ratios) for m in b.markets],
+            })
 
         if route == "/api/assets":
             """Every product image already uploaded, for reuse.

@@ -303,6 +303,72 @@ a.rep{font-size:13px;color:var(--accent)}
        text-align:right;line-height:1.3}
 .prow2 .mstrip{padding:0;flex:1;min-width:0}
 
+/* ---- analytics ----
+   Kept visually quieter than the run results on purpose. This data is
+   invented, and it should never out-shout the parts of the screen that are
+   real measurements of real pixels. */
+.anloading{font:12px var(--mono);color:var(--muted);padding:24px 4px}
+.anwarn{font-size:12.5px;line-height:1.65;color:var(--ink2);background:#fffdf3;
+  border:1px solid #f0e4bb;border-radius:10px;padding:12px 14px;margin-bottom:16px}
+.anwarn b{color:#8a6100}
+.anwarn code{font:11px var(--mono);background:#f6efd9;padding:1px 5px;border-radius:4px}
+
+.anmkt{border:1px solid var(--line);border-radius:11px;margin-bottom:14px;overflow:hidden}
+.anhead{display:flex;align-items:center;gap:10px;padding:10px 13px;
+  border-bottom:1px solid var(--line);background:#fcfcfb}
+.anhead .loc{font:600 10px var(--mono);letter-spacing:.1em;text-transform:uppercase;
+  background:var(--ink);color:#fff;border-radius:5px;padding:3px 7px}
+.anlab{font:11.5px var(--sans);color:var(--muted)}
+.ansyn{margin-left:auto;font:700 8.5px var(--mono);letter-spacing:.14em;
+  color:#8a6100;background:#fdf3d8;border:1px solid #f0e4bb;border-radius:4px;padding:3px 7px}
+
+.anrec{display:flex;gap:14px;align-items:flex-start;padding:13px;
+  background:#f7f9fb;border-bottom:1px solid var(--line)}
+.anrectxt{flex:1;min-width:0}
+.anrech{font:700 11px var(--sans);color:var(--ink);margin-bottom:6px}
+.anwhy{margin:0 0 9px;padding-left:18px;font-size:12.5px;color:var(--ink2);line-height:1.6}
+.anwhy li{margin-bottom:2px}
+.anchg{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:5px;
+  font:11.5px var(--sans);color:var(--muted)}
+.anchg code{font:11px var(--mono);background:#e8eef4;color:#2f5f88;
+  padding:2px 7px;border-radius:5px}
+.annote{font:10.5px var(--mono);color:var(--muted);line-height:1.55;margin-top:7px;
+  max-width:64ch}
+.anapply{flex:none;border:1px solid var(--ink);background:var(--ink);color:#fff;
+  border-radius:8px;padding:8px 14px;font:600 12px var(--sans);cursor:pointer}
+.anapply:hover{filter:brightness(1.25)}
+.anapply.done{background:#3d6b48;border-color:#3d6b48}
+
+.antables{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));
+  gap:1px;background:var(--line)}
+.antbl{background:#fff;padding:11px 13px}
+.antblh{font:700 9.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:7px}
+.antbl table{width:100%;border-collapse:collapse;font-size:11.5px}
+.antbl th{font:700 8.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);text-align:left;padding:3px 6px 5px;border-bottom:1px solid var(--line)}
+.antbl td{padding:5px 6px;border-bottom:1px solid var(--line-soft, #f0eee9);vertical-align:middle}
+.antbl td.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.antbl td.num.good{color:#3d6b48;font-weight:700}
+.anplace{color:var(--muted);font-size:10.5px}
+.spark{display:block}
+
+.antreat{padding:12px 13px;background:#fff}
+.antrow{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px;
+  font-size:12px}
+.antrow.best{background:#eef4ee;box-shadow:inset 2px 0 0 #3d6b48}
+.antlabel{flex:0 0 132px;font-weight:600;color:var(--ink)}
+.antsurf{flex:1;min-width:0;color:var(--muted);font:11px var(--mono);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.antnum{flex:0 0 78px;text-align:right;font:11.5px var(--mono);
+  font-variant-numeric:tabular-nums;color:var(--ink2)}
+.antruns{flex:0 0 62px;text-align:right;font:10.5px var(--mono);color:var(--muted)}
+@media(max-width:720px){
+  .anrec{flex-direction:column}
+  .antlabel{flex-basis:100px}
+  .antsurf{display:none}
+}
+
 /* ---- results: one panel per market ----
    The dark strip is not decoration. The pipeline is the part of this tool
    that normally has to be taken on trust, so it gets the visual weight of an
@@ -568,11 +634,13 @@ generated fresh from its current subject and surface, with a seed salted by the 
   <h2>Brief <span id="briefname" class="tag"></span>
     <span class="tabs">
       <button class="tab on" data-tab="form">Form</button
-      ><button class="tab" data-tab="yaml">YAML</button>
+      ><button class="tab" data-tab="yaml">YAML</button
+      ><button class="tab" data-tab="analytics">Analytics</button>
     </span>
   </h2>
   <div id="formpane" class="formpane"></div>
   <textarea id="text" spellcheck="false" hidden></textarea>
+  <div id="anpane" class="formpane" hidden></div>
 </div>
 
 <div class="panel logpanel">
@@ -1422,7 +1490,166 @@ function showTab(which){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.tab===which));
   $('#formpane').hidden = which !== 'form';
   $('#text').hidden     = which !== 'yaml';
+  $('#anpane').hidden   = which !== 'analytics';
+  // Fetched on first view rather than on load: it is a whole extra request
+  // for a tab most sessions never open.
+  if (which === 'analytics') loadInsights();
 }
+
+/* ------------------------------------------------------------------ *
+ * Analytics — SYNTHETIC channel history, and what it should change
+ *
+ * Every figure below is generated, from a fixed seed, and says so on screen
+ * in three places. Nothing connects to Meta, TikTok, X or Google. That is
+ * laboured on purpose: a fabricated metric that escapes a demo as a real one
+ * is the worst thing this tool could do, and an unlabelled dashboard is how
+ * that happens.
+ *
+ * The reason it exists is the exercise's fifth business goal — "learn what
+ * content, creative and localization drives the best business outcomes". A
+ * pipeline that only pushes creative out answers four of five; the missing
+ * one is the loop back. So this tab does not stop at charts: each market's
+ * history produces two changes you can APPLY to the brief — the order the
+ * placements get produced in, and the surface treatment that is working in
+ * that market. A dashboard that produces a feeling is decoration; one that
+ * produces a diff is a tool.
+ * ------------------------------------------------------------------ */
+
+let INSIGHTS = null;
+
+async function loadInsights(force){
+  const pane = $('#anpane');
+  const path = $('#brief').value;
+  if (INSIGHTS && INSIGHTS.path === path && !force) return;
+  pane.innerHTML = `<div class="anloading">Reading channel history…</div>`;
+  let r;
+  try { r = await (await fetch('/api/insights?path=' + encodeURIComponent(path))).json(); }
+  catch { r = {error: 'could not load'}; }
+  if (r.error) { pane.innerHTML = `<div class="note err">${esc(r.error)}</div>`; return; }
+  INSIGHTS = Object.assign({path}, r);
+  paintInsights();
+}
+
+const SRC_NAME = {meta:'Meta (FB/IG)', tiktok:'TikTok', x:'X (Twitter)', gsc:'Search Console'};
+
+function spark(vals){
+  // Inline SVG rather than a chart library: this page has no build step, and
+  // eight points do not need 90KB of dependency to be drawn.
+  if (!vals || vals.length < 2) return '';
+  const w = 58, h = 18, max = Math.max(...vals), min = Math.min(...vals);
+  const span = Math.max(1, max - min);
+  const pts = vals.map((v, i) =>
+    `${(i / (vals.length - 1) * w).toFixed(1)},${(h - (v - min) / span * h).toFixed(1)}`);
+  const up = vals[vals.length - 1] >= vals[0];
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"
+    aria-hidden="true"><polyline points="${pts.join(' ')}" fill="none"
+    stroke="${up ? '#3d6b48' : '#a33'}" stroke-width="1.5"
+    stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+
+function paintInsights(){
+  const d = INSIGHTS;
+  const pane = $('#anpane');
+  pane.innerHTML = `
+    <div class="anwarn">
+      <b>Sample data.</b> Every figure on this tab is synthetic, generated from a
+      fixed seed so it is identical on every machine. Nothing here is connected to
+      Meta, TikTok, X or Google. A real integration would need the Meta Graph API
+      (<code>insights</code> edge), the TikTok Business API, the X Ads API (paid
+      tier) and the Search Console API — all per-market, all rate-limited, all
+      returning a different shape for the same idea, which is the argument for an
+      adapter layer like <code>providers/</code> and <code>storage/</code>.
+    </div>
+    ${d.markets.map(m => marketInsight(m)).join('')}`;
+}
+
+function marketInsight(m){
+  const rec = m.recommendation || {};
+  const bySource = {};
+  for (const row of m.rows) (bySource[row.source] ||= []).push(row);
+
+  return `<div class="anmkt">
+    <div class="anhead"><span class="loc">${esc(m.locale)}</span>
+      <span class="anlab">channel history &mdash; last 8 weeks</span>
+      <span class="ansyn">SYNTHETIC</span></div>
+
+    <div class="anrec">
+      <div class="anrectxt">
+        <div class="anrech">What this suggests for ${esc(m.locale)}</div>
+        <ol class="anwhy">${(rec.why || []).filter(Boolean)
+          .map(w => `<li>${esc(w)}</li>`).join('')}</ol>
+        <div class="anchg">
+          <span>Produce in this order:</span>
+          ${(rec.ratio_order || []).map((rt, i) =>
+            `<code>${i ? '&rarr; ' : ''}${esc(rt)}</code>`).join(' ')}
+        </div>
+        <div class="anchg"><span>Surface treatment, on every product:</span>
+          <code>${esc(rec.surface || '')}</code></div>
+        <div class="annote">Applying edits the brief in place &mdash; it reorders the
+          placements and overwrites each product's surface prompt. Nothing is written
+          to disk until you press Save, so reloading the brief undoes it.</div>
+      </div>
+      <button class="anapply" data-apply="${esc(m.locale)}">Apply to brief</button>
+    </div>
+
+    <div class="antables">
+      ${Object.keys(bySource).map(src => `
+        <div class="antbl">
+          <div class="antblh">${esc(SRC_NAME[src] || src)}</div>
+          <table><thead><tr>
+            <th>Placement</th><th>Impr.</th><th>CTR</th><th>CVR</th><th>CPA</th><th>8wk</th>
+          </tr></thead><tbody>
+          ${bySource[src].map(row => `<tr>
+            <td><b>${esc(row.ratio)}</b> <span class="anplace">${esc(row.placement)}</span></td>
+            <td class="num">${(row.impressions/1000).toFixed(0)}k</td>
+            <td class="num">${row.ctr}%</td>
+            <td class="num">${row.cvr}%</td>
+            <td class="num${row.cpa_index <= 1 ? ' good' : ''}">${row.cpa_index}</td>
+            <td>${spark(row.trend)}</td>
+          </tr>`).join('')}
+          </tbody></table>
+        </div>`).join('')}
+    </div>
+
+    <div class="antreat">
+      <div class="antblh">Creative treatments &mdash; how each has performed here</div>
+      ${m.treatments.map((t, i) => `
+        <div class="antrow${i === 0 ? ' best' : ''}">
+          <span class="antlabel">${esc(t.label)}</span>
+          <span class="antsurf">${esc(t.surface)}</span>
+          <span class="antnum">${t.ctr}% CTR</span>
+          <span class="antnum">${t.saves}% saves</span>
+          <span class="antruns">${t.runs} runs</span>
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+/* Applying a recommendation is a real edit to the brief, and it is shown as
+   one: the aspect ratios reorder and the surface prompts change in the Form
+   tab and in the YAML. Nothing is saved to disk until Save is pressed, so a
+   suggestion you dislike costs one undo -- reload the brief. */
+$('#anpane').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-apply]');
+  if (!btn || !INSIGHTS || !BRIEF) return;
+  const m = INSIGHTS.markets.find(x => x.locale === btn.dataset.apply);
+  if (!m) return;
+  const rec = m.recommendation || {};
+
+  // Reorder, never drop. Removing a placement because eight weeks of data
+  // disliked it is the over-fitting a media team would rightly refuse; the
+  // pipeline still produces every spec, just best-performing first.
+  const order = rec.ratio_order || [];
+  BRIEF.aspect_ratios = (BRIEF.aspect_ratios || []).slice().sort(
+    (a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+
+  if (rec.surface) for (const p of (BRIEF.products || [])) p.surface = rec.surface;
+
+  renderForm();
+  btn.textContent = 'Applied';
+  btn.classList.add('done');
+  setTimeout(() => { btn.textContent = 'Apply to brief'; btn.classList.remove('done'); }, 2200);
+});
 document.querySelectorAll('.tab').forEach(t =>
   t.addEventListener('click', () => showTab(t.dataset.tab)));
 
