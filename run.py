@@ -37,7 +37,16 @@ def cmd_plan(args) -> int:
     print(f"\ndeliverables  {b.variant_count}")
     print(f"generative    {b.generation_count}   <- what this run actually costs")
     for p in b.products:
-        state = "reuse (on disk)" if p.has_asset() else "GENERATE"
+        # Name the actual path, not just "has a file / does not". A product
+        # that keeps its photo but rebuilds the scene reads as free if you
+        # only look for an asset on disk, and it is not free -- it is the
+        # difference between the total above and the lines below adding up.
+        if not p.uses_source_photo():
+            state = "GENERATE product + surface"
+        elif p.regenerate_surface:
+            state = "keep photo, GENERATE surface"
+        else:
+            state = "reuse (on disk), no call"
         print(f"                {p.id:<24} {state}")
     pre = preflight_brief(b)
     if pre:

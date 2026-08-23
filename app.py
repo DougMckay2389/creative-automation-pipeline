@@ -479,7 +479,15 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json({"error": str(exc)}, 200)
             return self._json({
                 "campaign": b.campaign_id,
-                "products": [{"id": x.id, "reuse": x.has_asset()} for x in b.products],
+                # `reuse` means "costs no generative call", which is only true
+                # for a photo used exactly as shot. A resurfaced product also
+                # has an asset on disk and is very much not free.
+                "products": [{"id": x.id,
+                              "reuse": x.uses_source_photo() and not x.regenerate_surface,
+                              "mode": ("generated" if not x.uses_source_photo()
+                                       else "resurfaced" if x.regenerate_surface
+                                       else "as-shot")}
+                             for x in b.products],
                 "markets": [m.locale for m in b.markets],
                 "ratios": [r.id for r in b.ratios],
                 "deliverables": b.variant_count,

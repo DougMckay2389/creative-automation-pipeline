@@ -1153,7 +1153,10 @@ async function doPlan(){
   const r = await (await fetch('/api/plan',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({path:$('#brief').value})})).json();
   if(r.error){ $('#planout').innerHTML = `<div class="note err"><b>Brief error.</b> ${esc(r.error)}</div>`; return; }
+  // "reuse" here means costs nothing, which a resurfaced product does not --
+  // it has an asset on disk AND spends a call.
   const reuse = r.products.filter(p=>p.reuse).length;
+  const resurf = r.products.filter(p=>p.mode === 'resurfaced').length;
   let html = `<div class="kpis">
     <div class="kpi"><div class="n">${r.deliverables}</div><div class="l">Deliverables</div></div>
     <div class="kpi"><div class="n">${r.generative}</div><div class="l">Generative calls</div></div>
@@ -1162,8 +1165,12 @@ async function doPlan(){
     <div class="kpi"><div class="n">${r.ratios.length}</div><div class="l">Aspect ratios</div></div>
   </div>
   <div class="note"><b>Nothing has been spent yet.</b> ${r.deliverables} deliverables would cost
-  <b>${r.generative}</b> generative call(s): ${reuse} product(s) already have an asset on disk and are reused;
-  each remaining product is generated once at master resolution and every market and ratio is composed from it.</div>`;
+  <b>${r.generative}</b> generative call(s)${
+    reuse ? ` — ${reuse} product(s) reused exactly as shot, costing nothing` : ''}${
+    resurf ? `; ${resurf} keeping its approved photo but regenerating the surface` : ''}.
+  Every product that costs a call is generated <b>once</b> at master resolution, and every
+  market and ratio is composed from that master locally — which is why adding a market
+  or a spec is free.</div>`;
   if(r.preflight.length){
     html += `<div class="note"><b>Pre-flight.</b><br>` + r.preflight.map(f=>
       `<code>${esc(f.rule)}</code> [${esc(f.severity)}] ${esc(f.message)}`).join('<br>') + `</div>`;
