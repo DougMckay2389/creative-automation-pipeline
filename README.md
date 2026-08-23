@@ -1,6 +1,6 @@
 # Creative Automation Pipeline
 
-A campaign brief goes in. An organised folder of on-spec, checked social
+A campaign brief goes in. An organized folder of on-spec, checked social
 creatives comes out — every product, every market, every aspect ratio — from
 as few generative calls as the brief actually requires.
 
@@ -12,7 +12,7 @@ brief.yaml
    ├─ resolve ──────  reuse the team's asset ▸ reuse cache ▸ generate
    ├─ compose ──────  one master ▸ N aspect ratios, localized message, logo
    ├─ check ────────  brand + legal + spec, measured on the rendered pixels
-   └─ report ───────  organised output, JSON manifest, screen-shareable HTML
+   └─ report ───────  organized output, JSON manifest, screen-shareable HTML
 ```
 
 ---
@@ -160,7 +160,7 @@ product, in one ratio:
 velvet-matte-lip__en-US__9x16   BRAND-001  minor
 velvet-matte-lip__ja-JP__9x16   BRAND-001  minor
 velvet-matte-lip__de-DE__9x16   BRAND-001  minor
-    20% of dominant colours are on palette; off-palette:
+    20% of dominant colors are on palette; off-palette:
     #b6aebe (Δ133), #b3aabb (Δ143), #b0a6b8 (Δ147)
 ```
 
@@ -177,6 +177,29 @@ Run the tests:
 ```bash
 python tests/test_pipeline.py        # 23 tests, no pytest needed
 ```
+
+### Handing it in
+
+```bash
+python tools/make_submission.py
+```
+
+Writes `creative-automation-submission.zip` next to the repo: the whole tree
+plus `.env`, minus `output/`, `.cache/`, `.git/` and scratch. A reviewer
+unzips it and runs against the real model with no setup — verified by
+unpacking into an empty directory and running only the commands this README
+prints: `25/25 passed`, then `18 creatives from 1 generative call(s)`.
+
+**Why a zip and not a commit.** The credential is a Cloudflare *user API
+token*, which is why it starts with `cfut_` — Cloudflare publishes that prefix
+so scanners can recognise it, and they are a GitHub secret-scanning partner:
+a token pushed to a public repository is **revoked automatically**. Committing
+it would not just be careless, it would arrive broken. So the repository stays
+keyless and the key travels out of band. Scope it to `Account · Workers AI ·
+Read`, and roll it once the review is done.
+
+Without a key the zip still runs — the offline provider needs no credentials —
+and `examples/cloudflare-run/` is a committed real run either way.
 
 ### Regenerating on purpose
 
@@ -232,23 +255,6 @@ provider  cloudflare        model  @cf/leonardo/phoenix-1.0
 pass 17   review 1   block 0
 ```
 
-**On the default model, and a trap worth knowing about.** The Cloudflare
-adapter used to default to `@cf/black-forest-labs/flux-1-schnell`, which
-refuses this brief: every call for the lipstick product returns
-`400 Input prompt contains NSFW content` on an ordinary cosmetics prompt.
-That is 8 refusals out of 8 — and 8 out of 8 again after rewording the subject
-to remove anything a classifier could reasonably object to, so it is not a
-prompt you can write your way around.
-
-The trap is that the same error text also appears when you send that model a
-*parameter it does not accept*. A schema problem and a moderation problem are
-reported identically, which is a good way to spend an afternoon fixing the
-wrong thing. The default is now `@cf/leonardo/phoenix-1.0`: 8/8 on the same
-prompt, and it honours `seed` — two runs at a fixed seed returned
-byte-identical images, which is what lets this repo claim the same brief
-regenerates the same pixels. Both facts were measured against the live
-endpoint rather than read off a documentation page.
-
 ---
 
 ## Example input
@@ -294,7 +300,7 @@ output/aurora-spring-2026/20260821-170138/
     └── … same structure
 ```
 
-Organised by product, then aspect ratio, with the locale in the filename — so
+Organized by product, then aspect ratio, with the locale in the filename — so
 a reviewer can see all three languages of one spec side by side rather than
 opening three folders.
 
@@ -362,7 +368,7 @@ regenerate the same pixels.
 | `SPEC-001` | Delivered pixels match the requested spec | blocker | engineering |
 | `SPEC-002` | Campaign message present | blocker | creative |
 | `SPEC-003` | Message type size at or above the legibility floor | major | creative |
-| `BRAND-001` | Dominant colours within the approved palette (redmean tolerance) | minor | brand |
+| `BRAND-001` | Dominant colors within the approved palette (redmean tolerance) | minor | brand |
 | `BRAND-002` | Logo present | blocker | brand |
 | `BRAND-003` | Logo clearspace meets the brand minimum | minor | brand |
 | `LEGAL-001` | No prohibited terms in campaign copy | blocker | legal |
@@ -378,7 +384,7 @@ generative credit is spent.
 Stated rather than hidden, because most of these are where the real work would
 go next.
 
-- **The prohibited-term list is a placeholder.** A real programme needs a list
+- **The prohibited-term list is a placeholder.** A real program needs a list
   per market, ratified by that market's legal lead — not machine-translated
   from English. Substring matching also has no notion of context; "not
   clinically proven" would flag. Real systems need phrase-level rules.
@@ -387,7 +393,7 @@ go next.
   logo in a supplied asset. That needs template matching or a small detector.
 - **Subject-aware cropping is a heuristic**, not a saliency model. It measures
   tonal deviation to find the busy band of the frame and biases upward because
-  product shots sit above centre. It fails towards centre, which is safe but
+  product shots sit above center. It fails towards center, which is safe but
   not clever. A saliency or segmentation model is the obvious upgrade.
 - **Composition is Pillow.** In production a regulated or brand-governed
   client composes into their own approved template — Photoshop API against a

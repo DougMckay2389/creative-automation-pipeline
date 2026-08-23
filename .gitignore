@@ -20,3 +20,6 @@ __pycache__/
 .venv/
 venv/
 .DS_Store
+
+# The hand-in zip. It contains .env by design, so it must never be committed.
+creative-automation-submission.zip
