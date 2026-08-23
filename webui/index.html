@@ -2,7 +2,7 @@
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Creative Automation Pipeline</title>
+<title>FDE Social Content Agentic Automation &amp; Analytics</title>
 <style>
 /* ==========================================================================
    Adobe Spectrum (dark), with a macOS type stack.
@@ -94,20 +94,40 @@ a{color:var(--accent-hi)}
 
 .wrap{max-width:1560px;margin:0 auto;padding:0 20px 80px}
 
-/* ---------- top chrome ---------- */
+/* ---------- top chrome ----------
+   The bar itself spans the window; its CONTENTS are constrained to the same
+   width and padding as .wrap so the brandmark lines up with the panels under
+   it. This used to be one element with `margin:0 -20px` to break out of
+   .wrap -- then the header moved out of .wrap and that negative margin had
+   nothing left to cancel, so the bar hung 20px off both edges and gave the
+   whole page a horizontal scrollbar. An inner track cannot fail that way. */
 header.topbar{
   position:sticky;top:0;z-index:50;
-  display:flex;align-items:center;gap:18px;
   background:var(--g75);border-bottom:1px solid var(--g300);
-  padding:0 20px;margin:0 -20px;
 }
-.brandmark{display:flex;align-items:center;gap:9px;padding:11px 0;flex:none}
-.brandmark .glyph{
-  width:19px;height:19px;border-radius:3px;flex:none;
-  background:linear-gradient(135deg,var(--accent) 0%,#8a4ff0 100%);
+.topinner{
+  max-width:1560px;margin:0 auto;padding:0 20px;
+  display:flex;align-items:stretch;gap:18px;min-height:54px;
 }
-.brandmark b{font:600 13.5px var(--sans);letter-spacing:-.01em;color:var(--g900)}
-.brandmark span{font:11px var(--sans);color:var(--muted)}
+.brandmark{display:flex;align-items:center;gap:10px;padding:8px 0;
+  min-width:0;flex:0 1 auto}
+.brandmark .glyph{width:24px;height:24px;flex:none;display:block}
+.brandmark .txt{min-width:0}
+.brandmark b{display:block;font:600 13.5px var(--sans);letter-spacing:-.012em;
+  color:var(--g900);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brandmark span{display:block;font:10.5px var(--sans);color:var(--g500);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brandmark a{color:inherit;text-decoration:none}
+.brandmark a:hover{color:var(--g700);text-decoration:underline}
+
+/* Below this the title, four tabs, Run and the GitHub link stop fitting on
+   one line. Rather than let them overflow, the bar wraps and the tabs take
+   the second row -- the tabs are the thing you need at every width. */
+@media (max-width:1080px){
+  .topinner{flex-wrap:wrap;padding-bottom:0}
+  nav.apptabs{order:3;width:100%;margin-top:-1px}
+  .brandmark{flex:1 1 auto}
+}
 
 nav.apptabs{display:flex;gap:0;align-self:stretch}
 nav.apptabs button{
@@ -837,8 +857,11 @@ a.loc1.link:hover{background:var(--accent);color:#fff}
    from wherever you happen to be looking. */
 .topact{margin-left:auto;display:flex;align-items:center;gap:11px;flex:none}
 .topact .dot{margin:0}
-.topact button.primary{padding:6px 15px;font-size:12.5px}
-header.topbar .ghlink{margin-left:14px}
+.topact button.primary{padding:6px 15px;font-size:12.5px;white-space:nowrap}
+/* .topinner stretches its children so the tab underlines reach the bar's
+   bottom edge; these two must opt back out or they grow to full bar height. */
+header.topbar .ghlink{margin-left:0;align-self:center;flex:none}
+@media (max-width:1080px){ .topact{margin-left:auto} }
 
 .pane{padding-top:18px}
 .pane[hidden]{display:none}
@@ -856,11 +879,31 @@ header.topbar .ghlink{margin-left:14px}
      Run and the status dot stay in the chrome rather than in a pane, because
      starting a run is the one thing you want to do from anywhere. -->
 <header class="topbar">
-  <div class="brandmark">
-    <span class="glyph" aria-hidden="true"></span>
-    <div>
-      <b>Creative Automation</b><br>
-      <span>campaign brief in &rarr; on-spec, checked creatives out</span>
+<!-- The bar spans the window; .topinner holds its contents to the same width
+     and padding as .wrap, so the brandmark lines up with the panels below.
+     Doing that with a negative margin on the header itself is what put a
+     horizontal scrollbar on the page. -->
+<div class="topinner">
+
+  <div class="brandmark" title="campaign brief in &rarr; on-spec, checked creatives out">
+    <!-- A four-point spark in Firefly's gradient. Drawn here rather than
+         embedding Adobe's actual mark: the trademark is not mine to ship in
+         a public repo, and a hand-drawn nod is honest about being a nod. -->
+    <svg class="glyph" viewBox="0 0 24 24" aria-hidden="true">
+      <defs><linearGradient id="ffg" x1="0" y1="1" x2="1" y2="0">
+        <stop offset="0%"  stop-color="#ff3f7f"/>
+        <stop offset="48%" stop-color="#ff7a29"/>
+        <stop offset="100%" stop-color="#b14cff"/>
+      </linearGradient></defs>
+      <path fill="url(#ffg)" d="M12 .8c.35 4.2 1.5 6.9 3.3 8.6 1.7 1.6 4.3 2.4 7.9 2.6
+        -3.6.2-6.2 1-7.9 2.6-1.8 1.7-2.95 4.4-3.3 8.6-.35-4.2-1.5-6.9-3.3-8.6C7 13 4.4 12.2.8
+        12c3.6-.2 6.2-1 7.9-2.6C10.5 7.7 11.65 5 12 .8z"/>
+      <circle cx="19.4" cy="4.6" r="2.1" fill="url(#ffg)" opacity=".85"/>
+    </svg>
+    <div class="txt">
+      <b>FDE Social Content Agentic Automation &amp; Analytics</b>
+      <span>Author, Douglas McKay,
+        <a href="mailto:doug@dougmckay.info">doug@dougmckay.info</a></span>
     </div>
   </div>
 
@@ -888,6 +931,8 @@ header.topbar .ghlink{margin-left:14px}
         0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01
         8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
     <span>GitHub</span></a>
+
+</div>
 </header>
 
 <!-- Overlays live outside the panes: they are fixed-position and must survive

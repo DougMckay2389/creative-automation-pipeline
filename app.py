@@ -1121,7 +1121,8 @@ def main() -> None:
 
     SERVER = srv
     url = f"http://{HOST}:{port}"
-    print("\n  Creative Automation Pipeline")
+    print("\n  FDE Social Content Agentic Automation & Analytics")
+    print("  Douglas McKay - doug@dougmckay.info")
     print(f"  running at  {url}")
     print("  press Ctrl-C to stop\n")
     if "--no-open" not in sys.argv:

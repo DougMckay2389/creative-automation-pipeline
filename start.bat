@@ -1,12 +1,14 @@
 @echo off
 REM ---------------------------------------------------------------------
-REM  Creative Automation Pipeline - one-click start (Windows)
+REM  FDE Social Content Agentic Automation ^& Analytics
+REM  One-click start (Windows). Douglas McKay - doug@dougmckay.info
 REM  Installs the three dependencies if needed, then opens the app.
 REM ---------------------------------------------------------------------
 cd /d "%~dp0"
 echo.
-echo   Creative Automation Pipeline
-echo   ----------------------------
+echo   FDE Social Content Agentic Automation ^& Analytics
+echo   Douglas McKay - doug@dougmckay.info
+echo   -------------------------------------------------
 echo.
 
 set PY=

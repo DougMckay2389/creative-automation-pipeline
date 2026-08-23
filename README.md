@@ -1,8 +1,13 @@
-# Creative Automation Pipeline
+# FDE Social Content Agentic Automation & Analytics
+
+**Douglas McKay** · <doug@dougmckay.info> · take-home exercise for Adobe
+Firefly Services, Forward Deployed Engineer (Creative AI)
 
 A campaign brief goes in. An organized folder of on-spec, checked social
 creatives comes out — every product, every market, every aspect ratio — from
-as few generative calls as the brief actually requires.
+as few generative calls as the brief actually requires. Then performance goes
+back in: the Analytics tab turns channel history and market trends into the
+next brief's prompt.
 
 ```
 brief.yaml

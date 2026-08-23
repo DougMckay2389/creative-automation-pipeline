@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------
-#  Creative Automation Pipeline - one-click start (macOS / Linux)
+#  FDE Social Content Agentic Automation & Analytics
+#  One-click start (macOS / Linux). Douglas McKay - doug@dougmckay.info
 # ---------------------------------------------------------------------
 set -e
 cd "$(dirname "$0")"
