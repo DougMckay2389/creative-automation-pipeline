@@ -25,13 +25,21 @@ DEFAULT_MODEL = "gemini-2.5-flash-image"
 class GeminiProvider:
     name = "gemini"
 
-    def __init__(self, rpm: float = 10.0, timeout_s: float = 120.0, **_ignored):
+    def __init__(self, rpm: float = 10.0, timeout_s: float = 120.0,
+                 model: str | None = None, **_ignored):
         self.api_key = os.environ.get("GEMINI_API_KEY", "")
         if not self.api_key:
             raise ProviderError("gemini provider needs GEMINI_API_KEY")
-        self.model = os.environ.get("GEMINI_IMAGE_MODEL", DEFAULT_MODEL)
+        # Argument, then environment, then default -- so the app's dropdown can
+        # change the model per run without editing .env and restarting.
+        self.model = model or os.environ.get("GEMINI_IMAGE_MODEL") or DEFAULT_MODEL
         self.limiter = RateLimiter(rpm)
         self.timeout_s = timeout_s
+
+    # A seed is accepted and recorded, but Gemini's image endpoint takes no
+    # seed parameter -- so unlike the Cloudflare models, two runs of the same
+    # brief here are NOT byte-identical. Recorded honestly rather than implied.
+    honours_seed = False
 
     def generate(self, req: GenerationRequest) -> GenerationResult:
         t0 = time.monotonic()
@@ -72,3 +80,37 @@ class GeminiProvider:
                 if inline and inline.get("data"):
                     return base64.b64decode(inline["data"])
         raise ProviderError(f"no inline image in response: {str(payload)[:300]}")
+
+
+def list_image_models(timeout_s: float = 20.0) -> list[dict]:
+    """Google's image-capable models, asked of the account.
+
+    Same argument as the Cloudflare adapter: a menu baked into the source is
+    wrong the week the vendor ships something. Filtered to models that can
+    actually RETURN an image -- most of the catalogue is text-only, and
+    offering those would be offering a guaranteed failure.
+    """
+    key = os.environ.get("GEMINI_API_KEY", "")
+    if not key:
+        return []
+    try:
+        r = requests.get(f"{API_BASE}/models", params={"key": key, "pageSize": 200},
+                         timeout=timeout_s)
+        if r.status_code != 200:
+            return []
+        out = []
+        for m in (r.json().get("models") or []):
+            name = (m.get("name") or "").split("/")[-1]
+            if "image" not in name:
+                continue
+            if not any("generateContent" in a
+                       for a in (m.get("supportedGenerationMethods") or [])):
+                continue
+            label = name
+            if name.startswith("gemini-2.5-flash-image"):
+                label = f"{name}  (nano banana)"
+            out.append({"name": name, "label": label, "vendor": "google",
+                        "default": name == DEFAULT_MODEL})
+        return sorted(out, key=lambda x: x["name"])
+    except requests.RequestException:
+        return []

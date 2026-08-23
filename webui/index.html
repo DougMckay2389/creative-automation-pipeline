@@ -1185,20 +1185,23 @@ function paintProviders(r){
  * flux-2 and lucid-origin both appeared after the adapter was written, so a
  * menu baked into the source is wrong the week the vendor ships something.
  * Only shown for cloudflare -- the other adapters each have one model. */
-let MODELS_LOADED = false;
+const MODELS_FOR = {};                 // provider -> already fetched
 async function paintModels(){
   const wrap = $('#modelwrap'), sel = $('#model');
-  const isCf = $('#provider').value === 'cloudflare';
-  wrap.hidden = !isCf;
-  if (!isCf || MODELS_LOADED) return;
+  const prov = $('#provider').value;
+  // Only the multi-model providers get a picker; mock has exactly one.
+  if (prov !== 'cloudflare' && prov !== 'gemini') { wrap.hidden = true; return; }
+  if (MODELS_FOR[prov]) { sel.innerHTML = MODELS_FOR[prov]; wrap.hidden = false; return; }
   try {
-    const r = await (await fetch('/api/models')).json();
+    const r = await (await fetch('/api/models?provider=' + encodeURIComponent(prov))).json();
     if (!r.models || !r.models.length) { wrap.hidden = true; return; }
-    sel.innerHTML = r.models.map(m =>
+    const html = r.models.map(m =>
       `<option value="${m.name}"${m.name === r.default ? ' selected' : ''}>${
         m.label}${m.name === r.default ? ' — default' : ''}</option>`).join('');
+    MODELS_FOR[prov] = html;
+    sel.innerHTML = html;
     if (r.current) sel.value = r.current;
-    MODELS_LOADED = true;
+    wrap.hidden = false;
   } catch { wrap.hidden = true; }
 }
 

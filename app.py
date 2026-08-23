@@ -265,11 +265,22 @@ class Handler(SimpleHTTPRequestHandler):
             appeared after this adapter was written, and a menu baked into the
             source is wrong the week the vendor ships something.
             """
-            from pipeline.providers.cloudflare import (DEFAULT_MODEL,
+            # Per provider, because "which models exist" is a question only
+            # each vendor can answer about itself.
+            which = (unquote(urlparse(self.path).query.split("provider=", 1)[-1])
+                     if "provider=" in self.path else "cloudflare")
+            if which == "gemini":
+                from pipeline.providers.gemini import (DEFAULT_MODEL,
                                                        list_image_models)
-            return self._json({"models": list_image_models(),
+                env_key = "GEMINI_IMAGE_MODEL"
+            else:
+                from pipeline.providers.cloudflare import (DEFAULT_MODEL,
+                                                           list_image_models)
+                env_key = "CLOUDFLARE_IMAGE_MODEL"
+            return self._json({"provider": which,
+                               "models": list_image_models(),
                                "default": DEFAULT_MODEL,
-                               "current": os.environ.get("CLOUDFLARE_IMAGE_MODEL", "")})
+                               "current": os.environ.get(env_key, "")})
 
         if route == "/api/assetcheck":
             """Does this product's asset actually exist on disk?
