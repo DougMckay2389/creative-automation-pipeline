@@ -33,6 +33,7 @@ from pipeline.env import load_dotenv
 from pipeline.checks import preflight_brief
 from pipeline.providers import (CREDENTIALS, default_provider,
                                 provider_status)
+from pipeline.storage import STORAGE_CREDENTIALS, storage_status
 from pipeline.report import write_report
 from pipeline.runner import run_campaign
 
@@ -142,12 +143,14 @@ def _on_event(rec: dict) -> None:
                  "message", "path", "out_dir", "findings")})
 
 
-def _do_run(brief_path: str, provider: str, regen: bool = False) -> None:
+def _do_run(brief_path: str, provider: str, regen: bool = False,
+            storage: str = "local") -> None:
     """Executed on a worker thread so the browser can poll for progress."""
     try:
         _emit(f"starting  brief={os.path.basename(brief_path)}  provider={provider}")
         summary = run_campaign(brief_path, provider_name=provider, quiet=True,
-                               on_event=_on_event, force_generate=regen)
+                               on_event=_on_event, force_generate=regen,
+                               storage_name=storage)
         report = write_report(summary, summary.output_dir)
         c = summary.counts or {}
         _emit(f"masters   generated={summary.generative_calls} "
@@ -219,6 +222,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json({"briefs": briefs,
                                "providers": provider_status(),
                                "default_provider": default_provider(),
+                               "storages": storage_status(),
                                "stale": _is_stale(),
                                "cwd": ROOT})
 
@@ -305,7 +309,10 @@ class Handler(SimpleHTTPRequestHandler):
             .env is gitignored, which is checked by a test.
             """
             name = str(body.get("provider", ""))
-            allowed = CREDENTIALS.get(name)
+            # One panel for both kinds of credential. A storage backend needs
+            # keys for exactly the same reason a model provider does, and
+            # having two places to type them in would be silly.
+            allowed = CREDENTIALS.get(name) or STORAGE_CREDENTIALS.get(name)
             if not allowed:
                 return self._json({"error": f"unknown provider '{name}'"}, 400)
             values = body.get("values") or {}
@@ -323,6 +330,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json({"error": f"could not write .env: {exc}"}, 500)
             os.environ.update(clean)          # live, so no restart is needed
             return self._json({"ok": True, "providers": provider_status(),
+                               "storages": storage_status(),
                                "default_provider": default_provider()})
 
         if route == "/api/plan":
@@ -356,7 +364,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json({"error": "bad path"}, 400)
             threading.Thread(
                 target=_do_run,
-                args=(p, body.get("provider", "mock"), bool(body.get("regen"))),
+                args=(p, body.get("provider", "mock"), bool(body.get("regen")),
+                      str(body.get("storage", "local"))),
                 daemon=True).start()
             return self._json({"ok": True})
 

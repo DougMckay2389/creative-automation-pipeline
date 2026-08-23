@@ -24,6 +24,7 @@ import yaml
 
 from .assets import AssetResolver, MasterAsset
 from .brief import Brief, Variant, load_brief, stable_seed
+from .storage import StorageError, get_storage
 from .checks import Finding, Verdict, evaluate, preflight_brief
 from .compose import Composer
 from .providers import get_provider
@@ -37,6 +38,7 @@ class VariantResult:
     ratio: str
     path: str
     verdict: str
+    stored_uri: str = ""          # where the mirror put it; "" when local-only
     findings: list[dict] = field(default_factory=list)
     font_family: str = ""
     message: str = ""
@@ -60,6 +62,7 @@ class RunSummary:
     preflight: list[dict] = field(default_factory=list)
     results: list[VariantResult] = field(default_factory=list)
     output_dir: str = ""
+    storage: dict | None = None   # backend/target/counts; None when local-only
 
 
 class JsonLogger:
@@ -114,7 +117,8 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
                  provider_name: str = "mock", out_root: str = "output",
                  rpm: float | None = None, quiet: bool = False,
                  cache_dir: str = ".cache/masters", on_event=None,
-                 force_generate: bool = False) -> RunSummary:
+                 force_generate: bool = False,
+                 storage_name: str = "local") -> RunSummary:
     t0 = time.monotonic()
     run_id = time.strftime("%Y%m%d-%H%M%S")
 
@@ -148,6 +152,18 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
     provider = get_provider(provider_name, **kwargs)
     resolver = AssetResolver(provider, cache_dir=cache_dir, log=log,
                              force=force_generate)
+
+    # Object storage, if one is configured.
+    #
+    # A MIRROR, never a replacement: the task requires outputs saved to a
+    # folder organised by product and aspect ratio, so the local tree is
+    # written either way and the backend receives a copy. Opened HERE, before
+    # any generative call, so a bad key or a missing bucket fails at once
+    # rather than after eighteen paid-for renders.
+    store = None
+    if storage_name and storage_name != "local":
+        store = get_storage(storage_name)
+        log("storage-open", backend=store.name, target=store.uri(f"runs/{run_id}/"))
     composer = Composer(brand)
 
     # --- 3. one master per product ----------------------------------------
@@ -177,6 +193,8 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
 
     # --- 4 + 5. compose and check every variant ---------------------------
     results: list[VariantResult] = []
+    uploaded: list = []
+    storage_errors: list[str] = []
     counts = {"pass": 0, "review": 0, "block": 0}
     for v in brief.variants():
         master = masters[v.product.id]
@@ -190,9 +208,25 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
         log("stage", stage="checks", variant=v.id,
             rules=[f["rule"] for f in [x.as_dict() for x in res.findings]])
         counts[res.verdict.value] += 1
+        rel = os.path.relpath(path, out_dir).replace(os.sep, "/")
+        stored_uri = ""
+        if store is not None:
+            # An upload failure must not lose the run. The creative already
+            # exists on disk and has already been checked; a network blip is
+            # something to report, not a reason to discard eighteen files.
+            try:
+                with open(path, "rb") as fh:
+                    obj = store.put(f"runs/{run_id}/{rel}", fh.read(), "image/jpeg")
+                stored_uri = obj.uri
+                uploaded.append(obj)
+            except StorageError as exc:
+                storage_errors.append(f"{rel}: {exc}")
+                log("storage-error", variant=v.id, error=str(exc)[:200])
+
         results.append(VariantResult(
             variant_id=v.id, product_id=v.product.id, locale=v.market.locale,
             ratio=v.ratio.id, path=os.path.relpath(path, out_dir),
+            stored_uri=stored_uri,
             verdict=res.verdict.value,
             findings=[f.as_dict() for f in res.findings],
             font_family=comp.font_family, message=comp.message,
@@ -216,9 +250,23 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
         variants_planned=brief.variant_count, generative_calls=gen,
         reused_from_brief=from_brief, reused_from_cache=from_cache,
         counts=counts, preflight=[f.as_dict() for f in pre],
-        results=results, output_dir=out_dir)
+        results=results, output_dir=out_dir,
+        storage=({"backend": store.name,
+                  "target": store.uri(f"runs/{run_id}/"),
+                  "objects": len(uploaded),
+                  "bytes": sum(o.size for o in uploaded),
+                  "errors": storage_errors} if store is not None else None))
 
     _write_manifest(summary, out_dir)
+    # The manifest goes up too. A bucket full of creatives with no record of
+    # which brief, model and seed produced them is an archive nobody can audit,
+    # which is the opposite of the point of putting them there.
+    if store is not None:
+        try:
+            with open(os.path.join(out_dir, "manifest.json"), "rb") as fh:
+                store.put(f"runs/{run_id}/manifest.json", fh.read(), "application/json")
+        except StorageError as exc:
+            log("storage-error", error=f"manifest: {exc}"[:200])
     log("run-end", **counts, generative_calls=gen,
         duration_s=round(summary.duration_s, 2))
     log.close()

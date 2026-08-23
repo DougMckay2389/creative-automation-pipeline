@@ -46,6 +46,101 @@ def test_brief_loads_and_expands():
     assert len({v.id for v in b.variants()}) == b.variant_count
 
 
+def test_sigv4_matches_the_published_aws_vector():
+    """The signature is hand-rolled, so it is checked against AWS's own answer.
+
+    A signature that is subtly wrong is indistinguishable from a bad key: you
+    get a 403 that says nothing useful, in front of whoever you are demoing
+    to. This is the worked GET Object example from the S3 documentation --
+    fixed credentials, fixed date, published expected values. If the canonical
+    request or the key derivation drifts, this fails here rather than there.
+    """
+    import hashlib
+    import hmac as _hmac
+    from pipeline.storage.s3 import (ALGORITHM, _sha256, canonical_request,
+                                     signing_key)
+
+    secret = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+    access = "AKIAIOSFODNN7EXAMPLE"
+    region, amzdate, datestamp = "us-east-1", "20130524T000000Z", "20130524"
+    empty = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+    creq, signed = canonical_request("GET", "/test.txt", "", {
+        "host": "examplebucket.s3.amazonaws.com", "range": "bytes=0-9",
+        "x-amz-content-sha256": empty, "x-amz-date": amzdate}, empty)
+
+    assert signed == "host;range;x-amz-content-sha256;x-amz-date"
+    assert _sha256(creq.encode()) == \
+        "7344ae5b7ee6c3e7e6b0fe0640412a37625d1fbfff95c48bbb2dc43964946972", \
+        "canonical request does not match the published example"
+
+    scope = f"{datestamp}/{region}/s3/aws4_request"
+    to_sign = "\n".join([ALGORITHM, amzdate, scope, _sha256(creq.encode())])
+    sig = _hmac.new(signing_key(secret, datestamp, region, "s3"),
+                    to_sign.encode(), hashlib.sha256).hexdigest()
+    assert sig == "f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41", \
+        f"signature does not match AWS's published value: {sig}"
+    assert access  # named for readability of the vector above
+
+
+def test_local_storage_round_trips_and_refuses_to_escape():
+    """A product id comes from the brief, which is user input."""
+    from pipeline.storage import get_storage
+    from pipeline.storage.base import StorageError
+
+    root = tempfile.mkdtemp()
+    st = get_storage("local", root=root)
+    obj = st.put("runs/r1/p/1x1/a.jpg", b"pixels", "image/jpeg")
+    assert st.exists("runs/r1/p/1x1/a.jpg")
+    assert st.get("runs/r1/p/1x1/a.jpg") == b"pixels"
+    assert obj.size == 6 and obj.backend == "local"
+    assert os.path.isfile(os.path.join(root, "runs", "r1", "p", "1x1", "a.jpg"))
+
+    try:
+        st.put("../../escaped.jpg", b"nope")
+    except StorageError:
+        pass
+    else:
+        raise AssertionError("a key climbing out of the root must be refused")
+
+
+def test_a_storage_failure_does_not_lose_the_run():
+    """The creatives already exist on disk and have already been checked.
+
+    A network blip during the mirror is worth reporting; it is not worth
+    throwing away eighteen finished files. The run must complete, the folder
+    must be full, and the manifest must say what failed.
+    """
+    from pipeline.storage.base import Storage, StorageError
+
+    class Broken(Storage):
+        name = "broken"
+        def put(self, key, data, content_type="application/octet-stream"):
+            raise StorageError("connection reset")
+        def uri(self, key):
+            return f"broken://{key}"
+
+    import pipeline.runner as runner
+    real = runner.get_storage
+    runner.get_storage = lambda name, **kw: Broken()
+    try:
+        out = tempfile.mkdtemp()
+        summary = runner.run_campaign(BRIEF, provider_name="mock", quiet=True,
+                                      out_root=out, cache_dir=os.path.join(out, "c"),
+                                      storage_name="broken")
+    finally:
+        runner.get_storage = real
+
+    assert len(summary.results) == summary.variants_planned, \
+        "every deliverable must still be produced"
+    assert summary.storage and len(summary.storage["errors"]) == summary.variants_planned, \
+        "and every failure must be recorded rather than swallowed"
+    assert summary.storage["objects"] == 0
+    on_disk = sum(len([f for f in fs if f.endswith(".jpg")])
+                  for _, _, fs in os.walk(summary.output_dir))
+    assert on_disk == summary.variants_planned, "the local folder must be complete"
+
+
 def test_brief_rejects_duplicate_ids():
     """A repeated id is silent data loss, not a style problem.
 

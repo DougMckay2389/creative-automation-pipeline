@@ -34,6 +34,7 @@ Every requirement, and the code and test that carries it.
 | Localized message *(the "plus")* | `pipeline/localize.py` · `font_for` — ja-JP ships in Japanese | `test_japanese_resolves_a_font_that_can_draw_japanese` |
 | Runs locally | `run.py` (CLI) · `app.py` (local app) — no credentials needed | `test_mock_provider_needs_no_credentials` |
 | Output organised by product and ratio | `runner.output_path_for` | `test_full_run_produces_every_deliverable` |
+| **Storage** for generated / transient assets | `pipeline/storage/` · `local.py` (always) + `s3.py` (mirror) | `test_local_storage_round_trips_and_refuses_to_escape`, `test_sigv4_matches_the_published_aws_vector`, `test_a_storage_failure_does_not_lose_the_run` |
 | Documentation | this file | — |
 | *Bonus* — brand compliance | `checks.py` · `BRAND-001` palette, `-002` logo, `-003` clearspace | `test_missing_logo_blocks_and_routes_to_brand`, `test_palette_tolerance_survives_a_jpeg_round_trip` |
 | *Bonus* — legal content checks | `checks.py` · `LEGAL-001`, run pre-flight **and** per creative | `test_prohibited_term_blocks_and_routes_to_legal` |
@@ -177,6 +178,54 @@ Run the tests:
 ```bash
 python tests/test_pipeline.py        # 23 tests, no pytest needed
 ```
+
+### Storage
+
+The brief lists Storage as a data source alongside user inputs and GenAI:
+somewhere to keep generated or transient assets. In a real engagement that is
+never a question of *which* vendor — it is whichever one the client already
+pays for — so the pipeline talks to a `Storage` and the class is chosen by a
+flag, exactly like the image providers.
+
+```bash
+python run.py run campaigns/aurora-spring.yaml --storage s3
+```
+
+```
+s3://creative-automation-doug/runs/<run-id>/
+    hydra-glow-serum/1x1/hydra-glow-serum_en-US_1x1.jpg
+    ...
+    manifest.json
+```
+
+Verified against real AWS: **19 objects, 18 creatives plus the manifest, 0
+errors**, and each result carries its `stored_uri`.
+
+**It mirrors, it does not replace.** The task also requires outputs saved to a
+folder organised by product and aspect ratio, so the local tree is written
+either way and the backend receives a copy. Which means a failed upload is
+worth reporting and is *not* worth discarding eighteen finished, already
+checked files — there is a test that breaks the backend deliberately and
+asserts the run still completes, the folder is still full, and every failure is
+recorded in the manifest.
+
+**The manifest goes up too.** A bucket full of creatives with no record of
+which brief, model and seed produced them is an archive nobody can audit,
+which is the opposite of the reason to put them there.
+
+**No boto3.** This repo has three dependencies and the point of that is that
+you can read all of it; pulling in an SDK larger than the rest of the codebase
+to make four HTTP calls is the wrong trade. SigV4 is about seventy lines of
+hashing, and writing it out shows the protocol instead of hiding it behind
+`client.put_object`. Because a hand-rolled signature that is subtly wrong is
+indistinguishable from a bad key — a 403 that says nothing, in front of
+whoever you are demoing to — it is tested against **AWS's own published worked
+example**, canonical request and final signature, byte for byte.
+
+The same class speaks to **Cloudflare R2, MinIO, Backblaze B2 and DigitalOcean
+Spaces** by setting `S3_ENDPOINT`, because they are all SigV4 over path-style
+URLs. That is the payoff of the adapter: "which object store" stays a
+procurement decision instead of becoming a code decision.
 
 ### Handing it in
 

@@ -54,7 +54,8 @@ def cmd_run(args) -> int:
     summary = run_campaign(
         brief_path=args.brief, brand_path=args.brand,
         provider_name=args.provider, out_root=args.out,
-        rpm=args.rpm, quiet=args.quiet, force_generate=args.regen)
+        rpm=args.rpm, quiet=args.quiet, force_generate=args.regen,
+        storage_name=args.storage)
     report = write_report(summary, summary.output_dir)
     c = summary.counts
     print("\n" + "-" * 62)
@@ -95,6 +96,9 @@ def main(argv=None) -> int:
     r.add_argument("--brand", default="brandkit/brand.yaml")
     r.add_argument("--provider", default="mock", help="mock | gemini | firefly")
     r.add_argument("--out", default="output")
+    r.add_argument("--storage", default="local",
+                   help="where to mirror artifacts: local | s3 (local is always "
+                        "written either way)")
     r.add_argument("--regen", action="store_true",
                    help="regenerate every product this run, ignoring the asset "
                         "on disk and the cache (seeded from the run id, so the "
