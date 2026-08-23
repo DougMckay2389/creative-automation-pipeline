@@ -120,12 +120,12 @@ def _on_event(rec: dict) -> None:
                  "message", "path", "out_dir", "findings")})
 
 
-def _do_run(brief_path: str, provider: str) -> None:
+def _do_run(brief_path: str, provider: str, regen: bool = False) -> None:
     """Executed on a worker thread so the browser can poll for progress."""
     try:
         _emit(f"starting  brief={os.path.basename(brief_path)}  provider={provider}")
         summary = run_campaign(brief_path, provider_name=provider, quiet=True,
-                               on_event=_on_event)
+                               on_event=_on_event, force_generate=regen)
         report = write_report(summary, summary.output_dir)
         c = summary.counts or {}
         _emit(f"masters   generated={summary.generative_calls} "
@@ -330,8 +330,10 @@ class Handler(SimpleHTTPRequestHandler):
                 with LOCK:
                     STATE["running"] = False
                 return self._json({"error": "bad path"}, 400)
-            threading.Thread(target=_do_run, args=(p, body.get("provider", "mock")),
-                             daemon=True).start()
+            threading.Thread(
+                target=_do_run,
+                args=(p, body.get("provider", "mock"), bool(body.get("regen"))),
+                daemon=True).start()
             return self._json({"ok": True})
 
         return self._json({"error": "unknown route"}, 404)

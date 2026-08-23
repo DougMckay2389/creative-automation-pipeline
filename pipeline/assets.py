@@ -72,11 +72,21 @@ class AssetResolver:
     """Resolves each product to exactly one master image, cheaply."""
 
     def __init__(self, provider: Provider, cache_dir: str = ".cache/masters",
-                 master_size: tuple[int, int] = (1600, 1600), log=None):
+                 master_size: tuple[int, int] = (1600, 1600), log=None,
+                 force: bool = False):
         self.provider = provider
         self.cache_dir = cache_dir
         self.master_size = master_size
         self.log = log or (lambda *a, **k: None)
+        # force: regenerate every product on every run, ignoring both the
+        # asset on disk and the cache. Off by default, because reuse is the
+        # cost argument this whole pipeline is built on -- one hero becomes
+        # every deliverable, and paying a model twice for the same picture is
+        # the waste it exists to remove. It is worth having anyway: while you
+        # are ITERATING on a prompt, "did my edit do anything" is the only
+        # question, and a cache that answers it with yesterday's image is
+        # actively in the way.
+        self.force = force
         os.makedirs(self.cache_dir, exist_ok=True)
 
     def _cache_key(self, prompt: str, seed: int) -> str:
@@ -98,7 +108,10 @@ class AssetResolver:
 
     def resolve(self, product: Product, seed: int) -> MasterAsset:
         # --- 1. the creative team's own asset, if it is really there --------
-        if product.has_asset():
+        # Skipped under force: an asset on disk short-circuits everything, so
+        # while it is there the product's `subject` and `surface` are never
+        # even read -- which is baffling if you have just edited them.
+        if product.has_asset() and not self.force:
             self.log("reuse", product=product.id, source=product.asset)
             return MasterAsset(product.id, product.asset, origin="brief")
 
@@ -107,7 +120,7 @@ class AssetResolver:
         cached = os.path.join(self.cache_dir, f"{product.id}-{key}.png")
 
         # --- 2. something we generated earlier, unchanged -------------------
-        if os.path.isfile(cached) and os.path.getsize(cached) > 0:
+        if os.path.isfile(cached) and os.path.getsize(cached) > 0 and not self.force:
             self.log("cache-hit", product=product.id, source=cached)
             return MasterAsset(product.id, cached, origin="cache", prompt=prompt, seed=seed)
 

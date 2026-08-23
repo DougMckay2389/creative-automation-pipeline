@@ -113,7 +113,8 @@ def output_path_for(out_root: str, v: Variant) -> str:
 def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
                  provider_name: str = "mock", out_root: str = "output",
                  rpm: float | None = None, quiet: bool = False,
-                 cache_dir: str = ".cache/masters", on_event=None) -> RunSummary:
+                 cache_dir: str = ".cache/masters", on_event=None,
+                 force_generate: bool = False) -> RunSummary:
     t0 = time.monotonic()
     run_id = time.strftime("%Y%m%d-%H%M%S")
 
@@ -145,13 +146,28 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
 
     kwargs = {"rpm": rpm} if rpm else {}
     provider = get_provider(provider_name, **kwargs)
-    resolver = AssetResolver(provider, cache_dir=cache_dir, log=log)
+    resolver = AssetResolver(provider, cache_dir=cache_dir, log=log,
+                             force=force_generate)
     composer = Composer(brand)
 
     # --- 3. one master per product ----------------------------------------
     masters: dict[str, MasterAsset] = {}
     for p in brief.products:
-        seed = stable_seed(brief.campaign_id, p.id)
+        # The seed has to move for a forced regeneration to mean anything.
+        #
+        # The provider honours it -- two calls at a fixed seed return
+        # byte-identical images, which is measured and is the whole basis for
+        # "the same brief regenerates the same pixels". So forcing a
+        # regeneration WITHOUT changing the seed spends a real generative call
+        # to receive the picture you already had, and looks from the outside
+        # like the button does nothing.
+        #
+        # Salted with the run id rather than randomised, so the seed still
+        # lands in the manifest and any image here can be reproduced exactly
+        # later. Two runs inside the same second would collide; that is a
+        # second of resolution against a call that takes several.
+        seed = (stable_seed(brief.campaign_id, p.id, run_id) if force_generate
+                else stable_seed(brief.campaign_id, p.id))
         masters[p.id] = resolver.resolve(p, seed)
 
     gen = sum(1 for m in masters.values() if m.origin == "generated")

@@ -134,6 +134,10 @@ a.rep{font-size:13px;color:var(--accent)}
  color:var(--ink2);background:#f7f5f1;margin-left:6px}
 
 /* ---- provider keys ---- */
+.chk{display:flex;align-items:center;gap:7px;padding:8px 11px;border:1px solid var(--line);
+ border-radius:8px;background:#fff;font-size:13px;cursor:pointer;white-space:nowrap}
+.chk input{margin:0;cursor:pointer}
+.chk.on{border-color:var(--accent);background:#fffaf7}
 .keylink{border:0;background:transparent;color:var(--accent);font:600 11px var(--sans);
  cursor:pointer;padding:0 0 0 7px;text-decoration:underline}
 #keypanel{background:var(--card);border:1px solid var(--line);border-radius:12px;
@@ -206,6 +210,11 @@ svg.flow{display:block}
   <div class="f"><label for="provider">Image provider
       <button id="keys" class="keylink" type="button">API keys</button></label>
     <select id="provider"></select></div>
+
+  <div class="f"><label for="regen">Generation</label>
+    <label class="chk" title="Ignore the asset on disk and the cache. Every product is
+generated fresh from its current subject and surface, with a seed salted by the run id.">
+      <input type="checkbox" id="regen"><span>Regenerate every run</span></label></div>
   <button id="plan">Plan &mdash; what would this cost?</button>
   <button id="run" class="primary">Run pipeline</button>
   <div class="spacer"></div>
@@ -679,7 +688,8 @@ async function doRun(){
   $('#run').disabled = true; $('#dot').classList.add('live');
   running = true; drawFlow({});
   const r = await (await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({path:$('#brief').value, provider:$('#provider').value})})).json();
+    body:JSON.stringify({path:$('#brief').value, provider:$('#provider').value,
+                        regen:$('#regen').checked})})).json();
   if(r.error){ $('#log').textContent = r.error; $('#run').disabled=false; $('#dot').classList.remove('live'); return; }
   poll = setInterval(tick, 400); tick();
 }

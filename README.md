@@ -178,6 +178,35 @@ Run the tests:
 python tests/test_pipeline.py        # 23 tests, no pytest needed
 ```
 
+### Regenerating on purpose
+
+Reuse is the default and it is the cost argument this repo is built on. While
+you are *iterating on a prompt*, though, it is exactly the wrong behaviour:
+edit a product's `subject` and press Run, and nothing changes — because an
+asset on disk short-circuits the resolver before the prompt is ever built, and
+a cache hit answers the next attempt with the previous picture.
+
+```bash
+python run.py run campaigns/aurora-spring.yaml --provider cloudflare --regen
+```
+
+or tick **Regenerate every run** in the app. It ignores both the asset on disk
+and the cache, so every product is generated fresh from its current `subject`
+and `surface`.
+
+**It also has to move the seed, and that is the part worth understanding.**
+The provider honours the seed — two calls at a fixed seed return byte-identical
+images, which is measured, and is the whole basis for "the same brief
+regenerates the same pixels". So regenerating *without* changing the seed
+spends a real generative call to receive the picture you already had, and looks
+from the outside like the flag does nothing. Under `--regen` the seed is salted
+with the run id: it still lands in the manifest, so any image can be reproduced
+exactly later, but it differs run to run. Verified — two consecutive forced
+runs of the same brief produced **24 different deliverables out of 24**.
+
+The cost is honest about itself: `--regen` spends one call per product on every
+run, and the summary says so.
+
 ### Using a real image model
 
 ```bash

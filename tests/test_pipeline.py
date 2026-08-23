@@ -145,6 +145,57 @@ def test_existing_asset_is_never_generated():
     assert m.origin == "brief" and not calls
 
 
+def test_regen_ignores_the_asset_on_disk_and_the_cache():
+    """--regen must actually produce a NEW picture, not just spend a call.
+
+    Three things have to be true together, and two of them are easy to get
+    wrong in a way that still looks like it worked:
+
+      * a product with an asset on disk must be generated anyway -- otherwise
+        editing its subject and surface does nothing at all, because the disk
+        asset short-circuits the resolver before the prompt is ever built;
+      * the cache must be bypassed;
+      * the SEED must move. The provider honours the seed, so regenerating at
+        a fixed seed spends a real call to get back the picture you already
+        had. That is the failure that looks like the flag is broken.
+    """
+    import yaml
+    tmp = tempfile.mkdtemp()
+    raw = yaml.safe_load(open(BRIEF, encoding="utf-8"))
+    # give BOTH products an asset that really exists, so nothing would
+    # normally be generated at all
+    shot = os.path.join(tmp, "on-disk.png")
+    Image.new("RGB", (64, 64), (200, 120, 90)).save(shot)
+    for prod in raw["products"]:
+        prod["asset"] = shot
+    path = os.path.join(tmp, "brief.yaml")
+    with open(path, "w", encoding="utf-8") as fh:
+        yaml.safe_dump(raw, fh, allow_unicode=True)
+
+    brief = load_brief(path)
+    provider = get_provider("mock")
+
+    normal = AssetResolver(provider, cache_dir=os.path.join(tmp, "c1"))
+    assert normal.resolve(brief.products[0], 7).origin == "brief", \
+        "without --regen an asset on disk must be reused"
+
+    forced = AssetResolver(provider, cache_dir=os.path.join(tmp, "c2"), force=True)
+    first = forced.resolve(brief.products[0], 7)
+    assert first.origin == "generated", "with --regen the disk asset must be ignored"
+
+    # same seed twice -> the cache is bypassed, but the pixels are identical,
+    # which is exactly why the runner salts the seed with the run id.
+    again = forced.resolve(brief.products[0], 7)
+    assert again.origin == "generated", "the cache must be bypassed too"
+    assert open(first.path, "rb").read() == open(again.path, "rb").read(), \
+        "a fixed seed is expected to reproduce the same pixels"
+
+    # a different seed -> a genuinely different picture
+    moved = forced.resolve(brief.products[0], 8)
+    assert open(moved.path, "rb").read() != open(first.path, "rb").read(), \
+        "moving the seed must actually change the image"
+
+
 def test_cache_prevents_a_second_generation():
     b = load_brief(BRIEF)
     missing = next(p for p in b.products if not p.has_asset())
