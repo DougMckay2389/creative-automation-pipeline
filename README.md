@@ -93,8 +93,17 @@ Expected result on the sample brief:
 pass 15   review 3   block 0
 ```
 
+*(Both images in `campaigns/assets/` were generated for this demo — there is
+no client photography in this repo. In a real engagement that folder holds the
+creative team's approved shots, which is precisely why the pipeline reuses
+whatever it finds there rather than regenerating it.)*
+
+*(That is the offline default. The same brief against a real image model is
+below, and lands `pass 17  review 1` — the numbers differ because the images
+differ, which is the honest reason.)*
+
 **18 deliverables, 1 generative call.** 2 products × 3 markets × 3 ratios = 18
-files. One product already has a photograph on disk, so it is reused; the
+files. One product already has an approved image on disk, so it is reused; the
 other is generated once at master resolution and every ratio is composed from
 it. This is the core cost decision in the repo and it is enforced by a test.
 
@@ -126,6 +135,9 @@ python tests/test_pipeline.py        # 23 tests, no pytest needed
 ### Using a real image model
 
 ```bash
+export CLOUDFLARE_ACCOUNT_ID=...  CLOUDFLARE_API_TOKEN=...
+python run.py run campaigns/aurora-spring.yaml --provider cloudflare
+
 export GEMINI_API_KEY=...
 python run.py run campaigns/aurora-spring.yaml --provider gemini
 
@@ -135,6 +147,32 @@ python run.py run campaigns/aurora-spring.yaml --provider firefly
 
 Nothing else in the pipeline changes. That symmetry is the point of the
 adapter — see *Key design decisions* below.
+
+A real run, committed to [`examples/cloudflare-run/`](examples/cloudflare-run)
+so you can see the output without holding a key:
+
+```
+provider  cloudflare        model  @cf/leonardo/phoenix-1.0
+18 creatives from 1 generative call(s)      4.1s
+pass 17   review 1   block 0
+```
+
+**On the default model, and a trap worth knowing about.** The Cloudflare
+adapter used to default to `@cf/black-forest-labs/flux-1-schnell`, which
+refuses this brief: every call for the lipstick product returns
+`400 Input prompt contains NSFW content` on an ordinary cosmetics prompt.
+That is 8 refusals out of 8 — and 8 out of 8 again after rewording the subject
+to remove anything a classifier could reasonably object to, so it is not a
+prompt you can write your way around.
+
+The trap is that the same error text also appears when you send that model a
+*parameter it does not accept*. A schema problem and a moderation problem are
+reported identically, which is a good way to spend an afternoon fixing the
+wrong thing. The default is now `@cf/leonardo/phoenix-1.0`: 8/8 on the same
+prompt, and it honours `seed` — two runs at a fixed seed returned
+byte-identical images, which is what lets this repo claim the same brief
+regenerates the same pixels. Both facts were measured against the live
+endpoint rather than read off a documentation page.
 
 ---
 

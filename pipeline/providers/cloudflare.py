@@ -61,11 +61,29 @@ import requests
 from .base import GenerationRequest, GenerationResult, ProviderError, RateLimiter
 
 API_BASE = "https://api.cloudflare.com/client/v4/accounts"
-DEFAULT_MODEL = "@cf/black-forest-labs/flux-1-schnell"
+# Leonardo Phoenix, not FLUX schnell.
+#
+# schnell was the default until it refused the sample brief outright: every
+# call for the lipstick product came back 400 "Input prompt contains NSFW
+# content" on a plain cosmetics prompt. Measured 8/8 refusals, and 8/8 again
+# after rewording the subject to remove anything a classifier could object to
+# -- so it is not a prompt that can be written around.
+#
+# Worse, that message is not always about content. Sending schnell a parameter
+# it does not accept produces the SAME "NSFW content" error, which is how a
+# schema problem ends up looking like a moderation problem. Do not trust the
+# error text to tell you which one you have; change one variable at a time.
+#
+# Phoenix takes the same prompt 8/8, and honours `seed` -- two runs at a fixed
+# seed returned byte-identical images. That matters more here than model
+# preference: the whole repo claims the same brief regenerates the same pixels.
+DEFAULT_MODEL = "@cf/leonardo/phoenix-1.0"
 
 # What each model will actually accept -- established by trying it, not by
 # reading the schema. Anything not listed here gets the conservative minimum.
 MODEL_CAPS: dict[str, set[str]] = {
+    # Verified by probing the live endpoint, not read off the docs page.
+    "@cf/leonardo/phoenix-1.0": {"prompt", "steps", "seed"},
     "@cf/black-forest-labs/flux-1-schnell": {"prompt", "steps"},
     "@cf/stabilityai/stable-diffusion-xl-base-1.0": {
         "prompt", "negative_prompt", "seed", "num_steps", "width", "height"},

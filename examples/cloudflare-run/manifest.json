@@ -1,0 +1,377 @@
+{
+  "run_id": "20260823-001544",
+  "campaign_id": "aurora-spring-2026",
+  "provider": "cloudflare",
+  "model": "@cf/leonardo/phoenix-1.0",
+  "started_at": "20260823-001544",
+  "duration_s": 4.219000000040978,
+  "variants_planned": 18,
+  "generative_calls": 1,
+  "reused_from_brief": 1,
+  "reused_from_cache": 0,
+  "counts": {
+    "pass": 17,
+    "review": 1,
+    "block": 0
+  },
+  "preflight": [
+    {
+      "rule": "SYS-003",
+      "severity": "minor",
+      "message": "[velvet-matte-lip] brief points at 'campaigns/assets/velvet-matte-lip.png' which is not on disk; this product will be generated",
+      "routes_to": "engineering"
+    }
+  ],
+  "results": [
+    {
+      "variant_id": "hydra-glow-serum__en-US__1x1",
+      "product_id": "hydra-glow-serum",
+      "locale": "en-US",
+      "ratio": "1:1",
+      "path": "hydra-glow-serum\\1x1\\hydra-glow-serum_en-US_1x1.jpg",
+      "verdict": "pass",
+      "findings": [],
+      "font_family": "arialbd.ttf",
+      "message": "Your skin, wide awake.",
+      "dominant_hex": [
+        "#cac3b6",
+        "#a0a19f",
+        "#9e9991",
+        "#afb1b0",
+        "#a9a39a"
+      ],
+      "master_origin": "brief"
+    },
+    {
+      "variant_id": "hydra-glow-serum__en-US__9x16",
+      "product_id": "hydra-glow-serum",
+      "locale": "en-US",
+      "ratio": "9:16",
+      "path": "hydra-glow-serum\\9x16\\hydra-glow-serum_en-US_9x16.jpg",
+      "verdict": "pass",
+      "findings": [],
+      "font_family": "arialbd.ttf",
+      "message": "Your skin, wide awake.",
+      "dominant_hex": [
+        "#aaaeb0",
+        "#cfc7ba",
+        "#373e40",
+        "#b6afa7",
+        "#cac2b5"
+      ],
+      "master_origin": "brief"
+    },
+    {
+      "variant_id": "hydra-glow-serum__en-US__16x9",
+      "product_id": "hydra-glow-serum",
+      "locale": "en-US",
+      "ratio": "16:9",
+      "path": "hydra-glow-serum\\16x9\\hydra-glow-serum_en-US_16x9.jpg",
+      "verdict": "pass",
+      "findings": [],
+      "font_family": "arialbd.ttf",
+      "message": "Your skin, wide awake.",
+      "dominant_hex": [
+        "#9f9f9b",
+        "#86847e",
+        "#919391",
+        "#acb0af",
+        "#2a3437"
+      ],
+      "master_origin": "brief"
+    },
+    {
+      "variant_id": "hydra-glow-serum__ja-JP__1x1",
+      "product_id": "hydra-glow-serum",
+      "locale": "ja-JP",
+      "ratio": "1:1",
+      "path": "hydra-glow-serum\\1x1\\hydra-glow-serum_ja-JP_1x1.jpg",
+      "verdict": "pass",
+      "findings": [],
+      "font_family": "msgothic.ttc",
+      "message": "肌が、目を覚ます。",
+      "dominant_hex": [
+        "#cac3b6",
+        "#a0a19f",
+        "#9e9991",
+        "#afb1b0",
+        "#a9a39a"
+      ],
+      "master_origin": "brief"
+    },
+    {
+      "variant_id": "hydra-glow-serum__ja-JP__9x16",
+      "product_id": "hydra-glow-serum",
+      "locale": "ja-JP",
+      "ratio": "9:16",
+      "path": "hydra-glow-serum\\9x16\\hydra-glow-serum_ja-JP_9x16.jpg",
+      "verdict": "pass",
+      "findings": [],
+      "font_family": "msgothic.ttc",
+      "message": "肌が、目を覚ます。",
+      "dominant_hex": [
+        "#cdc6b8",
+        "#c6bfb3",
+        "#373f41",
+        "#aab0b2",
+        "#bbb5ad"
+      ],
+      "master_origin": "brief"
+    },
+    {
+      "variant_id": "hydra-glow-serum__ja-JP__16x9",
+      "product_id": "hydra-glow-serum",
+      "locale": "ja-JP",
+      "ratio": "16:9",
+      "path": "hydra-glow-serum\\16x9\\hydra-glow-serum_ja-JP_16x9.jpg",
+      "verdict": "pass",
+      "findings": [],
+      "font_family": "msgothic.ttc",
+      "message": "肌が、目を覚ます。",
+      "dominant_hex": [
+        "#9f9f9b",
+        "#86847e",
+        "#919391",
+        "#abb0af",
+        "#2a3437"
+      ],
+      "master_origin": "brief"
+    },
+    {
+      "variant_id": "hydra-glow-serum__de-DE__1x1",
+      "product_id": "hydra-glow-serum",
+      "locale": "de-DE",
+      "ratio": "1:1",
+      "path": "hydra-glow-serum\\1x1\\hydra-glow-serum_de-DE_1x1.jpg",
+      "verdict": "pass",
+      "findings": [],
+      "font_family": "arialbd.ttf",
+      "message": "Wach für deine Haut.",
+      "dominant_hex": [
+        "#cac3b6",
+        "#a0a19f",
+        "#9e9991",
+        "#afb1b0",
+        "#a9a39a"
+      ],
+      "master_origin": "brief"
+    },
+    {
+      "variant_id": "hydra-glow-serum__de-DE__9x16",
+      "product_id": "hydra-glow-serum",
+      "locale": "de-DE",
+      "ratio": "9:16",
+      "path": "hydra-glow-serum\\9x16\\hydra-glow-serum_de-DE_9x16.jpg",
+      "verdict": "pass",
+      "findings": [],
+      "font_family": "arialbd.ttf",
+      "message": "Wach für deine Haut.",
+      "dominant_hex": [
+        "#aaaeb0",
+        "#cfc7ba",
+        "#373f41",
+        "#b6afa7",
+        "#cac2b5"
+      ],
+      "master_origin": "brief"
+    },
+    {
+      "variant_id": "hydra-glow-serum__de-DE__16x9",
+      "product_id": "hydra-glow-serum",
+      "locale": "de-DE",
+      "ratio": "16:9",
+      "path": "hydra-glow-serum\\16x9\\hydra-glow-serum_de-DE_16x9.jpg",
+      "verdict": "pass",
+      "findings": [],
+      "font_family": "arialbd.ttf",
+      "message": "Wach für deine Haut.",
+      "dominant_hex": [
+        "#9f9f9b",
+        "#86847e",
+        "#919391",
+        "#acb0af",
+        "#2a3437"
+      ],
+      "master_origin": "brief"
+    },
+    {
+      "variant_id": "velvet-matte-lip__en-US__1x1",
+      "product_id": "velvet-matte-lip",
+      "locale": "en-US",
+      "ratio": "1:1",
+      "path": "velvet-matte-lip\\1x1\\velvet-matte-lip_en-US_1x1.jpg",
+      "verdict": "pass",
+      "findings": [],
+      "font_family": "arialbd.ttf",
+      "message": "Your skin, wide awake.",
+      "dominant_hex": [
+        "#98938e",
+        "#938d88",
+        "#89817d",
+        "#e4dfd8",
+        "#837268"
+      ],
+      "master_origin": "generated"
+    },
+    {
+      "variant_id": "velvet-matte-lip__en-US__9x16",
+      "product_id": "velvet-matte-lip",
+      "locale": "en-US",
+      "ratio": "9:16",
+      "path": "velvet-matte-lip\\9x16\\velvet-matte-lip_en-US_9x16.jpg",
+      "verdict": "pass",
+      "findings": [],
+      "font_family": "arialbd.ttf",
+      "message": "Your skin, wide awake.",
+      "dominant_hex": [
+        "#867e7b",
+        "#98938e",
+        "#918c88",
+        "#958f8b",
+        "#dbd5cd"
+      ],
+      "master_origin": "generated"
+    },
+    {
+      "variant_id": "velvet-matte-lip__en-US__16x9",
+      "product_id": "velvet-matte-lip",
+      "locale": "en-US",
+      "ratio": "16:9",
+      "path": "velvet-matte-lip\\16x9\\velvet-matte-lip_en-US_16x9.jpg",
+      "verdict": "review",
+      "findings": [
+        {
+          "rule": "BRAND-001",
+          "severity": "minor",
+          "message": "40% of dominant colours are on palette; off-palette: #625851 (Δ122), #c8a48c (Δ139), #56453a (Δ144)",
+          "routes_to": "brand"
+        }
+      ],
+      "font_family": "arialbd.ttf",
+      "message": "Your skin, wide awake.",
+      "dominant_hex": [
+        "#948f8a",
+        "#625851",
+        "#c8a48c",
+        "#56453a",
+        "#7d716b"
+      ],
+      "master_origin": "generated"
+    },
+    {
+      "variant_id": "velvet-matte-lip__ja-JP__1x1",
+      "product_id": "velvet-matte-lip",
+      "locale": "ja-JP",
+      "ratio": "1:1",
+      "path": "velvet-matte-lip\\1x1\\velvet-matte-lip_ja-JP_1x1.jpg",
+      "verdict": "pass",
+      "findings": [],
+      "font_family": "msgothic.ttc",
+      "message": "肌が、目を覚ます。",
+      "dominant_hex": [
+        "#98938e",
+        "#948e89",
+        "#e1dbd4",
+        "#8a837f",
+        "#85746b"
+      ],
+      "master_origin": "generated"
+    },
+    {
+      "variant_id": "velvet-matte-lip__ja-JP__9x16",
+      "product_id": "velvet-matte-lip",
+      "locale": "ja-JP",
+      "ratio": "9:16",
+      "path": "velvet-matte-lip\\9x16\\velvet-matte-lip_ja-JP_9x16.jpg",
+      "verdict": "pass",
+      "findings": [],
+      "font_family": "msgothic.ttc",
+      "message": "肌が、目を覚ます。",
+      "dominant_hex": [
+        "#98938e",
+        "#857d7a",
+        "#918c87",
+        "#958f8b",
+        "#d8d2ca"
+      ],
+      "master_origin": "generated"
+    },
+    {
+      "variant_id": "velvet-matte-lip__ja-JP__16x9",
+      "product_id": "velvet-matte-lip",
+      "locale": "ja-JP",
+      "ratio": "16:9",
+      "path": "velvet-matte-lip\\16x9\\velvet-matte-lip_ja-JP_16x9.jpg",
+      "verdict": "pass",
+      "findings": [],
+      "font_family": "msgothic.ttc",
+      "message": "肌が、目を覚ます。",
+      "dominant_hex": [
+        "#a2958b",
+        "#7d716b",
+        "#c7a38a",
+        "#e0dad3",
+        "#5e5149"
+      ],
+      "master_origin": "generated"
+    },
+    {
+      "variant_id": "velvet-matte-lip__de-DE__1x1",
+      "product_id": "velvet-matte-lip",
+      "locale": "de-DE",
+      "ratio": "1:1",
+      "path": "velvet-matte-lip\\1x1\\velvet-matte-lip_de-DE_1x1.jpg",
+      "verdict": "pass",
+      "findings": [],
+      "font_family": "arialbd.ttf",
+      "message": "Wach für deine Haut.",
+      "dominant_hex": [
+        "#98938e",
+        "#948e89",
+        "#e4dfd8",
+        "#8a837f",
+        "#85746b"
+      ],
+      "master_origin": "generated"
+    },
+    {
+      "variant_id": "velvet-matte-lip__de-DE__9x16",
+      "product_id": "velvet-matte-lip",
+      "locale": "de-DE",
+      "ratio": "9:16",
+      "path": "velvet-matte-lip\\9x16\\velvet-matte-lip_de-DE_9x16.jpg",
+      "verdict": "pass",
+      "findings": [],
+      "font_family": "arialbd.ttf",
+      "message": "Wach für deine Haut.",
+      "dominant_hex": [
+        "#98938e",
+        "#918c88",
+        "#958f8b",
+        "#867e7b",
+        "#dbd5cd"
+      ],
+      "master_origin": "generated"
+    },
+    {
+      "variant_id": "velvet-matte-lip__de-DE__16x9",
+      "product_id": "velvet-matte-lip",
+      "locale": "de-DE",
+      "ratio": "16:9",
+      "path": "velvet-matte-lip\\16x9\\velvet-matte-lip_de-DE_16x9.jpg",
+      "verdict": "pass",
+      "findings": [],
+      "font_family": "arialbd.ttf",
+      "message": "Wach für deine Haut.",
+      "dominant_hex": [
+        "#7d716b",
+        "#a4968b",
+        "#c8a48c",
+        "#e1dcd5",
+        "#382720"
+      ],
+      "master_origin": "generated"
+    }
+  ],
+  "output_dir": "output\\aurora-spring-2026\\20260823-001544"
+}

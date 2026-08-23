@@ -1,0 +1,150 @@
+{"ts": "2026-08-23T00:15:44", "event": "run-start", "campaign": "aurora-spring-2026", "provider": "cloudflare", "variants": 18}
+{"ts": "2026-08-23T00:15:44", "event": "preflight", "rule": "SYS-003", "severity": "minor", "message": "[velvet-matte-lip] brief points at 'campaigns/assets/velvet-matte-lip.png' which is not on disk; this product will be generated"}
+{"ts": "2026-08-23T00:15:44", "event": "reuse", "product": "hydra-glow-serum", "source": "campaigns/assets/hydra-glow-serum.png"}
+{"ts": "2026-08-23T00:15:44", "event": "generate", "product": "velvet-matte-lip", "prompt": "a slim matte lipstick bullet, cap off, angled upright, product photography, centred, resting on brushed terracotta stone, soft directional daylight from upper left, shallow depth of field, clean neutral background with generous negative space, no text, no logos, no people", "seed": 1588814738}
+{"ts": "2026-08-23T00:15:47", "event": "masters-ready", "generated": 1, "from_brief": 1, "from_cache": 0}
+{"ts": "2026-08-23T00:15:47", "event": "variant-start", "variant": "hydra-glow-serum__en-US__1x1", "product": "hydra-glow-serum", "locale": "en-US", "ratio": "1:1"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "crop", "variant": "hydra-glow-serum__en-US__1x1"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "scrim", "variant": "hydra-glow-serum__en-US__1x1"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "message", "variant": "hydra-glow-serum__en-US__1x1"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "logo", "variant": "hydra-glow-serum__en-US__1x1"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "measure", "variant": "hydra-glow-serum__en-US__1x1"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "checks", "variant": "hydra-glow-serum__en-US__1x1", "rules": []}
+{"ts": "2026-08-23T00:15:47", "event": "variant", "variant": "hydra-glow-serum__en-US__1x1", "verdict": "pass"}
+{"ts": "2026-08-23T00:15:47", "event": "variant-start", "variant": "hydra-glow-serum__en-US__9x16", "product": "hydra-glow-serum", "locale": "en-US", "ratio": "9:16"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "crop", "variant": "hydra-glow-serum__en-US__9x16"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "scrim", "variant": "hydra-glow-serum__en-US__9x16"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "message", "variant": "hydra-glow-serum__en-US__9x16"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "logo", "variant": "hydra-glow-serum__en-US__9x16"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "measure", "variant": "hydra-glow-serum__en-US__9x16"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "checks", "variant": "hydra-glow-serum__en-US__9x16", "rules": []}
+{"ts": "2026-08-23T00:15:47", "event": "variant", "variant": "hydra-glow-serum__en-US__9x16", "verdict": "pass"}
+{"ts": "2026-08-23T00:15:47", "event": "variant-start", "variant": "hydra-glow-serum__en-US__16x9", "product": "hydra-glow-serum", "locale": "en-US", "ratio": "16:9"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "crop", "variant": "hydra-glow-serum__en-US__16x9"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "scrim", "variant": "hydra-glow-serum__en-US__16x9"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "message", "variant": "hydra-glow-serum__en-US__16x9"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "logo", "variant": "hydra-glow-serum__en-US__16x9"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "measure", "variant": "hydra-glow-serum__en-US__16x9"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "checks", "variant": "hydra-glow-serum__en-US__16x9", "rules": []}
+{"ts": "2026-08-23T00:15:47", "event": "variant", "variant": "hydra-glow-serum__en-US__16x9", "verdict": "pass"}
+{"ts": "2026-08-23T00:15:47", "event": "variant-start", "variant": "hydra-glow-serum__ja-JP__1x1", "product": "hydra-glow-serum", "locale": "ja-JP", "ratio": "1:1"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "crop", "variant": "hydra-glow-serum__ja-JP__1x1"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "scrim", "variant": "hydra-glow-serum__ja-JP__1x1"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "message", "variant": "hydra-glow-serum__ja-JP__1x1"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "logo", "variant": "hydra-glow-serum__ja-JP__1x1"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "measure", "variant": "hydra-glow-serum__ja-JP__1x1"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "checks", "variant": "hydra-glow-serum__ja-JP__1x1", "rules": []}
+{"ts": "2026-08-23T00:15:47", "event": "variant", "variant": "hydra-glow-serum__ja-JP__1x1", "verdict": "pass"}
+{"ts": "2026-08-23T00:15:47", "event": "variant-start", "variant": "hydra-glow-serum__ja-JP__9x16", "product": "hydra-glow-serum", "locale": "ja-JP", "ratio": "9:16"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "crop", "variant": "hydra-glow-serum__ja-JP__9x16"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "scrim", "variant": "hydra-glow-serum__ja-JP__9x16"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "message", "variant": "hydra-glow-serum__ja-JP__9x16"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "logo", "variant": "hydra-glow-serum__ja-JP__9x16"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "measure", "variant": "hydra-glow-serum__ja-JP__9x16"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "checks", "variant": "hydra-glow-serum__ja-JP__9x16", "rules": []}
+{"ts": "2026-08-23T00:15:47", "event": "variant", "variant": "hydra-glow-serum__ja-JP__9x16", "verdict": "pass"}
+{"ts": "2026-08-23T00:15:47", "event": "variant-start", "variant": "hydra-glow-serum__ja-JP__16x9", "product": "hydra-glow-serum", "locale": "ja-JP", "ratio": "16:9"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "crop", "variant": "hydra-glow-serum__ja-JP__16x9"}
+{"ts": "2026-08-23T00:15:47", "event": "stage", "stage": "scrim", "variant": "hydra-glow-serum__ja-JP__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "message", "variant": "hydra-glow-serum__ja-JP__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "logo", "variant": "hydra-glow-serum__ja-JP__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "measure", "variant": "hydra-glow-serum__ja-JP__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "checks", "variant": "hydra-glow-serum__ja-JP__16x9", "rules": []}
+{"ts": "2026-08-23T00:15:48", "event": "variant", "variant": "hydra-glow-serum__ja-JP__16x9", "verdict": "pass"}
+{"ts": "2026-08-23T00:15:48", "event": "variant-start", "variant": "hydra-glow-serum__de-DE__1x1", "product": "hydra-glow-serum", "locale": "de-DE", "ratio": "1:1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "crop", "variant": "hydra-glow-serum__de-DE__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "scrim", "variant": "hydra-glow-serum__de-DE__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "message", "variant": "hydra-glow-serum__de-DE__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "logo", "variant": "hydra-glow-serum__de-DE__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "measure", "variant": "hydra-glow-serum__de-DE__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "checks", "variant": "hydra-glow-serum__de-DE__1x1", "rules": []}
+{"ts": "2026-08-23T00:15:48", "event": "variant", "variant": "hydra-glow-serum__de-DE__1x1", "verdict": "pass"}
+{"ts": "2026-08-23T00:15:48", "event": "variant-start", "variant": "hydra-glow-serum__de-DE__9x16", "product": "hydra-glow-serum", "locale": "de-DE", "ratio": "9:16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "crop", "variant": "hydra-glow-serum__de-DE__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "scrim", "variant": "hydra-glow-serum__de-DE__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "message", "variant": "hydra-glow-serum__de-DE__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "logo", "variant": "hydra-glow-serum__de-DE__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "measure", "variant": "hydra-glow-serum__de-DE__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "checks", "variant": "hydra-glow-serum__de-DE__9x16", "rules": []}
+{"ts": "2026-08-23T00:15:48", "event": "variant", "variant": "hydra-glow-serum__de-DE__9x16", "verdict": "pass"}
+{"ts": "2026-08-23T00:15:48", "event": "variant-start", "variant": "hydra-glow-serum__de-DE__16x9", "product": "hydra-glow-serum", "locale": "de-DE", "ratio": "16:9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "crop", "variant": "hydra-glow-serum__de-DE__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "scrim", "variant": "hydra-glow-serum__de-DE__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "message", "variant": "hydra-glow-serum__de-DE__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "logo", "variant": "hydra-glow-serum__de-DE__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "measure", "variant": "hydra-glow-serum__de-DE__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "checks", "variant": "hydra-glow-serum__de-DE__16x9", "rules": []}
+{"ts": "2026-08-23T00:15:48", "event": "variant", "variant": "hydra-glow-serum__de-DE__16x9", "verdict": "pass"}
+{"ts": "2026-08-23T00:15:48", "event": "variant-start", "variant": "velvet-matte-lip__en-US__1x1", "product": "velvet-matte-lip", "locale": "en-US", "ratio": "1:1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "crop", "variant": "velvet-matte-lip__en-US__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "scrim", "variant": "velvet-matte-lip__en-US__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "message", "variant": "velvet-matte-lip__en-US__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "logo", "variant": "velvet-matte-lip__en-US__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "measure", "variant": "velvet-matte-lip__en-US__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "checks", "variant": "velvet-matte-lip__en-US__1x1", "rules": []}
+{"ts": "2026-08-23T00:15:48", "event": "variant", "variant": "velvet-matte-lip__en-US__1x1", "verdict": "pass"}
+{"ts": "2026-08-23T00:15:48", "event": "variant-start", "variant": "velvet-matte-lip__en-US__9x16", "product": "velvet-matte-lip", "locale": "en-US", "ratio": "9:16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "crop", "variant": "velvet-matte-lip__en-US__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "scrim", "variant": "velvet-matte-lip__en-US__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "message", "variant": "velvet-matte-lip__en-US__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "logo", "variant": "velvet-matte-lip__en-US__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "measure", "variant": "velvet-matte-lip__en-US__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "checks", "variant": "velvet-matte-lip__en-US__9x16", "rules": []}
+{"ts": "2026-08-23T00:15:48", "event": "variant", "variant": "velvet-matte-lip__en-US__9x16", "verdict": "pass"}
+{"ts": "2026-08-23T00:15:48", "event": "variant-start", "variant": "velvet-matte-lip__en-US__16x9", "product": "velvet-matte-lip", "locale": "en-US", "ratio": "16:9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "crop", "variant": "velvet-matte-lip__en-US__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "scrim", "variant": "velvet-matte-lip__en-US__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "message", "variant": "velvet-matte-lip__en-US__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "logo", "variant": "velvet-matte-lip__en-US__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "measure", "variant": "velvet-matte-lip__en-US__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "checks", "variant": "velvet-matte-lip__en-US__16x9", "rules": ["BRAND-001"]}
+{"ts": "2026-08-23T00:15:48", "event": "variant", "variant": "velvet-matte-lip__en-US__16x9", "verdict": "review"}
+{"ts": "2026-08-23T00:15:48", "event": "variant-start", "variant": "velvet-matte-lip__ja-JP__1x1", "product": "velvet-matte-lip", "locale": "ja-JP", "ratio": "1:1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "crop", "variant": "velvet-matte-lip__ja-JP__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "scrim", "variant": "velvet-matte-lip__ja-JP__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "message", "variant": "velvet-matte-lip__ja-JP__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "logo", "variant": "velvet-matte-lip__ja-JP__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "measure", "variant": "velvet-matte-lip__ja-JP__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "checks", "variant": "velvet-matte-lip__ja-JP__1x1", "rules": []}
+{"ts": "2026-08-23T00:15:48", "event": "variant", "variant": "velvet-matte-lip__ja-JP__1x1", "verdict": "pass"}
+{"ts": "2026-08-23T00:15:48", "event": "variant-start", "variant": "velvet-matte-lip__ja-JP__9x16", "product": "velvet-matte-lip", "locale": "ja-JP", "ratio": "9:16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "crop", "variant": "velvet-matte-lip__ja-JP__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "scrim", "variant": "velvet-matte-lip__ja-JP__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "message", "variant": "velvet-matte-lip__ja-JP__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "logo", "variant": "velvet-matte-lip__ja-JP__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "measure", "variant": "velvet-matte-lip__ja-JP__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "checks", "variant": "velvet-matte-lip__ja-JP__9x16", "rules": []}
+{"ts": "2026-08-23T00:15:48", "event": "variant", "variant": "velvet-matte-lip__ja-JP__9x16", "verdict": "pass"}
+{"ts": "2026-08-23T00:15:48", "event": "variant-start", "variant": "velvet-matte-lip__ja-JP__16x9", "product": "velvet-matte-lip", "locale": "ja-JP", "ratio": "16:9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "crop", "variant": "velvet-matte-lip__ja-JP__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "scrim", "variant": "velvet-matte-lip__ja-JP__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "message", "variant": "velvet-matte-lip__ja-JP__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "logo", "variant": "velvet-matte-lip__ja-JP__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "measure", "variant": "velvet-matte-lip__ja-JP__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "checks", "variant": "velvet-matte-lip__ja-JP__16x9", "rules": []}
+{"ts": "2026-08-23T00:15:48", "event": "variant", "variant": "velvet-matte-lip__ja-JP__16x9", "verdict": "pass"}
+{"ts": "2026-08-23T00:15:48", "event": "variant-start", "variant": "velvet-matte-lip__de-DE__1x1", "product": "velvet-matte-lip", "locale": "de-DE", "ratio": "1:1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "crop", "variant": "velvet-matte-lip__de-DE__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "scrim", "variant": "velvet-matte-lip__de-DE__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "message", "variant": "velvet-matte-lip__de-DE__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "logo", "variant": "velvet-matte-lip__de-DE__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "measure", "variant": "velvet-matte-lip__de-DE__1x1"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "checks", "variant": "velvet-matte-lip__de-DE__1x1", "rules": []}
+{"ts": "2026-08-23T00:15:48", "event": "variant", "variant": "velvet-matte-lip__de-DE__1x1", "verdict": "pass"}
+{"ts": "2026-08-23T00:15:48", "event": "variant-start", "variant": "velvet-matte-lip__de-DE__9x16", "product": "velvet-matte-lip", "locale": "de-DE", "ratio": "9:16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "crop", "variant": "velvet-matte-lip__de-DE__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "scrim", "variant": "velvet-matte-lip__de-DE__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "message", "variant": "velvet-matte-lip__de-DE__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "logo", "variant": "velvet-matte-lip__de-DE__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "measure", "variant": "velvet-matte-lip__de-DE__9x16"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "checks", "variant": "velvet-matte-lip__de-DE__9x16", "rules": []}
+{"ts": "2026-08-23T00:15:48", "event": "variant", "variant": "velvet-matte-lip__de-DE__9x16", "verdict": "pass"}
+{"ts": "2026-08-23T00:15:48", "event": "variant-start", "variant": "velvet-matte-lip__de-DE__16x9", "product": "velvet-matte-lip", "locale": "de-DE", "ratio": "16:9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "crop", "variant": "velvet-matte-lip__de-DE__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "scrim", "variant": "velvet-matte-lip__de-DE__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "message", "variant": "velvet-matte-lip__de-DE__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "logo", "variant": "velvet-matte-lip__de-DE__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "measure", "variant": "velvet-matte-lip__de-DE__16x9"}
+{"ts": "2026-08-23T00:15:48", "event": "stage", "stage": "checks", "variant": "velvet-matte-lip__de-DE__16x9", "rules": []}
+{"ts": "2026-08-23T00:15:48", "event": "variant", "variant": "velvet-matte-lip__de-DE__16x9", "verdict": "pass"}
+{"ts": "2026-08-23T00:15:48", "event": "run-end", "pass": 17, "review": 1, "block": 0, "generative_calls": 1, "duration_s": 4.22}
