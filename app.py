@@ -155,13 +155,13 @@ def _on_event(rec: dict) -> None:
 
 
 def _do_run(brief_path: str, provider: str, regen: bool = False,
-            storage: str = "local") -> None:
+            storage: str = "local", model: str = "") -> None:
     """Executed on a worker thread so the browser can poll for progress."""
     try:
         _emit(f"starting  brief={os.path.basename(brief_path)}  provider={provider}")
         summary = run_campaign(brief_path, provider_name=provider, quiet=True,
                                on_event=_on_event, force_generate=regen,
-                               storage_name=storage)
+                               storage_name=storage, model=model)
         report = write_report(summary, summary.output_dir)
         c = summary.counts or {}
         _emit(f"masters   generated={summary.generative_calls} "
@@ -257,6 +257,33 @@ class Handler(SimpleHTTPRequestHandler):
             except yaml.YAMLError as exc:
                 data, err = None, str(exc)
             return self._json({"path": rel, "text": text, "data": data, "parse_error": err})
+
+        if route == "/api/models":
+            """The image models this account can actually run.
+
+            Asked live rather than hardcoded: flux-2 and lucid-origin both
+            appeared after this adapter was written, and a menu baked into the
+            source is wrong the week the vendor ships something.
+            """
+            from pipeline.providers.cloudflare import (DEFAULT_MODEL,
+                                                       list_image_models)
+            return self._json({"models": list_image_models(),
+                               "default": DEFAULT_MODEL,
+                               "current": os.environ.get("CLOUDFLARE_IMAGE_MODEL", "")})
+
+        if route == "/api/assetcheck":
+            """Does this product's asset actually exist on disk?
+
+            The form needs to know, because an asset that is really there
+            short-circuits the resolver before the prompt is built -- so the
+            subject and surface fields become inert, and the only thing worse
+            than a field that does nothing is a field that does nothing
+            silently. Only the browser can ask; only the server can answer.
+            """
+            rel = unquote(urlparse(self.path).query.split("path=", 1)[-1])
+            full = self._safe(rel)
+            return self._json({"path": rel,
+                               "exists": bool(full and os.path.isfile(full))})
 
         if route == "/api/signed":
             """A link that opens one stored object, for a few minutes.
@@ -394,7 +421,7 @@ class Handler(SimpleHTTPRequestHandler):
             threading.Thread(
                 target=_do_run,
                 args=(p, body.get("provider", "mock"), bool(body.get("regen")),
-                      str(body.get("storage", "local"))),
+                      str(body.get("storage", "local")), str(body.get("model", ""))),
                 daemon=True).start()
             return self._json({"ok": True})
 

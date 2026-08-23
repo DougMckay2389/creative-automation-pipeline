@@ -55,7 +55,7 @@ def cmd_run(args) -> int:
         brief_path=args.brief, brand_path=args.brand,
         provider_name=args.provider, out_root=args.out,
         rpm=args.rpm, quiet=args.quiet, force_generate=args.regen,
-        storage_name=args.storage)
+        storage_name=args.storage, model=args.model)
     report = write_report(summary, summary.output_dir)
     c = summary.counts
     print("\n" + "-" * 62)
@@ -96,6 +96,9 @@ def main(argv=None) -> int:
     r.add_argument("--brand", default="brandkit/brand.yaml")
     r.add_argument("--provider", default="mock", help="mock | gemini | firefly")
     r.add_argument("--out", default="output")
+    r.add_argument("--model", default="",
+                   help="image model to use, e.g. @cf/leonardo/phoenix-1.0 "
+                        "(defaults to the adapter's own choice)")
     r.add_argument("--storage", default="local",
                    help="where to mirror artifacts: local | s3 (local is always "
                         "written either way)")

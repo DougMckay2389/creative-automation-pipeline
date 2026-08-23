@@ -103,13 +103,16 @@ class CloudflareProvider:
     name = "cloudflare"
 
     def __init__(self, rpm: float = 30.0, timeout_s: float = 120.0,
-                 steps: int = 4, **_ignored):
+                 steps: int = 4, model: str | None = None, **_ignored):
         self.account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
         self.token = os.environ.get("CLOUDFLARE_API_TOKEN", "")
         if not (self.account_id and self.token):
             raise ProviderError(
                 "cloudflare provider needs CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN")
-        self.model = os.environ.get("CLOUDFLARE_IMAGE_MODEL", DEFAULT_MODEL)
+        # Explicit argument wins, then the environment, then the default. The
+        # argument exists so the model can be chosen per RUN -- from the app's
+        # dropdown -- without editing .env and restarting.
+        self.model = model or os.environ.get("CLOUDFLARE_IMAGE_MODEL") or DEFAULT_MODEL
         # FLUX schnell caps steps at 8; more steps is more money for less and
         # less return, so the default stays low and is overridable.
         self.steps = max(1, min(int(steps), 8))
@@ -207,3 +210,41 @@ class CloudflareProvider:
             return base64.b64decode(b64)
         except Exception as exc:                                   # noqa: BLE001
             raise ProviderError(f"image was not valid base64: {exc}") from exc
+
+
+def list_image_models(timeout_s: float = 30.0) -> list[dict]:
+    """Ask the account which text-to-image models it can actually run.
+
+    Hardcoding a menu means it is wrong the week Cloudflare adds something --
+    flux-2 and lucid-origin both landed after this adapter was written. Asking
+    costs one request and can never be out of date.
+
+    img2img and inpainting models are filtered out: they are text-to-image by
+    task label but need a source image, and offering them in a dropdown that
+    only ever sends a prompt is offering a guaranteed failure.
+    """
+    acc = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+    tok = os.environ.get("CLOUDFLARE_API_TOKEN", "")
+    if not (acc and tok):
+        return []
+    try:
+        r = requests.get(f"{API_BASE}/{acc}/ai/models/search",
+                         headers={"Authorization": f"Bearer {tok}"},
+                         params={"per_page": 200}, timeout=timeout_s)
+        if r.status_code != 200:
+            return []
+        out = []
+        for m in (r.json().get("result") or []):
+            name = m.get("name") or ""
+            task = ((m.get("task") or {}).get("name") or "")
+            if task.lower() != "text-to-image":
+                continue
+            if "img2img" in name or "inpainting" in name:
+                continue
+            out.append({"name": name,
+                        "label": name.split("/")[-1],
+                        "vendor": name.split("/")[1] if name.count("/") > 1 else "",
+                        "default": name == DEFAULT_MODEL})
+        return sorted(out, key=lambda x: x["name"])
+    except requests.RequestException:
+        return []

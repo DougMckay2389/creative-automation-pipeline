@@ -118,7 +118,8 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
                  rpm: float | None = None, quiet: bool = False,
                  cache_dir: str = ".cache/masters", on_event=None,
                  force_generate: bool = False,
-                 storage_name: str = "local") -> RunSummary:
+                 storage_name: str = "local",
+                 model: str = "") -> RunSummary:
     t0 = time.monotonic()
     run_id = time.strftime("%Y%m%d-%H%M%S")
 
@@ -149,6 +150,10 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
         return summary
 
     kwargs = {"rpm": rpm} if rpm else {}
+    # Only pass a model if one was chosen. Sending model="" would override the
+    # adapter's own default with nothing.
+    if model:
+        kwargs["model"] = model
     provider = get_provider(provider_name, **kwargs)
     resolver = AssetResolver(provider, cache_dir=cache_dir, log=log,
                              force=force_generate)

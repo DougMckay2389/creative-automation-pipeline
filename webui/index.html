@@ -87,6 +87,16 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .fbadge.reuse{background:#e8efe6;color:#4a5d45}
 .fbadge.gen{background:#f6e9df;color:#9a5b2c}
 .fbad{border-color:#c4694a !important;background:#fdf3f0}
+.pstate{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:-2px 0 8px}
+.pstate-t{font:10.5px var(--mono);color:var(--muted);line-height:1.5;flex:1;min-width:150px}
+.pstate-t b{color:#9a5b2c}
+.pstate-b{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:7px;
+  padding:4px 10px;font:600 11px var(--sans);cursor:pointer;white-space:nowrap}
+.pstate-b:hover{border-color:var(--accent);color:var(--accent)}
+/* When a product is reused, the prompt fields are inert. Say it in the styling
+   as well as in the words -- nobody reads the words. */
+.fcard.reusing textarea[data-p$=".subject"],
+.fcard.reusing input[data-p$=".surface"]{opacity:.45;background:#f4f2ed}
 
 textarea{width:100%;height:340px;border:0;padding:14px 15px;resize:vertical;
  font:12.5px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
@@ -280,6 +290,9 @@ svg.flow{display:block}
   <div class="f"><label for="provider">Image provider
       <button id="keys" class="keylink" type="button">API keys</button></label>
     <select id="provider"></select></div>
+
+  <div class="f" id="modelwrap" hidden><label for="model">Image model</label>
+    <select id="model"></select></div>
 
   <div class="f"><label for="regen">Generation</label>
     <label class="chk" title="Ignore the asset on disk and the cache. Every product is
@@ -551,17 +564,17 @@ function renderForm(){
       <h3>Products <span class="fhint" style="text-transform:none;letter-spacing:0">
         — an asset that exists is reused; a missing one is generated</span></h3>
       ${products.map((p,i)=>`
-        <div class="fcard">
+        <div class="fcard" data-pcard="${i}">
           <button class="rm" data-rm="products" data-i="${i}" title="remove">×</button>
           ${field('ID', `<input data-p="products.${i}.id" value="${val(p.id)}">`)}
           ${field('Name', `<input data-p="products.${i}.name" value="${val(p.name)}">`)}
           ${field('Asset path', `<input data-p="products.${i}.asset" value="${val(p.asset)}"
             placeholder="campaigns/assets/thing.png">`)}
+          <div class="pstate" data-state-for="${i}"></div>
           ${field('Subject', `<textarea data-p="products.${i}.subject"
             placeholder="what the image should show">${val(p.subject)}</textarea>`)}
           ${field('Surface', `<input data-p="products.${i}.surface" value="${val(p.surface)}">`)}
-          <div class="fhint">Subject and surface build the generation prompt, and are
-            only used when the asset is missing.</div>
+          <div class="fhint">Subject and surface build the generation prompt.</div>
         </div>`).join('')}
       <button class="fadd" data-add="products">+ product</button>
     </div>
@@ -611,6 +624,44 @@ function renderForm(){
     </div>`;
 
   syncYaml();
+  paintProductStates();
+}
+
+/* Say plainly whether each product will be REUSED or GENERATED.
+ *
+ * An asset that really exists short-circuits the resolver before the prompt is
+ * ever built, which makes Subject and Surface inert -- and a field that does
+ * nothing silently is worse than one that is obviously disabled. Only the
+ * server can stat the path, so it is asked, once per product, whenever the
+ * form is drawn or an asset path is edited.
+ */
+async function paintProductStates(){
+  const products = (BRIEF && BRIEF.products) || [];
+  await Promise.all(products.map(async (p, i) => {
+    const host = $(`.pstate[data-state-for="${i}"]`);
+    const card = $(`.fcard[data-pcard="${i}"]`);
+    if (!host || !card) return;
+    const path = (p.asset || '').trim();
+
+    let exists = false;
+    if (path) {
+      try {
+        const r = await (await fetch('/api/assetcheck?path=' + encodeURIComponent(path))).json();
+        exists = !!r.exists;
+      } catch { exists = false; }
+    }
+    card.classList.toggle('reusing', exists);
+    host.innerHTML = exists
+      ? `<span class="fbadge reuse">reused</span>
+         <span class="pstate-t">that file exists, so it is used as-is —
+           <b>subject and surface below are ignored</b> for this product.</span>
+         <button class="pstate-b" data-clear="${i}">Generate from the prompt instead</button>`
+      : path
+        ? `<span class="fbadge gen">will generate</span>
+           <span class="pstate-t">nothing at that path yet, so the prompt below is used.</span>`
+        : `<span class="fbadge gen">will generate</span>
+           <span class="pstate-t">no asset path, so the prompt below is used.</span>`;
+  }));
 }
 
 /* Write one edited control back into BRIEF by its dotted path. */
@@ -631,7 +682,13 @@ function setPath(path, value){
 
 $('#formpane').addEventListener('input', (e) => {
   const el = e.target;
-  if (el.dataset.p) { setPath(el.dataset.p, el.value); syncYaml(); }
+  if (el.dataset.p) {
+    setPath(el.dataset.p, el.value);
+    syncYaml();
+    // Typing in an asset path changes whether this product is reused, and the
+    // answer has to keep up with the typing.
+    if (/^products\.\d+\.asset$/.test(el.dataset.p)) paintProductStates();
+  }
 });
 
 $('#formpane').addEventListener('change', (e) => {
@@ -657,6 +714,13 @@ $('#formpane').addEventListener('change', (e) => {
 });
 
 $('#formpane').addEventListener('click', (e) => {
+  const clear = e.target.closest('[data-clear]');
+  if (clear) {
+    // Emptying the asset path IS the mechanism -- no hidden per-product flag,
+    // and the change is visible in the YAML tab like every other edit.
+    BRIEF.products[+clear.dataset.clear].asset = '';
+    return renderForm();
+  }
   const rm = e.target.closest('[data-rm]'), add = e.target.closest('[data-add]');
   if (rm) { BRIEF[rm.dataset.rm].splice(+rm.dataset.i, 1); return renderForm(); }
   if (add) {
@@ -771,7 +835,9 @@ async function doRun(){
   running = true; drawFlow({});
   const r = await (await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({path:$('#brief').value, provider:$('#provider').value,
-                        regen:$('#regen').checked})})).json();
+                        regen:$('#regen').checked,
+                        storage:$('#storage') ? $('#storage').value : 'local',
+                        model:($('#modelwrap').hidden ? '' : $('#model').value)})})).json();
   if(r.error){ $('#log').textContent = r.error; $('#run').disabled=false; $('#dot').classList.remove('live'); return; }
   poll = setInterval(tick, 400); tick();
 }
@@ -1111,6 +1177,29 @@ function paintProviders(r){
   const stillOk = usable.some(p => p.name === keep);
   sel.value = stillOk ? keep : (r.default_provider || 'mock');
   sel.dataset.last = sel.value;
+  paintModels();
+}
+
+/* The model list belongs to the account, not to this file.
+ *
+ * flux-2 and lucid-origin both appeared after the adapter was written, so a
+ * menu baked into the source is wrong the week the vendor ships something.
+ * Only shown for cloudflare -- the other adapters each have one model. */
+let MODELS_LOADED = false;
+async function paintModels(){
+  const wrap = $('#modelwrap'), sel = $('#model');
+  const isCf = $('#provider').value === 'cloudflare';
+  wrap.hidden = !isCf;
+  if (!isCf || MODELS_LOADED) return;
+  try {
+    const r = await (await fetch('/api/models')).json();
+    if (!r.models || !r.models.length) { wrap.hidden = true; return; }
+    sel.innerHTML = r.models.map(m =>
+      `<option value="${m.name}"${m.name === r.default ? ' selected' : ''}>${
+        m.label}${m.name === r.default ? ' — default' : ''}</option>`).join('');
+    if (r.current) sel.value = r.current;
+    MODELS_LOADED = true;
+  } catch { wrap.hidden = true; }
 }
 
 /* Picking an "Add …" row is a request to configure, not a selection. Put the
@@ -1119,7 +1208,7 @@ function paintProviders(r){
    holding a provider that cannot run. */
 $('#provider').addEventListener('change', (e) => {
   const v = e.target.value;
-  if (!v.startsWith('__add:')) { e.target.dataset.last = v; return; }
+  if (!v.startsWith('__add:')) { e.target.dataset.last = v; paintModels(); return; }
   const name = v.slice(6);
   e.target.value = e.target.dataset.last || 'mock';
   const panel = $('#keypanel');
