@@ -33,7 +33,8 @@ from pipeline.env import load_dotenv
 from pipeline.checks import preflight_brief
 from pipeline.providers import (CREDENTIALS, default_provider,
                                 provider_status)
-from pipeline.storage import STORAGE_CREDENTIALS, storage_status
+from pipeline.storage import (STORAGE_CREDENTIALS, StorageError,
+                              get_storage, storage_status)
 from pipeline.report import write_report
 from pipeline.runner import run_campaign
 
@@ -84,6 +85,7 @@ EVENT_NODE = {
     "masters-ready": "master",
     "variant-start": "variant",
     "run-end":       "report",
+    "storage-open":  "store",
 }
 STAGE_NODE = {"crop": "crop", "scrim": "scrim", "message": "message",
               "logo": "logo", "measure": "measure", "checks": "checks"}
@@ -101,6 +103,15 @@ def _reduce(rec: dict) -> None:
 
     STATE["seq"] += 1
     ev = rec.get("event")
+
+    # One object per upload, so the node's count is the number of objects that
+    # actually landed -- not the number we attempted.
+    if ev == "variant" and rec.get("stored_uri"):
+        bump("store")
+        return
+    if ev == "storage-error":
+        bump("store", "err", 0)
+        return
 
     if ev == "stage":
         node = STAGE_NODE.get(rec.get("stage"))
@@ -246,6 +257,24 @@ class Handler(SimpleHTTPRequestHandler):
             except yaml.YAMLError as exc:
                 data, err = None, str(exc)
             return self._json({"path": rel, "text": text, "data": data, "parse_error": err})
+
+        if route == "/api/signed":
+            """A link that opens one stored object, for a few minutes.
+
+            The bucket is private and stays private -- this signs a URL rather
+            than loosening anything. Restricted to keys under runs/ so it can
+            only ever hand out a link to something this pipeline produced,
+            never to an arbitrary object that happens to share the bucket.
+            """
+            key = unquote(urlparse(self.path).query.split("key=", 1)[-1])
+            if not key.startswith("runs/") or ".." in key:
+                return self._json({"error": "only run artifacts can be signed"}, 400)
+            try:
+                st = get_storage("s3")
+                return self._json({"url": st.presigned_url(key, 900),
+                                   "expires_s": 900, "uri": st.uri(key)})
+            except StorageError as exc:
+                return self._json({"error": str(exc)}, 200)
 
         if route == "/api/progress":
             with LOCK:

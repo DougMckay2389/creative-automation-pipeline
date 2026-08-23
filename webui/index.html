@@ -14,6 +14,12 @@ body{margin:0;background:var(--bg);color:var(--ink);
  font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
 .wrap{max-width:1220px;margin:0 auto;padding:26px 22px 70px}
 header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+/* The repo is a deliverable, so it gets a permanent place rather than living
+   in whatever tab the reviewer happens to have open. */
+.ghlink{margin-left:auto;display:inline-flex;align-items:center;gap:6px;
+ padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:var(--card);
+ color:var(--ink2);text-decoration:none;font:600 12px var(--sans);align-self:center}
+.ghlink:hover{border-color:var(--ink);color:var(--ink)}
 h1{font-size:23px;margin:0;letter-spacing:-.02em}
 .sub{color:var(--ink2);font-size:13.5px}
 .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;
@@ -133,6 +139,47 @@ a.rep{font-size:13px;color:var(--accent)}
 .tag{font-size:10.5px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);
  color:var(--ink2);background:#f7f5f1;margin-left:6px}
 
+/* ---- product rows inside a market ---- */
+.mbody{padding:4px 0 8px}
+.prow2{display:flex;align-items:flex-start;gap:11px;padding:7px 13px}
+.prow2+.prow2{border-top:1px dashed var(--line)}
+.pname{flex:0 0 132px;font:600 11.5px var(--sans);color:var(--ink2);padding-top:52px;
+       text-align:right;line-height:1.3}
+.prow2 .mstrip{padding:0;flex:1;min-width:0}
+
+/* ---- where a creative lives ---- */
+.card{cursor:pointer}
+.card .where{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}
+.loc1{font:9.5px var(--mono);padding:2px 6px;border-radius:99px;background:#f2f0ea;
+      color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.loc1.s3{background:#fff3e0;color:#b26a00}
+.loc1.off{opacity:.6}
+
+/* ---- the detail view ---- */
+#assetmodal{position:fixed;inset:0;z-index:60;background:rgba(18,20,15,.55);
+ display:flex;align-items:center;justify-content:center;padding:26px}
+.amcard{background:var(--card);border-radius:14px;max-width:960px;width:100%;
+ max-height:100%;overflow:auto;box-shadow:0 24px 70px rgba(0,0,0,.35)}
+.amhead{display:flex;align-items:center;gap:11px;padding:13px 17px;border-bottom:1px solid var(--line)}
+.amhead b{font-size:14px}
+.amhead .x{margin-left:auto;border:0;background:transparent;font-size:20px;cursor:pointer;
+ color:var(--muted);line-height:1;padding:2px 7px;border-radius:6px}
+.amhead .x:hover{background:#f0ede7;color:var(--ink)}
+.ambody{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:17px;padding:16px 17px}
+@media(max-width:820px){.ambody{grid-template-columns:1fr}}
+.ambody img{width:100%;height:auto;border-radius:9px;border:1px solid var(--line);background:#eeece6}
+.amrow{margin-bottom:13px}
+.amrow h4{margin:0 0 4px;font:700 10px var(--mono);letter-spacing:.09em;
+ text-transform:uppercase;color:var(--muted)}
+.amrow code{display:block;font:11.5px var(--mono);background:#f7f5f1;border:1px solid var(--line);
+ border-radius:7px;padding:7px 9px;word-break:break-all;color:var(--ink2)}
+.amact{display:flex;gap:7px;margin-top:6px;flex-wrap:wrap}
+.amact button,.amact a{font:600 11.5px var(--sans);padding:5px 11px;border-radius:7px;
+ border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;text-decoration:none}
+.amact .go{background:#FF9900;border-color:#e08800;color:#12140f}
+.amact button:hover{background:#f3f1ec}
+.amnote{font:10.5px var(--mono);color:var(--muted);line-height:1.55;margin-top:5px}
+
 /* ---- provider keys ---- */
 .chk{display:flex;align-items:center;gap:7px;padding:8px 11px;border:1px solid var(--line);
  border-radius:8px;background:#fff;font-size:13px;cursor:pointer;white-space:nowrap}
@@ -206,6 +253,17 @@ svg.flow{display:block}
 <header>
   <h1>Creative Automation Pipeline</h1>
   <span class="sub">campaign brief in &rarr; on-spec, checked social creatives out</span>
+  <a class="ghlink" href="https://github.com/DougMckay2389/creative-automation-pipeline"
+     target="_blank" rel="noopener" title="source on GitHub">
+    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="currentColor">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+        0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01
+        1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95
+        0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 0 1 2-.27c.68
+        0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15
+        0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01
+        8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+    <span>GitHub</span></a>
 </header>
 
 <div class="bar">
@@ -225,6 +283,7 @@ generated fresh from its current subject and surface, with a seed salted by the 
   <button id="save">Save brief</button>
 </div>
 
+<div id="assetmodal" hidden></div>
 <div id="stalebanner" hidden></div>
 <div id="keypanel" hidden></div>
 <div id="planout"></div>
@@ -292,6 +351,11 @@ const NODES = [
   {id:'checks',    x:794, y:300, ic:'⚖',  t:'Gate',            s:'brand + legal',c:'#d03b3b'},
   {id:'verdict',   x:950, y:300, ic:'🗂', t:'Sorted queue',    s:'human queue',c:'#0ca30c'},
   {id:'report',    x:950, y:392, ic:'📊', t:'Report',          s:'JSON + HTML',    c:'#0ca30c'},
+  // Object storage sits AFTER the gate, not before it. Nothing reaches a
+  // shared bucket until it has been measured -- an archive of unchecked
+  // creatives is how an off-brand asset gets picked up by someone who assumes
+  // it was approved.
+  {id:'store',     x:794, y:392, ic:'☁',  t:'AWS S3',           s:'mirror + manifest', c:'#FF9900'},
 ];
 NODES.forEach(n=>{ n.y += DY; });
 const NMAP = Object.fromEntries(NODES.map(n=>[n.id,n]));
@@ -301,6 +365,7 @@ const EDGES = [
   ['master','crop','wrap'],
   ['crop','scrim'], ['scrim','message'], ['message','logo'], ['logo','measure'],
   ['measure','checks'], ['checks','verdict'], ['verdict','report','down'],
+  ['checks','store','down'],
 ];
 const SVGNS = 'http://www.w3.org/2000/svg';
 const el = (n,a={}) => { const e=document.createElementNS(SVGNS,n);
@@ -729,13 +794,25 @@ function cardHtml(r, base){
   const cls = {pass:'b-pass',review:'b-review',block:'b-block'}[r.verdict];
   const f = (r.findings||[]).map(x=>
     `<div><code>${esc(x.rule)}</code> → ${esc(x.routes_to)}</div>`).join('');
-  return `<div class="card" data-v="${esc(r.variant || r.variant_id || '')}">
-    <div class="ph"><img loading="lazy" src="${base}${String(r.path).replace(/\\/g,'/')}" alt=""></div>
+  const rel = String(r.path).replace(/\\/g,'/');
+  const s3  = r.stored_uri || '';
+  // Both locations live on the card in the dataset, so opening the detail view
+  // never has to reconstruct a path -- it shows what the run actually recorded.
+  return `<div class="card" data-v="${esc(r.variant || r.variant_id || '')}"
+       data-src="${base}${rel}" data-rel="${esc(rel)}"
+       data-dir="${esc(String(r.out_dir || '').replace(/\\/g,'/'))}"
+       data-s3="${esc(s3)}" title="click to see where this file lives">
+    <div class="ph"><img loading="lazy" src="${base}${rel}" alt=""></div>
     <div class="m"><span class="badge ${cls}">${esc(r.verdict)}</span>
-    <div class="t">${esc(r.product || r.product_id || '')} · ${esc(r.ratio)}</div>
+    <div class="t">${esc(r.ratio)}</div>
     <div style="color:var(--muted);margin-top:3px">${
       esc(r.font_family || '')}${r.font_family ? ' · ' : ''}${
       r.master_origin ? 'master: ' + esc(r.master_origin) : ''}</div>
+    <div class="where">
+      <span class="loc1" title="${esc(rel)}">📁 ${esc(rel.split('/').pop())}</span>
+      ${s3 ? `<span class="loc1 s3" title="${esc(s3)}">☁ s3</span>`
+           : `<span class="loc1 off" title="this run was local only">☁ not mirrored</span>`}
+    </div>
     ${f}</div></div>`;
 }
 
@@ -755,30 +832,51 @@ function paintLanded(landed){
     const r = landed[i];
     if (SEEN.has(r.variant)) continue;
     SEEN.add(r.variant);
-
-    let row = host.querySelector(`.mrow[data-loc="${CSS.escape(r.locale)}"]`);
-    if (!row) {
-      row = document.createElement('div');
-      row.className = 'mrow';
-      row.dataset.loc = r.locale;
-      row.innerHTML = `
-        <div class="mhead">
-          <span class="loc">${esc(r.locale)}</span>
-          <span class="msg">${esc(r.message || '')}</span>
-          <span class="mcount"></span>
-        </div>
-        <div class="mstrip"></div>`;
-      host.appendChild(row);                 // markets appear in brief order
-    }
-    const base = '/out/' + String(r.out_dir).replace(/\\/g,'/') + '/';
-    row.querySelector('.mstrip').insertAdjacentHTML('afterbegin', cardHtml(r, base));
-
-    const strip = row.querySelector('.mstrip');
-    const bad = strip.querySelectorAll('.badge:not(.b-pass)').length;
-    const n = strip.querySelectorAll('.card').length;
-    row.querySelector('.mcount').innerHTML =
-      `${n} creative${n===1?'':'s'}${bad ? ` · <b>${bad} to review</b>` : ''}`;
+    placeCard(host, r, '/out/' + String(r.out_dir).replace(/\\/g,'/') + '/');
   }
+}
+
+/* One card into the right place: a product's strip, inside its market's block.
+ *
+ * Two levels, because they answer different questions. The market is the unit
+ * a regional lead owns -- "everything going out in Japan". The product inside
+ * it is the unit you compare across ratios, and mixing two products into one
+ * strip means the 1:1 of one sits beside the 16:9 of the other, which is the
+ * comparison nobody wants to make. */
+function placeCard(host, r, base){
+  const prod = r.product || r.product_id || '—';
+
+  let row = host.querySelector(`.mrow[data-loc="${CSS.escape(r.locale)}"]`);
+  if (!row) {
+    row = document.createElement('div');
+    row.className = 'mrow';
+    row.dataset.loc = r.locale;
+    row.innerHTML = `
+      <div class="mhead">
+        <span class="loc">${esc(r.locale)}</span>
+        <span class="msg">${esc(r.message || '')}</span>
+        <span class="mcount"></span>
+      </div>
+      <div class="mbody"></div>`;
+    host.appendChild(row);                   // markets appear in brief order
+  }
+
+  let prow = row.querySelector(`.prow2[data-prod="${CSS.escape(prod)}"]`);
+  if (!prow) {
+    prow = document.createElement('div');
+    prow.className = 'prow2';
+    prow.dataset.prod = prod;
+    prow.innerHTML = `<div class="pname">${esc(prod)}</div><div class="mstrip"></div>`;
+    row.querySelector('.mbody').appendChild(prow);
+  }
+  // afterbegin: newest ends up leftmost within its own product strip.
+  prow.querySelector('.mstrip').insertAdjacentHTML('afterbegin', cardHtml(r, base));
+
+  const cards = row.querySelectorAll('.card');
+  const bad = row.querySelectorAll('.badge:not(.b-pass)').length;
+  row.querySelector('.mcount').innerHTML =
+    `${cards.length} creative${cards.length===1?'':'s'}${
+      bad ? ` · <b>${bad} to review</b>` : ''}`;
 }
 
 function render(sum, report){
@@ -805,20 +903,39 @@ function render(sum, report){
 
   const card = (r) => cardHtml(r, base);
 
+  // Product order, taken the same way as market order: first appearance in
+  // the results, which is the order the brief lists them.
+  const prodOrder = [];
+  for (const r of sum.results) {
+    const p = r.product_id || r.product;
+    if (!prodOrder.includes(p)) prodOrder.push(p);
+  }
+
   for (const locale of order) {
-    const rows = sum.results.filter(r => r.locale === locale).slice().reverse();
-    const bad  = rows.filter(r => r.verdict !== 'pass').length;
-    // The market's line is a property of the market, not of each creative, so
-    // it belongs on the row rather than repeated under all six tiles.
-    const msg = (rows[0] || {}).message || '';
-    html += `<div class="mrow">
+    const inMarket = sum.results.filter(r => r.locale === locale);
+    const bad = inMarket.filter(r => r.verdict !== 'pass').length;
+    // The market's line belongs to the market, not to each creative, so it
+    // sits on the header rather than being repeated under every tile.
+    const msg = (inMarket[0] || {}).message || '';
+
+    const body = prodOrder.map(prod => {
+      const mine = inMarket.filter(r => (r.product_id || r.product) === prod)
+                           .slice().reverse();       // newest leftmost
+      if (!mine.length) return '';
+      return `<div class="prow2" data-prod="${esc(prod)}">
+        <div class="pname">${esc(prod)}</div>
+        <div class="mstrip">${mine.map(card).join('')}</div>
+      </div>`;
+    }).join('');
+
+    html += `<div class="mrow" data-loc="${esc(locale)}">
       <div class="mhead">
         <span class="loc">${esc(locale)}</span>
         <span class="msg">${esc(msg)}</span>
-        <span class="mcount">${rows.length} creative${rows.length===1?'':'s'}${
+        <span class="mcount">${inMarket.length} creative${inMarket.length===1?'':'s'}${
           bad ? ` · <b>${bad} to review</b>` : ''}</span>
       </div>
-      <div class="mstrip">${rows.map(card).join('')}</div>
+      <div class="mbody">${body}</div>
     </div>`;
   }
   $('#results').innerHTML = html;
@@ -830,6 +947,100 @@ $('#brief').addEventListener('change', loadBrief);
 $('#plan').addEventListener('click', doPlan);
 $('#save').addEventListener('click', doSave);
 $('#run').addEventListener('click', doRun);
+/* ------------------------------------------------------------------ *
+ * Where a creative lives
+ *
+ * Every deliverable exists in two places at once -- an organised folder on
+ * this machine and, when a run mirrors, an object in a bucket. Both are shown
+ * because they answer different questions: the path is what you open, the URI
+ * is what you hand to someone else.
+ *
+ * The S3 link is signed on demand rather than stored. `s3://bucket/key` is an
+ * identifier, not a URL, and the alternative -- making the bucket public so
+ * the link works -- is how unreleased campaign art ends up indexed months
+ * early. A signed link opens the object for fifteen minutes and expires by
+ * itself; nothing about the bucket changes.
+ * ------------------------------------------------------------------ */
+function openAsset(card){
+  const m = $('#assetmodal');
+  const s3 = card.dataset.s3 || '';
+  const dir = card.dataset.dir || '';
+  const rel = card.dataset.rel || '';
+  const localPath = (dir ? dir.replace(/\/$/,'') + '/' : '') + rel;
+
+  m.innerHTML = `
+    <div class="amcard" role="dialog" aria-modal="true">
+      <div class="amhead">
+        <b>${esc(rel.split('/').pop())}</b>
+        <button class="x" aria-label="close">&times;</button>
+      </div>
+      <div class="ambody">
+        <img src="${esc(card.dataset.src)}" alt="">
+        <div>
+          <div class="amrow">
+            <h4>Local file</h4>
+            <code>${esc(localPath)}</code>
+            <div class="amact"><button data-copy="${esc(localPath)}">Copy path</button>
+              <a href="${esc(card.dataset.src)}" target="_blank" rel="noopener">Open</a></div>
+          </div>
+          <div class="amrow">
+            <h4>Object storage</h4>
+            ${s3 ? `<code>${esc(s3)}</code>
+              <div class="amact">
+                <button data-copy="${esc(s3)}">Copy URI</button>
+                <button class="go" data-sign="${esc(s3)}">Get live link</button>
+              </div>
+              <div class="amnote">The bucket is private. A signed link opens this
+                object for 15 minutes and then stops working — nothing is made
+                public to produce it.</div>`
+            : `<code>not mirrored — this run was local only</code>
+               <div class="amnote">Run with <b>--storage s3</b>, or pick S3 in the app,
+                 to mirror every artifact and its manifest.</div>`}
+          </div>
+          <div class="amrow" id="amsigned"></div>
+        </div>
+      </div>
+    </div>`;
+  m.hidden = false;
+}
+
+$('#results').addEventListener('click', (e) => {
+  const card = e.target.closest('.card');
+  if (card) openAsset(card);
+});
+
+$('#assetmodal').addEventListener('click', async (e) => {
+  if (e.target.id === 'assetmodal' || e.target.classList.contains('x')) {
+    $('#assetmodal').hidden = true; return;
+  }
+  const copy = e.target.closest('[data-copy]');
+  if (copy) {
+    try { await navigator.clipboard.writeText(copy.dataset.copy);
+          copy.textContent = 'Copied'; setTimeout(()=>copy.textContent='Copy', 1200); }
+    catch { copy.textContent = 'Copy failed'; }
+    return;
+  }
+  const sign = e.target.closest('[data-sign]');
+  if (sign) {
+    const key = sign.dataset.sign.replace(/^s3:\/\/[^/]+\//, '');
+    sign.disabled = true; sign.textContent = 'Signing…';
+    const r = await (await fetch('/api/signed?key=' + encodeURIComponent(key))).json();
+    sign.disabled = false; sign.textContent = 'Get live link';
+    const out = $('#amsigned');
+    out.innerHTML = r.error
+      ? `<h4>Live link</h4><code>${esc(r.error)}</code>`
+      : `<h4>Live link · expires in ${Math.round(r.expires_s/60)} min</h4>
+         <code>${esc(r.url)}</code>
+         <div class="amact">
+           <a class="go" href="${esc(r.url)}" target="_blank" rel="noopener">Open from S3</a>
+           <button data-copy="${esc(r.url)}">Copy link</button></div>`;
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') $('#assetmodal').hidden = true;
+});
+
 /* ------------------------------------------------------------------ *
  * Providers and their keys
  *

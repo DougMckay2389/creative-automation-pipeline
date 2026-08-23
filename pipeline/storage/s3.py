@@ -153,3 +153,47 @@ class S3Storage(Storage):
 
     def uri(self, key):
         return f"s3://{self.bucket}/{self._full_key(key)}"
+
+    # ------------------------------------------------------------------
+    def presigned_url(self, key: str, expires: int = 3600) -> str:
+        """A link that actually opens the object, without making it public.
+
+        `s3://bucket/key` is an identifier, not a URL -- paste it in a browser
+        and nothing happens. The obvious fix is to make the bucket public,
+        which is how creative assets end up indexed by search engines months
+        before a campaign launches.
+
+        The right one is query-string SigV4: the same signature, moved out of
+        the Authorization header and into the URL, with an expiry inside the
+        signed material so the link stops working on its own. Nothing about
+        the bucket changes; Block Public Access stays on.
+
+        Signed with UNSIGNED-PAYLOAD because the recipient is a browser doing
+        a GET -- there is no body to hash, and requiring one would mean the
+        signer had to know the object's contents to link to it.
+        """
+        url, canon_uri, host = self._url_and_path(key)
+        now = _dt.datetime.now(_dt.timezone.utc)
+        amzdate = now.strftime("%Y%m%dT%H%M%SZ")
+        datestamp = now.strftime("%Y%m%d")
+        scope = f"{datestamp}/{self.region}/s3/aws4_request"
+
+        params = {
+            "X-Amz-Algorithm": ALGORITHM,
+            "X-Amz-Credential": f"{self.access}/{scope}",
+            "X-Amz-Date": amzdate,
+            "X-Amz-Expires": str(int(expires)),
+            "X-Amz-SignedHeaders": "host",
+        }
+        if self.session_token:
+            params["X-Amz-Security-Token"] = self.session_token
+        # Sorted by encoded name, every value percent-encoded. The signature
+        # covers this exact string, so a differently-ordered query is a 403.
+        query = "&".join(f"{quote(k, safe='')}={quote(v, safe='')}"
+                         for k, v in sorted(params.items()))
+
+        creq, _ = canonical_request("GET", canon_uri, query, {"host": host}, UNSIGNED)
+        to_sign = "\n".join([ALGORITHM, amzdate, scope, _sha256(creq.encode("utf-8"))])
+        sig = hmac.new(signing_key(self.secret, datestamp, self.region, "s3"),
+                       to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
+        return f"{url}?{query}&X-Amz-Signature={sig}"

@@ -241,6 +241,7 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
             product=v.product.id, locale=v.market.locale, ratio=v.ratio.id,
             message=v.market.message, out_dir=out_dir,
             path=os.path.relpath(path, out_dir).replace(os.sep, "/"),
+            stored_uri=stored_uri,
             findings=[f.as_dict() for f in res.findings])
 
     summary = RunSummary(
