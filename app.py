@@ -21,13 +21,16 @@ import os
 import socket
 import sys
 import threading
+import time
 import traceback
 import webbrowser
 
 import yaml
 
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from urllib.error import HTTPError
 from urllib.parse import unquote, urlparse
+from urllib.request import Request, urlopen
 
 from pipeline.brief import BriefError, load_brief
 from pipeline.env import load_dotenv
@@ -106,6 +109,14 @@ def _is_stale() -> bool:
 STATE: dict = {"running": False, "lines": [], "summary": None, "error": None,
                "report": None, "graph": {}, "seq": 0, "landed": []}
 LOCK = threading.Lock()
+
+# The live server object, so /api/shutdown can stop it. Set in main().
+SERVER = None
+
+# Identifies THIS program to another copy of itself starting on the same port.
+# A bare "is something listening?" is not enough to justify stopping it -- the
+# whole point is to be certain it is us before doing anything.
+APP_ID = "creative-automation-pipeline"
 
 # Which pipeline event advances which node on the flow canvas. The graph is
 # driven entirely by events the pipeline actually emits -- the same records
@@ -301,6 +312,17 @@ class Handler(SimpleHTTPRequestHandler):
                                "stale": _is_stale(),
                                "cwd": ROOT})
 
+        if route == "/api/whoami":
+            """Who is answering on this port?
+
+            Asked by a SECOND copy of this app when its bind fails. Identity
+            is the whole point: "something is listening on 8765" is not a
+            licence to stop it -- it might be anything. This says what program
+            it is and which working copy it was started from, so the newcomer
+            can decide whether taking over is safe or rude.
+            """
+            return self._json({"app": APP_ID, "root": ROOT, "pid": os.getpid()})
+
         if route == "/api/brief":
             rel = unquote(urlparse(self.path).query.split("path=", 1)[-1])
             p = self._safe(rel)
@@ -469,6 +491,38 @@ class Handler(SimpleHTTPRequestHandler):
                                "storages": storage_status(),
                                "default_provider": default_provider()})
 
+        if route == "/api/shutdown":
+            """Stand down so a newly started copy can take the port.
+
+            Three things make this safe enough for a local demo tool:
+
+            * the socket is bound to 127.0.0.1, so nothing off this machine
+              can reach it;
+            * the caller must quote our own ROOT back to us, which a different
+              working copy cannot do by accident -- two checkouts on one
+              machine should NOT silently stop each other, they should be told
+              to use --port;
+            * it refuses while a run is in progress, because killing a server
+              mid-run abandons a half-written output folder and, worse, throws
+              away generative calls that have already been paid for.
+
+            This is what turns "port already in use, here is a taskkill
+            incantation" into the new instance simply starting.
+            """
+            if str(body.get("root", "")) != ROOT:
+                return self._json({"error": "different working copy; refusing"}, 403)
+            with LOCK:
+                if STATE["running"]:
+                    return self._json({"error": "a run is in progress"}, 409)
+            # Reply FIRST, then stop. shutdown() blocks until the serve loop
+            # exits, and the serve loop cannot exit until this handler returns
+            # -- calling it inline would deadlock the process it is trying to
+            # close. A thread lets this response finish first.
+            self._json({"ok": True, "pid": os.getpid()})
+            if SERVER is not None:
+                threading.Thread(target=SERVER.shutdown, daemon=True).start()
+            return None
+
         if route == "/api/plan":
             p = self._safe(body.get("path", ""))
             if not p:
@@ -630,34 +684,116 @@ class ExclusiveHTTPServer(ThreadingHTTPServer):
         super().server_bind()
 
 
+def _ask_previous_copy_to_stand_down(port: int) -> str:
+    """Try to free the port by asking, not by killing. Returns a status.
+
+    "Kill whatever owns port 8765" is the obvious fix and it is wrong: the
+    thing on that port might not be this app at all, and a tool that terminates
+    unidentified processes on your machine to start itself is not a tool you
+    should trust. So the newcomer asks first.
+
+        GET  /api/whoami   -> is this the same program, from the same folder?
+        POST /api/shutdown -> if so, please stop
+
+    The old process closes its own socket. Nothing is killed, nothing is
+    forced, and every refusal is a sentence rather than a stack trace.
+
+    Returns one of:
+        "freed"      the previous copy stood down
+        "busy"       it is mid-run and declined -- do not interrupt a paid run
+        "foreign"    something else owns the port, or another working copy
+        "unreachable" nothing answered
+    """
+    base = f"http://{HOST}:{port}"
+    try:
+        with urlopen(f"{base}/api/whoami", timeout=2) as r:      # noqa: S310
+            who = json.loads(r.read().decode("utf-8"))
+    except Exception:                                            # noqa: BLE001
+        return "unreachable"
+
+    if who.get("app") != APP_ID:
+        return "foreign"
+    if who.get("root") != ROOT:
+        return "foreign"
+
+    req = Request(f"{base}/api/shutdown", method="POST",
+                  data=json.dumps({"root": ROOT}).encode("utf-8"),
+                  headers={"Content-Type": "application/json"})
+    try:
+        with urlopen(req, timeout=5) as r:                       # noqa: S310
+            if not json.loads(r.read().decode("utf-8")).get("ok"):
+                return "foreign"
+    except HTTPError as exc:
+        return "busy" if exc.code == 409 else "foreign"
+    except Exception:                                            # noqa: BLE001
+        return "unreachable"
+
+    # It said yes. Wait for the socket to actually close -- "shutdown
+    # accepted" and "port available" are not the same instant, and binding
+    # too eagerly just recreates the error we are trying to remove.
+    for _ in range(40):                                          # up to ~8s
+        time.sleep(0.2)
+        probe = socket.socket()
+        try:
+            probe.settimeout(0.3)
+            probe.connect((HOST, port))
+        except OSError:
+            return "freed"
+        finally:
+            probe.close()
+    return "unreachable"
+
+
 def main() -> None:
     port = PORT
     for i, a in enumerate(sys.argv):                       # --port 8766
         if a == "--port" and i + 1 < len(sys.argv):
             port = int(sys.argv[i + 1])
 
+    global SERVER
+    srv = None
     try:
         srv = ExclusiveHTTPServer((HOST, port), Handler)
-    except OSError as exc:
-        # Fail LOUDLY on a port clash.
+    except OSError:
+        # The port is taken. Do not die, and do not kill anything -- ask.
         #
-        # The default here is quietly dangerous: the new process dies, the old
-        # one keeps serving, and the browser shows an app that looks fine and
-        # is running yesterday's code. That has been mistaken for three
-        # different bugs -- an empty provider list, a missing form, a toggle
-        # that "does nothing" -- each time because the server answering was
-        # not the server just started.
-        print(f"\n  Port {port} is already in use.\n")
-        print("  An older copy of this app is almost certainly still running.")
-        print("  It will keep answering on this port and it is serving the OLD")
-        print("  code, so anything you just changed will appear to have no effect.\n")
-        print("  Stop it first:")
-        print(f"    Windows   for /f \"tokens=5\" %a in "
-              f"('netstat -ano ^| findstr :{port}') do taskkill /PID %a /F")
-        print(f"    macOS/Linux   kill $(lsof -ti tcp:{port})\n")
-        print(f"  ...or run this one somewhere else:  python app.py --port {port + 1}\n")
-        raise SystemExit(2) from exc
+        # Leaving the user with a taskkill incantation was technically correct
+        # and practically useless: restarting the app is the single most common
+        # thing anyone does with it, and "paste this netstat pipeline" is not an
+        # answer you want on screen in front of an audience.
+        outcome = _ask_previous_copy_to_stand_down(port)
+        if outcome == "freed":
+            print("\n  An older copy was running; it has stood down.")
+            for attempt in range(15):
+                try:
+                    srv = ExclusiveHTTPServer((HOST, port), Handler)
+                    break
+                except OSError:
+                    # The listener is gone but the port can linger briefly.
+                    time.sleep(0.4)
+        if srv is None:
+            print(f"\n  Port {port} is already in use.\n")
+            if outcome == "busy":
+                print("  The copy already running is in the MIDDLE OF A RUN, so it was")
+                print("  not interrupted -- stopping it would abandon a half-written")
+                print("  output folder and waste generative calls already paid for.\n")
+                print("  Wait for it to finish, then start this again.")
+            elif outcome == "foreign":
+                print("  Something else owns that port -- either another program, or")
+                print("  this app started from a DIFFERENT folder. Nothing was touched.\n")
+                print("  Stop it yourself, or run this copy somewhere else:")
+                print(f"    python app.py --port {port + 1}")
+            else:
+                print("  Something is listening but did not answer, so it was left")
+                print("  alone. If it is a stuck copy of this app, stop it:\n")
+                print(f"    Windows   for /f \"tokens=5\" %a in "
+                      f"('netstat -ano ^| findstr :{port}') do taskkill /PID %a /F")
+                print(f"    macOS/Linux   kill $(lsof -ti tcp:{port})\n")
+                print(f"  ...or run this one somewhere else:  python app.py --port {port + 1}")
+            print()
+            raise SystemExit(2)
 
+    SERVER = srv
     url = f"http://{HOST}:{port}"
     print("\n  Creative Automation Pipeline")
     print(f"  running at  {url}")
