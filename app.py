@@ -21,6 +21,9 @@ import os
 import threading
 import traceback
 import webbrowser
+
+import yaml
+
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlparse
 
@@ -191,7 +194,20 @@ class Handler(SimpleHTTPRequestHandler):
             if not p or not os.path.isfile(p):
                 return self._json({"error": "not found"}, 404)
             with open(p, "r", encoding="utf-8") as fh:
-                return self._json({"path": rel, "text": fh.read()})
+                text = fh.read()
+            # The form is built from `data`, parsed HERE with the same PyYAML
+            # the pipeline uses. Parsing it a second time in the browser would
+            # mean two parsers that can disagree about what the brief says --
+            # and the one the user is editing would be the one that is wrong.
+            # `data` is null when the file will not parse; the UI then keeps
+            # the user in the raw YAML tab, which is the only honest place to
+            # fix a syntax error.
+            try:
+                data = yaml.safe_load(text) or {}
+                err = None
+            except yaml.YAMLError as exc:
+                data, err = None, str(exc)
+            return self._json({"path": rel, "text": text, "data": data, "parse_error": err})
 
         if route == "/api/progress":
             with LOCK:

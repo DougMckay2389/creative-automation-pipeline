@@ -38,7 +38,7 @@ products:
     # one product reused from disk, one generated.
     asset: campaigns/assets/velvet-matte-lip.png
     subject: "a slim matte lipstick bullet, cap off, angled upright"
-    surface: "brushed terracotta stone"
+    surface: "brushed slate stone"
 
 markets:
   - locale: en-US

@@ -48,8 +48,22 @@ checks the three dependencies, starts a local server and opens
 <http://127.0.0.1:8765>.
 
 From there: pick a brief, press **Plan** to see what a run would cost before
-spending anything, edit the brief in place if you like, then **Run pipeline**
-and watch it move through the flow canvas.
+spending anything, edit the brief, then **Run pipeline** and watch it move
+through the flow canvas.
+
+The brief has two tabs. **Form** gives you fields — products, markets with a
+locale picker that fills in the region, aspect ratios with presets for the
+specs people actually order, and the prohibited-term list. **YAML** is the
+file itself. The form is a *view*: every edit regenerates the YAML, and the
+Save button still writes that text, so you can always read exactly what the
+file is about to become before you commit to it. That matters here, because
+serialising a brief drops the comments the shipped sample is full of.
+
+The parsing happens server-side with the same PyYAML the pipeline imports —
+the browser only ever emits. Two parsers would eventually disagree about what
+a brief says, and the one being edited would be the wrong one. Emitting is
+hand-rolled and quotes every string: a message containing a colon, a `#` or a
+leading `%` is perfectly good ad copy and completely invalid bare YAML.
 
 The canvas is a node graph in the style of n8n: it shows where the image comes
 from (the creative team's asset on disk, the cache, or a generative call), the

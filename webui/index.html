@@ -39,6 +39,42 @@ button[disabled]{opacity:.45;cursor:not-allowed}
  margin:0;padding:12px 15px;border-bottom:1px solid var(--line);font-weight:700;
  display:flex;align-items:center;gap:10px}
 .panel .body{padding:14px 15px}
+/* ---------- brief form ----------
+   The form is a VIEW over the YAML, never a second source of truth: every
+   edit regenerates the textarea, and the existing Save button is still the
+   only thing that writes a file. That is why the YAML tab is one click away
+   rather than hidden -- serialising drops the comments in the shipped brief,
+   and you should be able to see that before you save over it. */
+.tabs{float:right;display:inline-flex;border:1px solid var(--line);border-radius:7px;
+      overflow:hidden}
+.tab{border:0;padding:4px 12px;font:600 11px var(--mono);background:#fff;color:var(--muted);
+     cursor:pointer}
+.tab+.tab{border-left:1px solid var(--line)}
+.tab.on{background:var(--ink);color:#fff}
+.formpane{height:340px;overflow-y:auto;padding:13px 15px}
+.fsec{margin-bottom:16px}
+.fsec>h3{margin:0 0 8px;font:700 10.5px var(--mono);letter-spacing:.1em;
+         text-transform:uppercase;color:var(--muted)}
+.frow{display:grid;grid-template-columns:118px 1fr;gap:9px;align-items:center;margin-bottom:6px}
+.frow>label{font:11.5px var(--sans);color:var(--muted)}
+.frow input,.frow select,.frow textarea{width:100%;padding:5px 8px;border:1px solid var(--line);
+  border-radius:6px;font:12px var(--sans);background:#fff;color:var(--ink)}
+.frow textarea{height:46px;resize:vertical;font-family:var(--mono);font-size:11px}
+.fcard{border:1px solid var(--line);border-radius:9px;padding:11px 12px;margin-bottom:9px;
+       background:#fcfcfb;position:relative}
+.fcard>.rm{position:absolute;top:8px;right:9px;border:0;background:transparent;cursor:pointer;
+           color:var(--muted);font-size:15px;line-height:1;padding:2px 5px;border-radius:5px}
+.fcard>.rm:hover{background:#f0dedb;color:#a33}
+.fadd{border:1px dashed var(--line);background:#fff;color:var(--muted);border-radius:8px;
+      padding:6px 12px;font:600 11.5px var(--sans);cursor:pointer;width:100%}
+.fadd:hover{border-color:var(--ink);color:var(--ink)}
+.fhint{font:10.5px var(--mono);color:var(--muted);margin:-2px 0 8px}
+.fbadge{display:inline-block;font:700 9px var(--mono);letter-spacing:.05em;padding:2px 6px;
+        border-radius:99px;text-transform:uppercase;vertical-align:1px;margin-left:6px}
+.fbadge.reuse{background:#e8efe6;color:#4a5d45}
+.fbadge.gen{background:#f6e9df;color:#9a5b2c}
+.fbad{border-color:#c4694a !important;background:#fdf3f0}
+
 textarea{width:100%;height:340px;border:0;padding:14px 15px;resize:vertical;
  font:12.5px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
  color:var(--ink);background:#fcfbf8;outline:none}
@@ -140,8 +176,14 @@ svg.flow{display:block}
 
 <div class="cols">
   <div class="panel">
-    <h2>Brief <span id="briefname" class="tag"></span></h2>
-    <textarea id="text" spellcheck="false"></textarea>
+    <h2>Brief <span id="briefname" class="tag"></span>
+      <span class="tabs">
+        <button class="tab on" data-tab="form">Form</button
+        ><button class="tab" data-tab="yaml">YAML</button>
+      </span>
+    </h2>
+    <div id="formpane" class="formpane"></div>
+    <textarea id="text" spellcheck="false" hidden></textarea>
   </div>
   <div class="panel">
     <h2><span id="dot" class="dot"></span> Run log</h2>
@@ -282,12 +324,271 @@ async function init(){
   await loadBrief();
 }
 
+/* ------------------------------------------------------------------ *
+ * The brief form
+ *
+ * A view over the YAML, not a second source of truth. The server hands us
+ * the file already parsed by the same PyYAML the pipeline uses -- parsing it
+ * again here would mean two parsers that can disagree, and the one being
+ * edited would be the wrong one. The browser only ever EMITS yaml.
+ * ------------------------------------------------------------------ */
+
+/* Locale -> the region a market usually rolls up to. A default, not a rule:
+   the field stays editable because "which region owns Canada" is a question
+   about someone's org chart, not about the locale. */
+const LOCALES = {
+  'en-US':'North America', 'en-CA':'North America', 'es-MX':'North America',
+  'en-GB':'UK & Ireland',  'de-DE':'DACH',          'fr-FR':'France',
+  'es-ES':'Iberia',        'it-IT':'Southern Europe','nl-NL':'Benelux',
+  'sv-SE':'Nordics',       'nb-NO':'Nordics',       'pl-PL':'Central Europe',
+  'cs-CZ':'Central Europe','tr-TR':'Turkey',        'ru-RU':'Russia & CIS',
+  'pt-BR':'LATAM',         'ja-JP':'Japan',         'ko-KR':'South Korea',
+  'zh-CN':'Greater China', 'en-AU':'ANZ',
+};
+
+/* Production specs people actually order. "Custom" unlocks the numbers --
+   the spec list is the thing that changes most often in a real campaign, so
+   it is data with presets rather than a fixed menu. */
+const RATIOS = [
+  {id:'1:1',  w:1080, h:1080, channel:'Instagram feed'},
+  {id:'9:16', w:1080, h:1920, channel:'Stories / Reels'},
+  {id:'16:9', w:1920, h:1080, channel:'YouTube / display'},
+  {id:'4:5',  w:1080, h:1350, channel:'Retail shelf / PDP'},
+];
+
+let BRIEF = null;            // the parsed brief the form is editing
+
 async function loadBrief(){
   const p = $('#brief').value;
   const r = await (await fetch('/api/brief?path='+encodeURIComponent(p))).json();
   $('#text').value = r.text || '';
   $('#briefname').textContent = p;
+  BRIEF = r.data || null;
+  if (BRIEF) { renderForm(); }
+  else {
+    // Unparseable YAML has no honest form representation. Say so and put the
+    // user in the raw tab, which is the only place the problem can be fixed.
+    $('#formpane').innerHTML =
+      `<div class="note err" style="margin:0"><b>This brief will not parse, so the form
+       cannot be built.</b><br>${esc(r.parse_error || 'unknown YAML error')}</div>`;
+    showTab('yaml');
+  }
 }
+
+const field = (label, html) => `<div class="frow"><label>${label}</label>${html}</div>`;
+const val = (v) => esc(v == null ? '' : String(v));
+
+function renderForm(){
+  const b = BRIEF, c = b.campaign || (b.campaign = {});
+  const products = b.products || (b.products = []);
+  const markets  = b.markets  || (b.markets  = []);
+  const ratios   = b.aspect_ratios || (b.aspect_ratios = []);
+
+  const localeOpts = (sel) => Object.keys(LOCALES)
+    .map(l=>`<option${l===sel?' selected':''}>${l}</option>`).join('') +
+    (LOCALES[sel]===undefined && sel ? `<option selected>${val(sel)}</option>` : '');
+
+  const ratioOpts = (sel) => RATIOS.map(r=>
+      `<option value="${r.id}"${r.id===sel?' selected':''}>${r.id}</option>`).join('') +
+    `<option value="__custom"${RATIOS.some(r=>r.id===sel)?'':' selected'}>custom…</option>`;
+
+  $('#formpane').innerHTML = `
+    <div class="fsec">
+      <h3>Campaign</h3>
+      ${field('ID', `<input data-p="campaign.id" value="${val(c.id)}">`)}
+      ${field('Name', `<input data-p="campaign.name" value="${val(c.name)}">`)}
+      ${field('Brand', `<input data-p="campaign.brand" value="${val(c.brand)}">`)}
+      ${field('Default message',
+        `<input data-p="default_message" value="${val(b.default_message)}">`)}
+      <div class="fhint">Markets without their own line fall back to this.</div>
+    </div>
+
+    <div class="fsec">
+      <h3>Products <span class="fhint" style="text-transform:none;letter-spacing:0">
+        — an asset that exists is reused; a missing one is generated</span></h3>
+      ${products.map((p,i)=>`
+        <div class="fcard">
+          <button class="rm" data-rm="products" data-i="${i}" title="remove">×</button>
+          ${field('ID', `<input data-p="products.${i}.id" value="${val(p.id)}">`)}
+          ${field('Name', `<input data-p="products.${i}.name" value="${val(p.name)}">`)}
+          ${field('Asset path', `<input data-p="products.${i}.asset" value="${val(p.asset)}"
+            placeholder="campaigns/assets/thing.png">`)}
+          ${field('Subject', `<textarea data-p="products.${i}.subject"
+            placeholder="what the image should show">${val(p.subject)}</textarea>`)}
+          ${field('Surface', `<input data-p="products.${i}.surface" value="${val(p.surface)}">`)}
+          <div class="fhint">Subject and surface build the generation prompt, and are
+            only used when the asset is missing.</div>
+        </div>`).join('')}
+      <button class="fadd" data-add="products">+ product</button>
+    </div>
+
+    <div class="fsec">
+      <h3>Markets</h3>
+      ${markets.map((m,i)=>`
+        <div class="fcard">
+          <button class="rm" data-rm="markets" data-i="${i}" title="remove">×</button>
+          ${field('Locale', `<select data-p="markets.${i}.locale" data-locale>
+            ${localeOpts(m.locale)}</select>`)}
+          ${field('Region', `<input data-p="markets.${i}.region" value="${val(m.region)}">`)}
+          ${field('Audience', `<textarea data-p="markets.${i}.audience"
+            placeholder="who this market is for">${val(m.audience)}</textarea>`)}
+          ${field('Message', `<input data-p="markets.${i}.message" value="${val(m.message)}"
+            placeholder="(falls back to the default message)">`)}
+        </div>`).join('')}
+      <button class="fadd" data-add="markets">+ market</button>
+      <div class="fhint">Copy is authored per market, never machine-translated.</div>
+    </div>
+
+    <div class="fsec">
+      <h3>Aspect ratios</h3>
+      ${ratios.map((r,i)=>`
+        <div class="fcard">
+          <button class="rm" data-rm="aspect_ratios" data-i="${i}" title="remove">×</button>
+          ${field('Spec', `<select data-preset data-i="${i}">${ratioOpts(r.id)}</select>`)}
+          ${field('ID', `<input data-p="aspect_ratios.${i}.id" value="${val(r.id)}">`)}
+          ${field('Pixels',
+            `<span style="display:flex;gap:6px;align-items:center">
+               <input data-p="aspect_ratios.${i}.width" value="${val(r.width)}" inputmode="numeric">
+               <span style="color:var(--muted)">×</span>
+               <input data-p="aspect_ratios.${i}.height" value="${val(r.height)}" inputmode="numeric">
+             </span>`)}
+          ${field('Channel', `<input data-p="aspect_ratios.${i}.channel" value="${val(r.channel)}">`)}
+        </div>`).join('')}
+      <button class="fadd" data-add="aspect_ratios">+ spec</button>
+    </div>
+
+    <div class="fsec">
+      <h3>Prohibited terms</h3>
+      <textarea data-p="prohibited_terms" style="width:100%;height:70px;padding:7px 9px;
+        border:1px solid var(--line);border-radius:6px;font:11px var(--mono)"
+        >${val((b.prohibited_terms||[]).join('\n'))}</textarea>
+      <div class="fhint">One per line. Checked against every market's copy before a
+        single generative credit is spent.</div>
+    </div>`;
+
+  syncYaml();
+}
+
+/* Write one edited control back into BRIEF by its dotted path. */
+function setPath(path, value){
+  const parts = path.split('.');
+  let node = BRIEF;
+  for (let i = 0; i < parts.length - 1; i++) node = node[parts[i]];
+  const leaf = parts[parts.length - 1];
+  if (leaf === 'width' || leaf === 'height') {
+    const n = parseInt(value, 10);
+    node[leaf] = Number.isFinite(n) ? n : value;      // keep bad input visible
+  } else if (path === 'prohibited_terms') {
+    BRIEF.prohibited_terms = value.split('\n').map(t=>t.trim()).filter(Boolean);
+  } else {
+    node[leaf] = value;
+  }
+}
+
+$('#formpane').addEventListener('input', (e) => {
+  const el = e.target;
+  if (el.dataset.p) { setPath(el.dataset.p, el.value); syncYaml(); }
+});
+
+$('#formpane').addEventListener('change', (e) => {
+  const el = e.target;
+  // hasAttribute, not truthiness. `data-locale` is a bare attribute, so
+  // el.dataset.locale is the EMPTY STRING -- which is falsy, so the whole
+  // branch silently never ran and picking a locale left the old region in
+  // place. The ratio branch below tests `!== undefined` and worked, which is
+  // exactly why only one of the two was broken.
+  if (el.hasAttribute('data-locale')) {          // locale picks a default region
+    const i = el.dataset.p.split('.')[1];
+    const region = LOCALES[el.value];
+    if (region) { BRIEF.markets[i].region = region; }
+    BRIEF.markets[i].locale = el.value;
+    return renderForm();
+  }
+  if (el.dataset.preset !== undefined && el.value !== '__custom') {
+    const r = RATIOS.find(x=>x.id === el.value);
+    Object.assign(BRIEF.aspect_ratios[el.dataset.i],
+                  {id:r.id, width:r.w, height:r.h, channel:r.channel});
+    return renderForm();
+  }
+});
+
+$('#formpane').addEventListener('click', (e) => {
+  const rm = e.target.closest('[data-rm]'), add = e.target.closest('[data-add]');
+  if (rm) { BRIEF[rm.dataset.rm].splice(+rm.dataset.i, 1); return renderForm(); }
+  if (add) {
+    const blank = {
+      products: {id:'', name:'', asset:'', subject:'', surface:'a clean neutral surface'},
+      markets: {locale:'en-US', region:LOCALES['en-US'], audience:'', message:''},
+      aspect_ratios: {...(({id,w,h,channel})=>({id,width:w,height:h,channel}))(RATIOS[0])},
+    }[add.dataset.add];
+    BRIEF[add.dataset.add].push(JSON.parse(JSON.stringify(blank)));
+    return renderForm();
+  }
+});
+
+/* ---- YAML emitter ----------------------------------------------------
+   Hand-written because the shape is known and shallow, and because pulling a
+   YAML library into a page that ships with no build step is a poor trade.
+   Every string is double-quoted and escaped rather than guessed at: a
+   message containing a colon, a '#', or a leading '%' is valid copy and
+   invalid bare YAML, and Japanese copy must survive verbatim. */
+const q = (v) => '"' + String(v == null ? '' : v)
+  .replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+
+function toYaml(b){
+  const L = [];
+  L.push('campaign:');
+  L.push(`  id: ${q((b.campaign||{}).id)}`);
+  L.push(`  name: ${q((b.campaign||{}).name)}`);
+  if ((b.campaign||{}).brand) L.push(`  brand: ${q(b.campaign.brand)}`);
+  L.push('');
+  L.push(`default_message: ${q(b.default_message)}`);
+  L.push('');
+  L.push('products:');
+  for (const p of (b.products||[])) {
+    L.push(`  - id: ${q(p.id)}`);
+    L.push(`    name: ${q(p.name)}`);
+    if (p.asset)   L.push(`    asset: ${q(p.asset)}`);
+    if (p.subject) L.push(`    subject: ${q(p.subject)}`);
+    if (p.surface) L.push(`    surface: ${q(p.surface)}`);
+  }
+  L.push('');
+  L.push('markets:');
+  for (const m of (b.markets||[])) {
+    L.push(`  - locale: ${q(m.locale)}`);
+    L.push(`    region: ${q(m.region)}`);
+    L.push(`    audience: ${q(m.audience)}`);
+    if (m.message) L.push(`    message: ${q(m.message)}`);
+  }
+  L.push('');
+  L.push('aspect_ratios:');
+  for (const r of (b.aspect_ratios||[])) {
+    L.push(`  - id: ${q(r.id)}`);
+    L.push(`    width: ${r.width}`);
+    L.push(`    height: ${r.height}`);
+    if (r.channel) L.push(`    channel: ${q(r.channel)}`);
+  }
+  if ((b.prohibited_terms||[]).length) {
+    L.push('');
+    L.push('prohibited_terms:');
+    for (const t of b.prohibited_terms) L.push(`  - ${q(t)}`);
+  }
+  return L.join('\n') + '\n';
+}
+
+function syncYaml(){ if (BRIEF) $('#text').value = toYaml(BRIEF); }
+
+function showTab(which){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.tab===which));
+  $('#formpane').hidden = which !== 'form';
+  $('#text').hidden     = which !== 'yaml';
+}
+document.querySelectorAll('.tab').forEach(t =>
+  t.addEventListener('click', () => showTab(t.dataset.tab)));
+
+/* Typing in the raw YAML has to win: it is the thing that gets saved. The
+   form is rebuilt from it on the next load rather than fighting it live. */
+$('#text').addEventListener('input', () => { BRIEF = null; });
 
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
