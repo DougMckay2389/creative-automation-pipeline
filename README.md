@@ -52,7 +52,24 @@ From there: pick a brief, press **Plan** to see what a run would cost before
 spending anything, edit the brief, then **Run pipeline** and watch it move
 through the flow canvas.
 
-The brief has two tabs. **Form** gives you fields — products, markets with a
+The app is four tabs — **Brief**, **Analytics**, **Pipeline**, **Results** —
+with Run and the status light in the top bar rather than in any one of them,
+because starting a run is the one thing you want to do from wherever you are.
+The tabs follow the work: pressing Run switches to Pipeline, and finishing
+switches to Results, which carries a live count of deliverables while you are
+looking at something else. `1`–`4` switch panes from the keyboard. This was
+one long scroll until a run produced five markets, at which point the stage
+strip you want to read and the deliverables you want to check it against were
+two screens apart.
+
+It is themed on Adobe's Spectrum dark palette with the platform's own type —
+SF on macOS, Segoe on Windows, no webfont fetched, since this is meant to run
+on a laptop with no network. Dark is not a preference here: a light chrome
+around a photograph biases how the photograph reads, which is why Photoshop,
+Premiere and Lightroom all look like this, and this app's whole job is showing
+you creatives and asking whether they pass.
+
+Inside the Brief tab are two views. **Form** gives you fields — products, markets with a
 locale picker that fills in the region, aspect ratios with presets for the
 specs people actually order, and the prohibited-term list. **YAML** is the
 file itself. The form is a *view*: every edit regenerates the YAML, and the
@@ -76,7 +93,9 @@ see at a glance that (for example) the cache did not hit on a cold run.
 
 **It is driven by the pipeline's own events** — the same records written to
 `run.log.jsonl`, fed to the browser through `/api/progress`. Nothing on the
-canvas is on a timer, so it cannot show a stage that did not happen. Finished creatives land below the brief and the run log
+canvas is on a timer, so it cannot show a stage that did not happen.
+
+Finished creatives land in the Results tab
 — one row per market, in the order the markets appear in the brief, each row
 carrying that market's own line and its own count of what needs review. A flat
 grid of eighteen files reads as eighteen unrelated files; the unit a regional
@@ -346,30 +365,66 @@ faster and more consistently; the fifth is *"learn what content, creative and
 localization drives the best business outcomes"*. That one is a loop, not a
 report: performance should decide what you make **next**.
 
-> **Every figure on the Analytics tab is synthetic.** Nothing connects to Meta,
-> TikTok, X or Google. It is generated from a fixed seed so it is identical on
-> every machine, and it is labelled as sample data in four places — the module
-> docstring, the API payload, a standing banner, and a badge on every market.
+> **Every figure on the Analytics tab is synthetic.** Nothing connects to
+> Google, Meta, TikTok or YouTube. It is generated from a fixed seed so it is
+> identical on every machine, and it is labelled as sample data in four
+> places — the module docstring, the API payload, a standing banner, and a
+> chip in the toolbar and in every post detail.
 
-A real integration would need the Meta Graph API (`insights` edge), the TikTok
-Business API, the X Ads API (paid tier) and the Search Console API — all
-per-market, all rate-limited, all returning a different shape for the same
-idea, which is exactly the argument for an adapter layer like `providers/` and
-`storage/`. `pipeline/insights.py` is deliberately shaped like one.
+The tab is organised by **social channel**, because the four do not behave
+alike and averaging them together throws away the only thing worth knowing.
+Each channel names the API a real integration would call:
 
-What makes it more than a dashboard is that it ends in a **diff you can apply**:
+| Channel | Headline metric | Real endpoint |
+|---|---|---|
+| Google Analytics | Sessions | GA4 Data API · `runReport` |
+| Facebook / IG | Reach | Graph API · `insights` edge |
+| TikTok | Views | Business API · integrated report |
+| YouTube | Views | YouTube Analytics API |
 
-| Recommendation | Effect on the brief |
+Four vendors returning four shapes for the same idea, all per-market, all
+rate-limited — which is exactly the argument for an adapter layer like
+`providers/` and `storage/`. `pipeline/insights.py` is deliberately shaped
+like one.
+
+**Two sources feed each channel.**
+
+*Internal — what we posted.* A 28-day **calendar**, one thumbnail and one
+number per post, click any post for the full detail. A calendar rather than a
+table because posting is periodic and so are the questions: a sortable table
+answers *which post won*, a calendar answers *what were we doing*. It is
+padded to start on a Monday, or weekday-versus-weekend is invisible and you
+have built a table with extra steps. Engagement and CTR are
+impression-weighted — a 6% rate on 900 views must not outrank 2% on 900,000,
+and un-weighted averages are how dashboards end up celebrating the smallest
+sample they have.
+
+*External — what the market is doing.* Trending terms per market with a
+week-over-week velocity, a **virality meter**, where the audience is and who
+they are. The virality score is normalised velocity, not volume: a term
+everyone already uses is not a trend.
+
+**They meet in one suggested surface prompt**, with the evidence listed and
+labelled by source. When the two agree, confidence is `high`. When they
+disagree the tab says `CONFLICT` out loud and the external signal wins —
+our own history can only rank treatments we have already tried, so a
+disagreement is usually a gap in our sample rather than a finding.
+
+From there the loop closes in two clicks:
+
+| Button | What it does |
 |---|---|
-| Placement order | Aspect ratios reorder so the best performer is produced first |
-| Surface treatment | The winning treatment is written into the products' surface prompts |
+| **Render one sample** | One creative — one product × one market × one ratio — through the *same* resolver, composer and checks a real run uses. Written to `.cache/samples/`, never `output/`. |
+| **Adopt into brief** | Writes the surface prompt into every product, turns on `regenerate_surface` so the prompt actually reaches the model, and reorders the placements. |
 
-Reorder, **never drop** — removing a placement because eight weeks of data
-disliked it is the kind of over-fitting a media team would rightly refuse.
-Every recommendation carries the evidence that produced it, because one you
-cannot interrogate is one you should not take. CTR is impression-weighted: a 4%
-CTR on 900 views must not outrank 2% on 900,000, and un-weighted averages are
-how dashboards end up recommending whatever has the smallest sample.
+One sample, not eighteen: "act on a suggestion" has to mean *see it* first,
+and a full run is eighteen deliverables and two paid calls. Trying a
+suggestion should cost about what looking at it is worth.
+
+Placements **reorder, never drop** — removing a placement because four weeks
+of data disliked it is the kind of over-fitting a media team would rightly
+refuse. Nothing is written to disk until you press Save, so an adoption you
+dislike costs one brief reload.
 
 ### Uploading and reusing product images
 
@@ -748,23 +803,31 @@ go next.
 ```
 start.bat / start.sh         one-click launcher for the local app
 app.py                       local web app (stdlib http.server, no framework)
-webui/index.html             the app's front end, incl. the live flow canvas
+webui/index.html             the app's front end — four panes, one file
 run.py                       CLI: plan / run / providers
 pipeline/
   brief.py                   parse + validate a brief, expand to variants
   assets.py                  reuse ▸ cache ▸ generate; the cost decision
+  resurface.py               keep the approved photo, rebuild the scene
   providers/
     base.py                  Provider protocol + token-bucket rate limiter
     mock.py                  deterministic offline renderer (default)
+    cloudflare.py            Workers AI — FLUX.2 (edit) and Phoenix
     gemini.py                live Google image API
     firefly.py               Adobe Firefly Services v3 async
+  storage/
+    base.py                  Storage protocol + the public prefix
+    local.py                 always on; the run folder itself
+    s3.py                    hand-rolled SigV4 mirror + share tokens
   localize.py                cross-platform font resolution + glyph coverage
   compose.py                 crop, scrim, message, logo — returns measurements
   checks.py                  brand / legal / spec rules + pre-flight
+  insights.py                synthetic channel history → a suggested prompt
   report.py                  self-contained HTML run report
   runner.py                  orchestration, structured logging, manifest
-tests/test_pipeline.py       23 tests, runnable without pytest
+tests/test_pipeline.py       38 tests, runnable without pytest
 tools/make_placeholders.py   regenerates the committed logo and input asset
+tools/make_public.py         scopes the S3 bucket policy to public/ (dry-run)
 ```
 
 ---

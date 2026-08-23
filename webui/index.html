@@ -4,574 +4,879 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Creative Automation Pipeline</title>
 <style>
+/* ==========================================================================
+   Adobe Spectrum (dark), with a macOS type stack.
+
+   Rewritten wholesale rather than patched. The old sheet carried 189 hard
+   colour literals across 90 distinct values; converting those one at a time
+   produces a half-themed app where one panel is warm paper and the next is
+   dark, which looks worse than either. One coherent token set is the only
+   version of this worth shipping.
+
+   Two decisions worth stating:
+
+   * DARK, because Adobe's creative applications are dark, and this is a tool
+     you look at images in. A light chrome around a photograph biases how the
+     photograph reads; a neutral dark one does not. That is why Photoshop,
+     Premiere and Lightroom all look like this.
+   * Type is the SYSTEM stack -- SF on macOS, Segoe on Windows -- with Inter
+     named after them so a machine that already has it lands nearer SF than
+     Segoe does. No webfont is fetched: this tool is meant to run on a laptop
+     with no network and a blocked font request means a flash of fallback on
+     every load. Adobe Clean is proprietary and cannot ship here; a lookalike
+     would be worse than using the platform's own face.
+   ========================================================================== */
+
 :root{
-  --ink:#12140f; --ink2:#5a5c55; --muted:#8b8d85; --line:#e4e2da;
-  --bg:#faf9f6; --card:#fff; --accent:#c4694a;
-  --pass:#0ca30c; --review:#fab219; --block:#d03b3b;
+  /* Spectrum dark greys. Numbered as Spectrum numbers them so the values are
+     checkable against the published scale rather than invented. */
+  --g50:#1d1d1d;   /* app ground        */
+  --g75:#252525;   /* sunken            */
+  --g100:#323232;  /* panel             */
+  --g200:#3b3b3b;  /* raised / control  */
+  --g300:#4a4a4a;  /* border            */
+  --g400:#5c5c5c;  /* strong border     */
+  --g500:#7a7a7a;  /* disabled text     */
+  --g600:#9a9a9a;  /* muted text        */
+  --g700:#c2c2c2;  /* secondary text    */
+  --g800:#e8e8e8;  /* primary text      */
+  --g900:#ffffff;
+
+  --accent:#2680eb;        /* Spectrum blue 500 */
+  --accent-hi:#378ef0;
+  --accent-dn:#1473e6;
+  --accent-soft:rgba(38,128,235,.16);
+
+  --pass:#33ab84;
+  --pass-soft:rgba(51,171,132,.16);
+  --review:#e68619;
+  --review-soft:rgba(230,134,25,.16);
+  --block:#e34850;
+  --block-soft:rgba(227,72,80,.16);
+
+  /* Aliases so existing rules keep working without a second sweep. */
+  --bg:var(--g50);
+  --card:var(--g100);
+  --line:var(--g300);
+  --line-soft:var(--g200);
+  --ink:var(--g800);
+  --ink2:var(--g700);
+  --muted:var(--g600);
+
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display",
+         "Inter","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,
+         "Liberation Mono",monospace;
+
+  --r:4px;      /* control radius — Spectrum is tight */
+  --r2:8px;     /* card / dialog radius */
+  --shadow:0 2px 8px rgba(0,0,0,.4);
+  --shadow-lg:0 12px 40px rgba(0,0,0,.55);
 }
+
 *{box-sizing:border-box}
-/* The hidden attribute only sets display:none at the USER-AGENT level, so any
-   rule of ours that sets display beats it -- and a hidden element with
-   position:fixed;inset:0 becomes an invisible sheet over the whole page that
-   swallows every click. That happened: the closed asset modal kept
-   display:flex and nothing on the page could be clicked, Run included.
-   One line, and the whole class of bug is gone. */
-[hidden]{display:none !important}
-body{margin:0;background:var(--bg);color:var(--ink);
- font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
-.wrap{max-width:1220px;margin:0 auto;padding:26px 22px 70px}
-header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
-/* The repo is a deliverable, so it gets a permanent place rather than living
-   in whatever tab the reviewer happens to have open. */
-.ghlink{margin-left:auto;display:inline-flex;align-items:center;gap:6px;
- padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:var(--card);
- color:var(--ink2);text-decoration:none;font:600 12px var(--sans);align-self:center}
-.ghlink:hover{border-color:var(--ink);color:var(--ink)}
-h1{font-size:23px;margin:0;letter-spacing:-.02em}
-.sub{color:var(--ink2);font-size:13.5px}
-.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;
- background:var(--card);border:1px solid var(--line);border-radius:12px;
- padding:14px 16px;margin:18px 0}
+html,body{background:var(--g50)}
+body{
+  margin:0;color:var(--ink);
+  font:13px/1.5 var(--sans);
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--accent-hi)}
+::selection{background:var(--accent-soft)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-radius:2px}
+
+/* thin, dark scrollbars — a bright scrollbar in a dark tool is a glare source */
+*::-webkit-scrollbar{height:10px;width:10px}
+*::-webkit-scrollbar-track{background:var(--g75)}
+*::-webkit-scrollbar-thumb{background:var(--g300);border-radius:99px;
+  border:2px solid var(--g75)}
+*::-webkit-scrollbar-thumb:hover{background:var(--g400)}
+
+.wrap{max-width:1560px;margin:0 auto;padding:0 20px 80px}
+
+/* ---------- top chrome ---------- */
+header.topbar{
+  position:sticky;top:0;z-index:50;
+  display:flex;align-items:center;gap:18px;
+  background:var(--g75);border-bottom:1px solid var(--g300);
+  padding:0 20px;margin:0 -20px;
+}
+.brandmark{display:flex;align-items:center;gap:9px;padding:11px 0;flex:none}
+.brandmark .glyph{
+  width:19px;height:19px;border-radius:3px;flex:none;
+  background:linear-gradient(135deg,var(--accent) 0%,#8a4ff0 100%);
+}
+.brandmark b{font:600 13.5px var(--sans);letter-spacing:-.01em;color:var(--g900)}
+.brandmark span{font:11px var(--sans);color:var(--muted)}
+
+nav.apptabs{display:flex;gap:0;align-self:stretch}
+nav.apptabs button{
+  background:transparent;border:0;border-bottom:2px solid transparent;
+  color:var(--g600);font:500 13px var(--sans);
+  padding:0 15px;cursor:pointer;align-self:stretch;white-space:nowrap;
+}
+nav.apptabs button:hover{color:var(--g800);background:rgba(255,255,255,.03)}
+nav.apptabs button.on{color:var(--g900);border-bottom-color:var(--accent)}
+nav.apptabs .cnt{
+  display:inline-block;margin-left:7px;font:600 10px var(--mono);
+  background:var(--g200);color:var(--g700);border-radius:99px;padding:1px 6px;
+}
+nav.apptabs button.on .cnt{background:var(--accent);color:#fff}
+
+.ghlink{
+  margin-left:auto;display:inline-flex;align-items:center;gap:6px;
+  color:var(--g600);text-decoration:none;font:500 12px var(--sans);
+  border:1px solid var(--g300);border-radius:var(--r);padding:5px 10px;
+}
+.ghlink:hover{color:var(--g900);border-color:var(--g400)}
+
+h1{display:none}                       /* the brandmark is the title now */
+.sub{display:none}
+
+/* ---------- action bar ---------- */
+.bar{
+  display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;
+  background:var(--g100);border:1px solid var(--g300);border-radius:var(--r2);
+  padding:13px 15px;margin:16px 0;
+}
 .f{display:flex;flex-direction:column;gap:5px}
-.f label{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
- color:var(--muted);font-weight:700}
-select,button{font:inherit}
-select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;
- color:var(--ink);min-width:210px}
-button{cursor:pointer;border-radius:999px;padding:9px 18px;font-weight:640;font-size:14px;
- border:1px solid var(--line);background:#fff;color:var(--ink)}
-button:hover{background:#f3f1ec}
-button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
-button.primary:hover{filter:brightness(1.25)}
-button[disabled]{opacity:.45;cursor:not-allowed}
+.f label{font:600 10px var(--sans);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted)}
+select,button,input,textarea{font:inherit}
+select,input,textarea{
+  background:var(--g200);color:var(--ink);
+  border:1px solid var(--g400);border-radius:var(--r);
+  padding:7px 9px;
+}
+select{min-width:200px}
+select:hover,input:hover,textarea:hover{border-color:var(--g500)}
+select:focus,input:focus,textarea:focus{outline:none;border-color:var(--accent);
+  box-shadow:0 0 0 1px var(--accent)}
+button{
+  cursor:pointer;border-radius:var(--r);padding:7px 15px;
+  font:500 13px var(--sans);
+  border:1px solid var(--g400);background:var(--g200);color:var(--ink);
+}
+button:hover{background:var(--g300)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button.primary:hover{background:var(--accent-hi)}
+button[disabled]{opacity:.4;cursor:not-allowed}
 .spacer{flex:1}
+.chk{display:flex;align-items:center;gap:7px;padding:7px 11px;
+  border:1px solid var(--g400);border-radius:var(--r);background:var(--g200);
+  cursor:pointer;white-space:nowrap;font-size:12.5px}
+.keylink{border:0;background:transparent;color:var(--accent-hi);
+  padding:0 0 0 7px;font:500 10px var(--sans);text-transform:none;
+  letter-spacing:0;cursor:pointer}
+.keylink:hover{background:transparent;text-decoration:underline}
 
-/* ---- surface prompts, sitting directly above Run ----
-   `flex:1 1 100%` inside the wrapping .bar gives this its own full-width row,
-   so two stacked inputs sit immediately above the Run button instead of
-   fighting the horizontal control row for space.
-
-   It is up here rather than only in the Form tab because the surface is the
-   one field somebody actually iterates on between runs -- change the words,
-   press Run, look at the picture -- and making that a three-click round trip
-   through a tab is how a demo loses its rhythm. Both places edit the same
-   BRIEF object, so they can never disagree. */
+/* surface prompts, above Run */
 #surfacebox{flex:1 1 100%;display:flex;flex-direction:column;gap:7px;
-  border-top:1px solid var(--line);margin-top:4px;padding-top:12px}
-.sfhead{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
-  color:var(--muted);font-weight:700;display:flex;align-items:baseline;gap:9px}
+  border-top:1px solid var(--g300);margin-top:4px;padding-top:12px}
+.sfhead{font:600 10px var(--sans);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);display:flex;align-items:baseline;gap:9px}
 .sfhead .sfhint{text-transform:none;letter-spacing:0;font-weight:400;
-  font-size:11px;color:var(--muted)}
+  font-size:11.5px;color:var(--g500)}
 .sfrow{display:flex;align-items:center;gap:9px}
-.sfrow .sfname{flex:0 0 148px;text-align:right;font-size:11.5px;font-weight:600;
+.sfrow .sfname{flex:0 0 150px;text-align:right;font-size:12px;font-weight:500;
   color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sfrow input{flex:1 1 auto;min-width:0;padding:8px 10px;border:1px solid var(--line);
-  border-radius:8px;background:#fff;color:var(--ink);
-  font:12px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-.sfrow input:focus{outline:none;border-color:var(--accent)}
-/* The same words mean different things depending on the product's state, and
-   a bare text box would hide that: for a resurfaced product this IS the whole
-   scene brief, for a generated one it is one clause of a longer prompt, and
-   for a product reused as shot it is not read at all. Say which. */
-.sfmode{flex:0 0 auto;font:9.5px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  padding:3px 8px;border-radius:99px;white-space:nowrap}
-.sfmode.resurf{background:#e6ecf4;color:#3c5578}
-.sfmode.gen{background:#f6e9df;color:#9a5b2c}
-.sfmode.off{background:#f2f0ea;color:var(--muted)}
-.sfrow.inert input{opacity:.5;background:#f4f2ed}
-@media(max-width:700px){
-  .sfrow{flex-wrap:wrap}
-  .sfrow .sfname{flex:1 1 100%;text-align:left}
+.sfrow input{flex:1 1 auto;min-width:0;font:12px var(--mono)}
+.sfmode{flex:0 0 auto;font:600 9.5px var(--mono);padding:3px 8px;
+  border-radius:99px;white-space:nowrap}
+.sfmode.resurf{background:var(--accent-soft);color:var(--accent-hi)}
+.sfmode.gen{background:var(--review-soft);color:var(--review)}
+.sfmode.off{background:var(--g200);color:var(--g500)}
+.sfrow.inert input{opacity:.45}
+@media(max-width:760px){.sfrow{flex-wrap:wrap}.sfrow .sfname{flex:1 1 100%;text-align:left}}
+
+/* ---------- panes ---------- */
+.pane[hidden]{display:none}
+.panel{background:var(--g100);border:1px solid var(--g300);
+  border-radius:var(--r2);overflow:hidden}
+.panel+.panel{margin-top:14px}
+.panel h2{
+  font:600 11px var(--sans);letter-spacing:.07em;text-transform:uppercase;
+  color:var(--muted);margin:0;padding:11px 15px;
+  border-bottom:1px solid var(--g300);background:var(--g75);
+  display:flex;align-items:center;gap:10px;
 }
-.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
-@media(max-width:900px){.cols{grid-template-columns:1fr}}
-.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.panel h2{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
- margin:0;padding:12px 15px;border-bottom:1px solid var(--line);font-weight:700;
- display:flex;align-items:center;gap:10px}
 .panel .body{padding:14px 15px}
-/* ---------- brief form ----------
-   The form is a VIEW over the YAML, never a second source of truth: every
-   edit regenerates the textarea, and the existing Save button is still the
-   only thing that writes a file. That is why the YAML tab is one click away
-   rather than hidden -- serialising drops the comments in the shipped brief,
-   and you should be able to see that before you save over it. */
-.tabs{float:right;display:inline-flex;border:1px solid var(--line);border-radius:7px;
-      overflow:hidden}
-.tab{border:0;padding:4px 12px;font:600 11px var(--mono);background:#fff;color:var(--muted);
-     cursor:pointer}
-.tab+.tab{border-left:1px solid var(--line)}
-.tab.on{background:var(--ink);color:#fff}
-.formpane{max-height:620px;overflow-y:auto;padding:15px 17px}
-.fsec{margin-bottom:16px}
+.tag{font:11px var(--mono);color:var(--g700);background:var(--g200);
+  border-radius:var(--r);padding:2px 7px;margin-left:6px;text-transform:none;
+  letter-spacing:0}
+.hint{font:11.5px var(--sans);color:var(--g500);text-transform:none;
+  letter-spacing:0;font-weight:400}
 
-/* ---- product cards ----
-   Full width bought room for a real layout, so a product is now a card with
-   three parts side by side: the source image, what to do with it, and the
-   words that drive it. Reading left to right is reading the decision. */
-.pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:12px}
-@media(max-width:900px){.pgrid{grid-template-columns:1fr}}
-.pcard{border:1px solid var(--line);border-radius:11px;background:#fcfcfb;
+/* segmented control — Spectrum's tab shape */
+.tabs{margin-left:auto;display:inline-flex;background:var(--g200);
+  border-radius:var(--r);padding:2px;gap:2px}
+.tab{border:0;padding:4px 12px;font:500 11.5px var(--sans);
+  background:transparent;color:var(--g600);border-radius:3px;cursor:pointer}
+.tab:hover{color:var(--g900);background:var(--g300)}
+.tab.on{background:var(--accent);color:#fff}
+
+/* ---------- brief form ---------- */
+.formpane{max-height:640px;overflow-y:auto;padding:15px 17px}
+.fsec{margin-bottom:18px}
+.fsec>h3{margin:0 0 9px;font:600 10.5px var(--sans);letter-spacing:.07em;
+  text-transform:uppercase;color:var(--muted)}
+.fhint{font:11.5px var(--sans);color:var(--g500);margin-top:5px;line-height:1.55}
+.frow{display:grid;grid-template-columns:118px 1fr;gap:9px;align-items:center;
+  margin-bottom:7px}
+.frow>label{font:12px var(--sans);color:var(--muted)}
+.frow input,.frow select,.frow textarea{width:100%;padding:6px 9px;font-size:12.5px}
+.frow textarea{height:48px;resize:vertical;font-family:var(--mono);font-size:11.5px}
+.fcard{border:1px solid var(--g300);border-radius:var(--r2);padding:12px;
+  margin-bottom:9px;background:var(--g75);position:relative}
+.fcard>.rm{position:absolute;top:8px;right:9px;border:0;background:transparent;
+  cursor:pointer;color:var(--g500);font-size:15px;line-height:1;padding:2px 6px;
+  border-radius:3px}
+.fcard>.rm:hover{background:var(--block-soft);color:var(--block)}
+.fadd{border:1px dashed var(--g400);background:transparent;color:var(--muted);
+  border-radius:var(--r);padding:7px 12px;font:500 12px var(--sans);
+  cursor:pointer;width:100%}
+.fadd:hover{border-color:var(--accent);color:var(--accent-hi);background:transparent}
+.fbad{border-color:var(--block) !important}
+.fields{display:contents}
+
+/* product cards */
+.pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:12px}
+@media(max-width:980px){.pgrid{grid-template-columns:1fr}}
+.pcard{border:1px solid var(--g300);border-radius:var(--r2);background:var(--g75);
   position:relative;overflow:hidden}
-.pcard.is-resurf{border-color:#c3d0e2;box-shadow:inset 3px 0 0 #3c5578}
-.pcard.is-gen{border-color:#e8d3bd;box-shadow:inset 3px 0 0 #c08040}
-.pcard.is-asis{box-shadow:inset 3px 0 0 #7d9070}
+.pcard.is-resurf{box-shadow:inset 3px 0 0 var(--accent)}
+.pcard.is-gen{box-shadow:inset 3px 0 0 var(--review)}
+.pcard.is-asis{box-shadow:inset 3px 0 0 var(--pass)}
 .pchead{display:flex;align-items:center;gap:8px;padding:9px 12px;
-  border-bottom:1px solid var(--line);background:#fff}
-.pchead .pcname{font:700 12.5px var(--sans);color:var(--ink);flex:1;min-width:0;
+  border-bottom:1px solid var(--g300);background:var(--g100)}
+.pchead .pcname{font:600 13px var(--sans);color:var(--g900);flex:1;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pchead .pcid{font:10px var(--mono);color:var(--muted)}
-.pchead .rm{border:0;background:transparent;cursor:pointer;color:var(--muted);
-  font-size:16px;line-height:1;padding:2px 6px;border-radius:5px}
-.pchead .rm:hover{background:#f0dedb;color:#a33}
-.pcbody{display:grid;grid-template-columns:126px 1fr;gap:12px;padding:12px}
-@media(max-width:520px){.pcbody{grid-template-columns:1fr}}
-
-/* the source image */
+.pchead .pcid{font:10.5px var(--mono);color:var(--g500)}
+.pchead .rm{border:0;background:transparent;cursor:pointer;color:var(--g500);
+  font-size:16px;line-height:1;padding:2px 6px;border-radius:3px}
+.pchead .rm:hover{background:var(--block-soft);color:var(--block)}
+.pcbody{display:grid;grid-template-columns:128px 1fr;gap:13px;padding:12px}
+@media(max-width:560px){.pcbody{grid-template-columns:1fr}}
 .pcimg{display:flex;flex-direction:column;gap:5px}
-.pcimg .shot{width:126px;height:126px;border-radius:9px;border:1px solid var(--line);
-  background:#f2f0ea center/cover no-repeat;display:flex;align-items:center;
-  justify-content:center;text-align:center;font:10px var(--mono);color:var(--muted);
-  padding:8px;overflow:hidden}
-.pcimg .shot img{width:100%;height:100%;object-fit:cover;border-radius:8px}
-.pcimg .shotcap{font:9.5px var(--mono);color:var(--muted);text-align:center;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pcard.is-gen .pcimg .shot{opacity:.35;filter:grayscale(1)}
-
-/* the three-way mode switch */
-.pcmode{display:flex;gap:0;border:1px solid var(--line);border-radius:8px;
-  overflow:hidden;background:#fff}
-.pcmode button{flex:1;border:0;border-radius:0;background:#fff;color:var(--muted);
-  font:600 11px var(--sans);padding:7px 6px;cursor:pointer;line-height:1.25;
-  border-right:1px solid var(--line);white-space:normal}
-.pcmode button:last-child{border-right:0}
-.pcmode button:hover:not(.on):not([disabled]){background:#f4f2ed;color:var(--ink)}
-.pcmode button.on{background:var(--ink);color:#fff}
-.pcmode button[disabled]{opacity:.35;cursor:not-allowed}
-.pcwhy{font:10.5px var(--mono);color:var(--muted);line-height:1.5;margin-top:2px}
-.pcwhy b{color:#9a5b2c}
-
-.pcfield{margin-top:9px}
-.pcfield>label{display:block;font:700 9.5px var(--mono);letter-spacing:.09em;
-  text-transform:uppercase;color:var(--muted);margin-bottom:3px}
-.pcfield input,.pcfield textarea{width:100%;padding:6px 9px;border:1px solid var(--line);
-  border-radius:7px;background:#fff;color:var(--ink);
-  font:11.5px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-.pcfield textarea{height:42px;resize:vertical}
-.pcfield input:focus,.pcfield textarea:focus{outline:none;border-color:var(--accent)}
-.pcfield.live input,.pcfield.live textarea{border-color:#3c5578;background:#fbfcfe}
-.pcfield.inert input,.pcfield.inert textarea{opacity:.45;background:#f4f2ed}
-.pcfield .sub{font:9.5px var(--mono);color:var(--muted);margin-top:3px}
-
-/* ---- uploading and reusing images ---- */
-.assetbtns{display:flex;gap:6px;margin-top:6px}
-.abtn{flex:1;border:1px solid var(--line);background:#fff;color:var(--ink2);
-  border-radius:7px;padding:5px 8px;font:600 11px var(--sans);cursor:pointer}
-.abtn:hover{border-color:var(--accent);color:var(--accent);background:#fff}
-/* The thumbnail is a drop target and a picker, so it has to LOOK like one --
-   an invisible affordance is not an affordance. */
-.pcimg .shot{cursor:pointer;transition:border-color .12s,background-color .12s}
+.pcimg .shot{width:128px;height:128px;border-radius:var(--r);
+  border:1px solid var(--g400);background:var(--g50);display:flex;
+  align-items:center;justify-content:center;text-align:center;
+  font:10.5px var(--mono);color:var(--g500);padding:8px;overflow:hidden;
+  cursor:pointer;transition:border-color .12s}
 .pcimg .shot:hover{border-color:var(--accent)}
-.pcimg .shot.dropping{border:2px dashed var(--accent);background:#fdf6ee}
-
-#librarymodal{position:fixed;inset:0;z-index:70;background:rgba(18,20,15,.55);
-  display:flex;align-items:center;justify-content:center;padding:26px}
-#librarymodal[hidden]{display:none}
-#librarymodal .amcard{max-width:760px}
-.libbody{padding:14px 17px;max-height:62vh;overflow-y:auto}
-.libgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:10px}
-.libitem{display:flex;flex-direction:column;gap:5px;padding:8px;cursor:pointer;
-  border:1px solid var(--line);border-radius:9px;background:#fff;text-align:center}
-.libitem:hover{border-color:var(--accent);background:#fffaf4}
-.libthumb{display:block;width:100%;aspect-ratio:1;border-radius:6px;overflow:hidden;
-  background:#f2f0ea}
-.libthumb img{width:100%;height:100%;object-fit:cover;display:block}
-.libname{font:600 10.5px var(--sans);color:var(--ink);overflow:hidden;
-  text-overflow:ellipsis;white-space:nowrap}
-.libmeta{font:9.5px var(--mono);color:var(--muted)}
-.libempty{font:12px var(--sans);color:var(--muted);text-align:center;padding:30px 10px;
-  line-height:1.7}
-.fsec>h3{margin:0 0 8px;font:700 10.5px var(--mono);letter-spacing:.1em;
-         text-transform:uppercase;color:var(--muted)}
-.frow{display:grid;grid-template-columns:118px 1fr;gap:9px;align-items:center;margin-bottom:6px}
-.frow>label{font:11.5px var(--sans);color:var(--muted)}
-.frow input,.frow select,.frow textarea{width:100%;padding:5px 8px;border:1px solid var(--line);
-  border-radius:6px;font:12px var(--sans);background:#fff;color:var(--ink)}
-.frow textarea{height:46px;resize:vertical;font-family:var(--mono);font-size:11px}
-.fcard{border:1px solid var(--line);border-radius:9px;padding:11px 12px;margin-bottom:9px;
-       background:#fcfcfb;position:relative}
-.fcard>.rm{position:absolute;top:8px;right:9px;border:0;background:transparent;cursor:pointer;
-           color:var(--muted);font-size:15px;line-height:1;padding:2px 5px;border-radius:5px}
-.fcard>.rm:hover{background:#f0dedb;color:#a33}
-.fadd{border:1px dashed var(--line);background:#fff;color:var(--muted);border-radius:8px;
-      padding:6px 12px;font:600 11.5px var(--sans);cursor:pointer;width:100%}
-.fadd:hover{border-color:var(--ink);color:var(--ink)}
-.fhint{font:10.5px var(--mono);color:var(--muted);margin:-2px 0 8px}
-.fbadge{display:inline-block;font:700 9px var(--mono);letter-spacing:.05em;padding:2px 6px;
-        border-radius:99px;text-transform:uppercase;vertical-align:1px;margin-left:6px}
-.fbadge.reuse{background:#e8efe6;color:#4a5d45}
-.fbadge.gen{background:#f6e9df;color:#9a5b2c}
-.fbad{border-color:#c4694a !important;background:#fdf3f0}
-.pstate{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:-2px 0 8px}
-.pstate-t{font:10.5px var(--mono);color:var(--muted);line-height:1.5;flex:1;min-width:150px}
-.pstate-t b{color:#9a5b2c}
-.pstate-b{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:7px;
-  padding:4px 10px;font:600 11px var(--sans);cursor:pointer;white-space:nowrap}
-.pstate-b:hover{border-color:var(--accent);color:var(--accent)}
-.fbadge.resurf{background:#e6ecf4;color:#3c5578}
-/* When a product is reused AS SHOT, the prompt fields are inert. Say it in the
-   styling as well as in the words -- nobody reads the words. */
-.fcard.reusing textarea[data-p$=".subject"],
-.fcard.reusing input[data-p$=".surface"]{opacity:.45;background:#f4f2ed}
-/* Resurfacing is the third state, and it is the one the styling has to get
-   right: the photo is kept, so Subject and Surface are BOTH live again --
-   Surface describes the new scene, Subject tells the model which object it is
-   forbidden to redesign. Greying either one here would be a lie about which
-   field is doing the work. */
-.fcard.resurfacing input[data-p$=".surface"]{border-color:#3c5578;background:#fbfcfe}
-.pstate-b.on{border-color:#3c5578;color:#3c5578;background:#eef2f8}
-.pstate-b[disabled]{opacity:.4;cursor:not-allowed}
-
-.panel+.panel{margin-top:16px}
-/* The YAML editor gets the full width of the page now, so it can be short and
-   wide rather than tall and narrow -- which is the shape YAML actually is. */
-textarea{width:100%;height:300px;border:0;padding:14px 15px;resize:vertical;
- font:12.5px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
- color:var(--ink);background:#fcfbf8;outline:none}
-/* Half height. It is a thing you glance at, not a thing you read: the
-   interesting lines are the last few, and it autoscrolls to them. */
-pre.console{margin:0;padding:14px 15px;height:170px;overflow:auto;background:#14161a;color:#d6dae0;
- font:12px/1.62 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap}
-pre.console .ok{color:#7ee787}.console .warn{color:#ffc866}.console .bad{color:#ff8a8a}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:16px 0 0}
-.kpi{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:12px 14px}
-.kpi .n{font-size:23px;font-weight:660;letter-spacing:-.02em;line-height:1.1}
-.kpi .l{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
- font-weight:700;margin-top:4px}
-.note{font-size:13px;color:var(--ink2);background:#fffdf3;border:1px solid #f0e4bb;
- border-radius:11px;padding:11px 14px;margin-top:14px}
-.note b{color:var(--ink)}
-.err{background:#fff5f5;border-color:#f2c9c9;color:#8a2b2b}
-/* ---- one row per market ----
-   A flat grid of eighteen tiles reads as eighteen unrelated files. The unit a
-   regional lead cares about is "everything going out in MY market", so that
-   is the unit on screen: one strip per locale, in brief order. */
-.mrow{margin-top:14px;border:1px solid var(--line);border-radius:12px;background:var(--card);
-      overflow:hidden}
-.mhead{display:flex;align-items:baseline;gap:10px;padding:9px 13px;
-       border-bottom:1px solid var(--line);background:#faf9f6}
-.mhead .loc{font:700 11px var(--mono);letter-spacing:.06em;background:var(--ink);color:#fff;
-            padding:3px 8px;border-radius:5px}
-.mhead .msg{font-size:12.5px;color:var(--ink)}
-.mhead .mcount{margin-left:auto;font:11px var(--mono);color:var(--muted)}
-.mhead .mcount b{color:var(--review)}
-.mstrip{display:flex;gap:11px;padding:12px 13px;overflow-x:auto;align-items:stretch}
-.mstrip .card{flex:0 0 176px;display:flex;flex-direction:column}
-/* A fixed band for the thumbnail, not a fixed card.
-   Three aspect ratios in one row means a 9:16 tile is nearly three times the
-   height of a 16:9 one, and the row stops reading as a row. Letterboxing each
-   thumbnail into the same band lines the captions up and lets you compare the
-   CROPS, which is the thing worth comparing. */
-.mstrip .card .ph{height:150px;padding:6px}
-.mstrip .card img{max-height:100%;max-width:100%;width:auto;object-fit:contain}
-.mstrip .card .m{flex:1}
-
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:13px;margin-top:14px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:11px;overflow:hidden}
-.card .ph{background:#eeece6;display:flex;align-items:center;justify-content:center;padding:8px}
-.card img{max-width:100%;height:auto;display:block;border-radius:3px}
-.card .m{padding:9px 11px 11px;font-size:11.5px;color:var(--ink2)}
-.card .t{font-size:12.5px;font-weight:640;color:var(--ink)}
-.badge{display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;
- text-transform:uppercase;letter-spacing:.06em;padding:2px 8px;border-radius:999px;
- border:1px solid;margin-bottom:6px}
-.b-pass{color:var(--pass);border-color:rgba(12,163,12,.35);background:rgba(12,163,12,.07)}
-.b-review{color:#8a6100;border-color:rgba(250,178,25,.45);background:rgba(250,178,25,.10)}
-.b-block{color:var(--block);border-color:rgba(208,59,59,.35);background:rgba(208,59,59,.07)}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
-.dot.live{background:var(--pass);animation:p 1.4s infinite}
-@keyframes p{50%{opacity:.25}}
-a.rep{font-size:13px;color:var(--accent)}
-.tag{font-size:10.5px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);
- color:var(--ink2);background:#f7f5f1;margin-left:6px}
-
-/* ---- product rows inside a market ---- */
-.mbody{padding:4px 0 8px}
-.prow2{display:flex;align-items:flex-start;gap:11px;padding:7px 13px}
-.prow2+.prow2{border-top:1px dashed var(--line)}
-.pname{flex:0 0 132px;font:600 11.5px var(--sans);color:var(--ink2);padding-top:52px;
-       text-align:right;line-height:1.3}
-.prow2 .mstrip{padding:0;flex:1;min-width:0}
-
-/* ---- analytics ----
-   Kept visually quieter than the run results on purpose. This data is
-   invented, and it should never out-shout the parts of the screen that are
-   real measurements of real pixels. */
-.anloading{font:12px var(--mono);color:var(--muted);padding:24px 4px}
-.anwarn{font-size:12.5px;line-height:1.65;color:var(--ink2);background:#fffdf3;
-  border:1px solid #f0e4bb;border-radius:10px;padding:12px 14px;margin-bottom:16px}
-.anwarn b{color:#8a6100}
-.anwarn code{font:11px var(--mono);background:#f6efd9;padding:1px 5px;border-radius:4px}
-
-.anmkt{border:1px solid var(--line);border-radius:11px;margin-bottom:14px;overflow:hidden}
-.anhead{display:flex;align-items:center;gap:10px;padding:10px 13px;
-  border-bottom:1px solid var(--line);background:#fcfcfb}
-.anhead .loc{font:600 10px var(--mono);letter-spacing:.1em;text-transform:uppercase;
-  background:var(--ink);color:#fff;border-radius:5px;padding:3px 7px}
-.anlab{font:11.5px var(--sans);color:var(--muted)}
-.ansyn{margin-left:auto;font:700 8.5px var(--mono);letter-spacing:.14em;
-  color:#8a6100;background:#fdf3d8;border:1px solid #f0e4bb;border-radius:4px;padding:3px 7px}
-
-.anrec{display:flex;gap:14px;align-items:flex-start;padding:13px;
-  background:#f7f9fb;border-bottom:1px solid var(--line)}
-.anrectxt{flex:1;min-width:0}
-.anrech{font:700 11px var(--sans);color:var(--ink);margin-bottom:6px}
-.anwhy{margin:0 0 9px;padding-left:18px;font-size:12.5px;color:var(--ink2);line-height:1.6}
-.anwhy li{margin-bottom:2px}
-.anchg{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:5px;
-  font:11.5px var(--sans);color:var(--muted)}
-.anchg code{font:11px var(--mono);background:#e8eef4;color:#2f5f88;
-  padding:2px 7px;border-radius:5px}
-.annote{font:10.5px var(--mono);color:var(--muted);line-height:1.55;margin-top:7px;
-  max-width:64ch}
-.anapply{flex:none;border:1px solid var(--ink);background:var(--ink);color:#fff;
-  border-radius:8px;padding:8px 14px;font:600 12px var(--sans);cursor:pointer}
-.anapply:hover{filter:brightness(1.25)}
-.anapply.done{background:#3d6b48;border-color:#3d6b48}
-
-.antables{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));
-  gap:1px;background:var(--line)}
-.antbl{background:#fff;padding:11px 13px}
-.antblh{font:700 9.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;
-  color:var(--muted);margin-bottom:7px}
-.antbl table{width:100%;border-collapse:collapse;font-size:11.5px}
-.antbl th{font:700 8.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;
-  color:var(--muted);text-align:left;padding:3px 6px 5px;border-bottom:1px solid var(--line)}
-.antbl td{padding:5px 6px;border-bottom:1px solid var(--line-soft, #f0eee9);vertical-align:middle}
-.antbl td.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
-.antbl td.num.good{color:#3d6b48;font-weight:700}
-.anplace{color:var(--muted);font-size:10.5px}
-.spark{display:block}
-
-.antreat{padding:12px 13px;background:#fff}
-.antrow{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:7px;
-  font-size:12px}
-.antrow.best{background:#eef4ee;box-shadow:inset 2px 0 0 #3d6b48}
-.antlabel{flex:0 0 132px;font-weight:600;color:var(--ink)}
-.antsurf{flex:1;min-width:0;color:var(--muted);font:11px var(--mono);
+.pcimg .shot.dropping{border:2px dashed var(--accent);background:var(--accent-soft)}
+.pcimg .shot img{width:100%;height:100%;object-fit:cover;border-radius:3px}
+.pcimg .shotcap{font:10px var(--mono);color:var(--g500);text-align:center;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.antnum{flex:0 0 78px;text-align:right;font:11.5px var(--mono);
-  font-variant-numeric:tabular-nums;color:var(--ink2)}
-.antruns{flex:0 0 62px;text-align:right;font:10.5px var(--mono);color:var(--muted)}
-@media(max-width:720px){
-  .anrec{flex-direction:column}
-  .antlabel{flex-basis:100px}
-  .antsurf{display:none}
+.pcard.is-gen .pcimg .shot{opacity:.3;filter:grayscale(1)}
+.pcmode{display:flex;border:1px solid var(--g400);border-radius:var(--r);
+  overflow:hidden;background:var(--g200)}
+.pcmode button{flex:1;border:0;border-radius:0;background:transparent;
+  color:var(--g600);font:500 11.5px var(--sans);padding:7px 6px;cursor:pointer;
+  line-height:1.3;border-right:1px solid var(--g400);white-space:normal}
+.pcmode button:last-child{border-right:0}
+.pcmode button:hover:not(.on):not([disabled]){background:var(--g300);color:var(--g900)}
+.pcmode button.on{background:var(--accent);color:#fff;font-weight:600}
+.pcmode button[disabled]{opacity:.3;cursor:not-allowed}
+.pcwhy{font:11px var(--sans);color:var(--g600);line-height:1.55;margin-top:7px}
+.pcwhy b{color:var(--accent-hi);font-weight:600}
+.pcfield{margin-top:10px}
+.pcfield>label{display:block;font:600 9.5px var(--sans);letter-spacing:.07em;
+  text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.pcfield input,.pcfield textarea{width:100%;font:11.5px var(--mono)}
+.pcfield textarea{height:44px;resize:vertical}
+.pcfield.live input,.pcfield.live textarea{border-color:var(--accent)}
+.pcfield.inert input,.pcfield.inert textarea{opacity:.4}
+.pcfield .sub{font:10px var(--mono);color:var(--g500);margin-top:3px}
+.assetbtns{display:flex;gap:6px;margin-top:6px}
+.abtn{flex:1;border:1px solid var(--g400);background:var(--g200);color:var(--ink2);
+  border-radius:var(--r);padding:6px 8px;font:500 11.5px var(--sans);cursor:pointer}
+.abtn:hover{border-color:var(--accent);color:var(--accent-hi)}
+
+/* ---------- pipeline flow canvas ---------- */
+.flowpanel{background:var(--g100);border:1px solid var(--g300);
+  border-radius:var(--r2);padding:14px 16px;margin:0 0 14px}
+.flowpanel h2{font:600 11px var(--sans);letter-spacing:.07em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 11px;padding:0;border:0;background:none;
+  display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.flowscroll{overflow-x:auto}
+svg.flow{display:block}
+
+/* ---------- run log ---------- */
+.logpanel .console,pre.console{
+  margin:0;padding:14px 16px;height:180px;overflow:auto;
+  background:var(--g50);color:var(--g700);
+  font:12px/1.62 var(--mono);white-space:pre-wrap;
 }
+pre.console .ok{color:var(--pass)}
+.console .warn{color:var(--review)}
+.console .bad{color:var(--block)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--g500);
+  display:inline-block}
+.dot.live{background:var(--pass);animation:p 1.4s infinite}
+@keyframes p{0%,100%{opacity:1}50%{opacity:.25}}
 
-/* ---- results: one panel per market ----
-   The dark strip is not decoration. The pipeline is the part of this tool
-   that normally has to be taken on trust, so it gets the visual weight of an
-   instrument panel while everything around it stays paper-light -- the eye
-   goes to the thing worth inspecting. */
-.mpanel{background:var(--card);border:1px solid var(--line);border-radius:13px;
-  margin-top:18px;overflow:hidden}
-.mphead{display:flex;align-items:baseline;gap:11px;padding:13px 16px;flex-wrap:wrap}
-.mphead .loc{font:600 10px var(--mono);letter-spacing:.1em;text-transform:uppercase;
-  background:var(--ink);color:#fff;border-radius:5px;padding:4px 8px}
-.mpregion{font:700 16px var(--sans);letter-spacing:-.01em;color:var(--ink)}
-.mpmsg{font:italic 13px var(--sans);color:var(--ink2)}
-.mpflag{font:600 9px var(--mono);letter-spacing:.12em;color:#4a5d45;
-  background:#e8efe6;border-radius:4px;padding:4px 8px}
-.mpcount{margin-left:auto;font:11px var(--mono);color:var(--muted)}
+/* ---------- KPIs and notes ---------- */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));
+  gap:10px;margin:0 0 14px}
+.kpi{background:var(--g100);border:1px solid var(--g300);
+  border-radius:var(--r2);padding:12px 14px}
+.kpi .n{font-size:24px;font-weight:600;letter-spacing:-.02em;line-height:1.1;
+  color:var(--g900);font-variant-numeric:tabular-nums}
+.kpi .l{font-size:10px;text-transform:uppercase;letter-spacing:.07em;
+  color:var(--muted);font-weight:600;margin-top:4px}
+.note{font-size:12.5px;color:var(--ink2);background:var(--g100);
+  border:1px solid var(--g300);border-left:3px solid var(--accent);
+  border-radius:var(--r);padding:11px 14px;margin-top:12px;line-height:1.6}
+.note b{color:var(--g900)}
+.note.err{border-left-color:var(--block);background:var(--block-soft)}
+.note .rep{color:var(--accent-hi)}
+.badge{display:inline-block;font:600 9.5px var(--mono);text-transform:uppercase;
+  letter-spacing:.06em;padding:2px 8px;border-radius:99px;margin-bottom:6px}
+.b-pass{color:var(--pass);background:var(--pass-soft)}
+.b-review{color:var(--review);background:var(--review-soft)}
+.b-block{color:var(--block);background:var(--block-soft)}
+
+/* ---------- results: market panels ---------- */
+.mpanel{background:var(--g100);border:1px solid var(--g300);
+  border-radius:var(--r2);margin-bottom:14px;overflow:hidden}
+.mphead{display:flex;align-items:baseline;gap:11px;padding:12px 15px;flex-wrap:wrap}
+.mphead .loc{font:600 10px var(--mono);letter-spacing:.08em;text-transform:uppercase;
+  background:var(--accent);color:#fff;border-radius:3px;padding:3px 7px}
+.mpregion{font:600 15px var(--sans);letter-spacing:-.01em;color:var(--g900)}
+.mpmsg{font:13px var(--sans);color:var(--g600);font-style:italic}
+.mpflag{font:600 9px var(--mono);letter-spacing:.1em;color:var(--pass);
+  background:var(--pass-soft);border-radius:3px;padding:3px 8px}
+.mpcount{margin-left:auto;font:11.5px var(--mono);color:var(--g500)}
 .mpcount b{color:var(--review)}
-
-.mptabs{display:flex;gap:4px;padding:0 16px;flex-wrap:wrap}
+.mptabs{display:flex;gap:2px;padding:0 15px}
 .mptab{display:flex;flex-direction:column;gap:2px;align-items:flex-start;
-  border:1px solid var(--line);border-bottom:0;background:#f4f2ed;
-  border-radius:9px 9px 0 0;padding:8px 14px;cursor:pointer;text-align:left}
-.mptab .tabname{font:600 12.5px var(--sans);color:var(--ink2)}
-.mptab .tabdim{font:9.5px var(--mono);color:var(--muted)}
-.mptab:hover{background:#efece5}
-.mptab.on{background:#1b1f25;border-color:#1b1f25}
-.mptab.on .tabname{color:#fff}
-.mptab.on .tabdim{color:#93a0ae}
+  border:1px solid var(--g300);border-bottom:0;background:var(--g75);
+  border-radius:var(--r) var(--r) 0 0;padding:8px 14px;cursor:pointer;
+  text-align:left}
+.mptab .tabname{font:500 12.5px var(--sans);color:var(--g700)}
+.mptab .tabdim{font:10px var(--mono);color:var(--g500)}
+.mptab:hover{background:var(--g200)}
+.mptab.on{background:var(--g50);border-color:var(--g400)}
+.mptab.on .tabname{color:var(--g900);font-weight:600}
+.mptab.on .tabdim{color:var(--accent-hi)}
 
-/* ---- the pipeline strip ---- */
-.mpstage{background:#1b1f25;padding:14px 16px;border-top:1px solid #2a3038}
+.mpstage{background:var(--g50);padding:14px 15px;border-top:1px solid var(--g300)}
 .stwrap{overflow-x:auto;padding-bottom:6px}
-.strail{display:flex;align-items:stretch;gap:0;min-width:min-content}
-.starrow{flex:0 0 26px;align-self:center;height:1px;background:#39414c;position:relative}
+.strail{display:flex;align-items:stretch;min-width:min-content}
+.starrow{flex:0 0 24px;align-self:center;height:1px;background:var(--g400);
+  position:relative}
 .starrow::after{content:'';position:absolute;right:0;top:-3px;
-  border-left:6px solid #39414c;border-top:3px solid transparent;
+  border-left:6px solid var(--g400);border-top:3px solid transparent;
   border-bottom:3px solid transparent}
-.stcard{flex:0 0 236px;background:#23282f;border:1px solid #2f3640;border-radius:9px;
-  display:flex;flex-direction:column;overflow:hidden}
+.stcard{flex:0 0 238px;background:var(--g100);border:1px solid var(--g300);
+  border-radius:var(--r2);display:flex;flex-direction:column;overflow:hidden}
 .sthead{display:flex;align-items:center;gap:7px;padding:9px 11px;
-  border-bottom:1px solid #2f3640}
+  border-bottom:1px solid var(--g300)}
 .stdot{width:8px;height:8px;border-radius:50%;flex:none}
-.stname{font:600 12px var(--sans);color:#e4e9ef}
-.stshot{height:104px;background:#12161b;display:flex;align-items:center;
+.stname{font:600 12px var(--sans);color:var(--g800)}
+.stshot{height:106px;background:var(--g50);display:flex;align-items:center;
   justify-content:center;overflow:hidden}
 .stshot img{max-width:100%;max-height:100%;object-fit:contain;display:block}
-.stshot.none{font:10px var(--mono);color:#5f6a78;text-align:center;line-height:1.6}
+.stshot.none{font:10px var(--mono);color:var(--g500);text-align:center;line-height:1.6}
 .stbody{padding:9px 11px;display:flex;flex-direction:column;gap:5px;flex:1}
-.strow{display:flex;align-items:baseline;gap:8px;
-  font:10.5px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-.stk{color:#8b96a4;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
+.strow{display:flex;align-items:baseline;gap:8px;font:10.5px var(--mono)}
+.stk{color:var(--g600);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;
   white-space:nowrap}
-.stv{color:#dfe6ee;font-weight:600;font-variant-numeric:tabular-nums}
+.stv{color:var(--g900);font-weight:600;font-variant-numeric:tabular-nums}
 .strules{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}
-.strules code{font:9.5px ui-monospace,Menlo,Consolas,monospace;color:#c8d2dd;
-  background:#2f3640;border-radius:4px;padding:2px 5px}
-.stms{padding:7px 11px;border-top:1px solid #2f3640;
-  font:10px ui-monospace,Menlo,Consolas,monospace;color:#6f7a88;
-  font-variant-numeric:tabular-nums}
-.stempty{font:11.5px var(--mono);color:#7b8593;padding:18px 4px;line-height:1.7}
+.strules code{font:9.5px var(--mono);color:var(--g700);background:var(--g200);
+  border-radius:3px;padding:2px 5px}
+.stms{padding:7px 11px;border-top:1px solid var(--g300);font:10px var(--mono);
+  color:var(--g500);font-variant-numeric:tabular-nums}
+.stempty{font:11.5px var(--mono);color:var(--g500);padding:18px 4px;line-height:1.7}
 
-/* ---- deliverables ---- */
-.mpdel{padding:13px 16px 16px}
-.mpdelhead{font:700 9.5px var(--mono);letter-spacing:.14em;color:var(--muted);
-  margin-bottom:9px}
+.mpdel{padding:13px 15px 16px}
+.mpdelhead{font:600 9.5px var(--sans);letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:9px}
 .mpdelrow{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px}
-.deltile{position:relative;flex:0 0 132px;border:1px solid var(--line);
-  border-radius:9px;overflow:hidden;background:#f2f0ea;cursor:pointer;padding:0;
-  display:block}
-.deltile.on{border-color:var(--ink);box-shadow:0 0 0 2px rgba(27,31,37,.16)}
-.delimg{display:block;height:132px;background:#e9e6de}
+.deltile{position:relative;flex:0 0 134px;border:1px solid var(--g300);
+  border-radius:var(--r2);overflow:hidden;background:var(--g75);cursor:pointer;
+  padding:0;display:block}
+.deltile:hover{border-color:var(--g500)}
+.deltile.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.delimg{display:block;height:134px;background:var(--g50)}
 .delimg img{width:100%;height:100%;object-fit:cover;display:block}
-/* Its own solid colours, not the .b-* chips used on light cards.
-   Those are pale-on-pale by design and vanish over a photograph; a verdict
-   that is hard to read is a verdict nobody acts on. Specificity is raised
-   deliberately so this wins over the shared chip rules. */
-.delbadge{position:absolute;top:6px;left:6px;font:700 8.5px var(--mono);
-  letter-spacing:.08em;text-transform:uppercase;border-radius:4px;padding:3px 6px;
+.delbadge{position:absolute;top:6px;left:6px;font:600 8.5px var(--mono);
+  letter-spacing:.06em;text-transform:uppercase;border-radius:3px;padding:3px 6px;
   color:#fff;border:0}
-.delbadge.b-pass{background:#2f7a34;color:#fff}
-.delbadge.b-review{background:#a8700c;color:#fff}
-.delbadge.b-block{background:#b23434;color:#fff}
-.delscore{position:absolute;top:6px;right:6px;font:700 10px var(--mono);
-  background:rgba(18,22,27,.78);color:#fff;border-radius:4px;padding:3px 6px;
+.delbadge.b-pass{background:#1f7a5c;color:#fff}
+.delbadge.b-review{background:#a8600c;color:#fff}
+.delbadge.b-block{background:#a8323a;color:#fff}
+.delscore{position:absolute;top:6px;right:6px;font:600 10px var(--mono);
+  background:rgba(0,0,0,.72);color:#fff;border-radius:3px;padding:3px 6px;
   font-variant-numeric:tabular-nums}
-.delcap{display:block;font:9.5px var(--mono);color:var(--muted);padding:5px 6px;
-  text-align:center;background:#fff}
+.delcap{display:block;font:10px var(--mono);color:var(--g600);padding:5px 6px;
+  text-align:center;background:var(--g100)}
 
-/* ---- where a creative lives ---- */
-.card{cursor:pointer}
+/* legacy market rows (live gallery during a run) */
+.mrow{background:var(--g100);border:1px solid var(--g300);border-radius:var(--r2);
+  margin-bottom:12px;overflow:hidden}
+.mhead{display:flex;align-items:baseline;gap:10px;padding:11px 14px;
+  border-bottom:1px solid var(--g300)}
+.mhead .loc{font:600 10px var(--mono);letter-spacing:.08em;text-transform:uppercase;
+  background:var(--accent);color:#fff;border-radius:3px;padding:3px 7px}
+.mhead .msg{font-size:12.5px;color:var(--ink2)}
+.mhead .mcount{margin-left:auto;font:11px var(--mono);color:var(--g500)}
+.mhead .mcount b{color:var(--review)}
+.mbody{padding:4px 0 8px}
+.mstrip{display:flex;gap:10px;overflow-x:auto;padding:8px 13px}
+.mstrip .card{flex:0 0 190px}
+.mstrip .ph{height:150px;display:flex;align-items:center;justify-content:center;
+  background:var(--g50);overflow:hidden}
+.mstrip .ph img{max-width:100%;max-height:100%;object-fit:contain}
+.prow2{display:flex;align-items:flex-start;gap:11px;padding:7px 13px}
+.prow2+.prow2{border-top:1px dashed var(--g300)}
+.pname{flex:0 0 132px;font:500 12px var(--sans);color:var(--ink2);padding-top:52px;
+  text-align:right;line-height:1.3}
+.prow2 .mstrip{padding:0;flex:1;min-width:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));
+  gap:12px;margin-top:14px}
+.card{background:var(--g100);border:1px solid var(--g300);
+  border-radius:var(--r2);overflow:hidden;cursor:pointer}
+.card:hover{border-color:var(--g500)}
+.card .m{padding:9px 11px;font-size:11.5px;color:var(--g600)}
+.card .t{font:600 12px var(--sans);color:var(--g800);margin-top:2px}
 .card .where{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}
-.loc1{font:9.5px var(--mono);padding:2px 6px;border-radius:99px;background:#f2f0ea;
-      color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.loc1.s3{background:#fff3e0;color:#b26a00}
-.loc1.off{opacity:.6}
-/* The chip is an <a> when there is a link to follow. It has to stop looking
-   like the inert chips beside it, or nobody discovers it is clickable. */
-a.loc1.link{text-decoration:none;cursor:pointer;font-weight:700}
-a.loc1.link:hover{background:#ffe6bf;color:#8a5000}
+.loc1{font:9.5px var(--mono);padding:2px 6px;border-radius:99px;
+  background:var(--g200);color:var(--g600);max-width:100%;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.loc1.s3{background:var(--review-soft);color:var(--review)}
+.loc1.off{opacity:.5}
+a.loc1.link{text-decoration:none;cursor:pointer;font-weight:600;
+  background:var(--accent-soft);color:var(--accent-hi)}
+a.loc1.link:hover{background:var(--accent);color:#fff}
 
-/* ---- the detail view ---- */
-#assetmodal{position:fixed;inset:0;z-index:60;background:rgba(18,20,15,.55);
- display:flex;align-items:center;justify-content:center;padding:26px}
-#assetmodal[hidden]{display:none}
-.amcard{background:var(--card);border-radius:14px;max-width:960px;width:100%;
- max-height:100%;overflow:auto;box-shadow:0 24px 70px rgba(0,0,0,.35)}
-.amhead{display:flex;align-items:center;gap:11px;padding:13px 17px;border-bottom:1px solid var(--line)}
-.amhead b{font-size:14px}
-.amhead .x{margin-left:auto;border:0;background:transparent;font-size:20px;cursor:pointer;
- color:var(--muted);line-height:1;padding:2px 7px;border-radius:6px}
-.amhead .x:hover{background:#f0ede7;color:var(--ink)}
-.ambody{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:17px;padding:16px 17px}
+/* ---------- modals ---------- */
+#assetmodal,#librarymodal,#postmodal{
+  position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.66);
+  display:flex;align-items:center;justify-content:center;padding:26px;
+  backdrop-filter:blur(2px);
+}
+#assetmodal[hidden],#librarymodal[hidden],#postmodal[hidden]{display:none}
+.amcard{background:var(--g100);border:1px solid var(--g400);border-radius:var(--r2);
+  max-width:960px;width:100%;max-height:100%;overflow:auto;box-shadow:var(--shadow-lg)}
+#librarymodal .amcard{max-width:780px}
+#postmodal .amcard{max-width:720px}
+.amhead{display:flex;align-items:center;gap:11px;padding:13px 16px;
+  border-bottom:1px solid var(--g300);background:var(--g75)}
+.amhead b{font-size:13.5px;color:var(--g900)}
+.amhead .x{margin-left:auto;border:0;background:transparent;font-size:20px;
+  cursor:pointer;color:var(--g600);line-height:1;padding:2px 8px;border-radius:3px}
+.amhead .x:hover{background:var(--g300);color:var(--g900)}
+.ambody{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:17px;
+  padding:16px}
 @media(max-width:820px){.ambody{grid-template-columns:1fr}}
-.ambody img{width:100%;height:auto;border-radius:9px;border:1px solid var(--line);background:#eeece6}
+.ambody img{width:100%;height:auto;border-radius:var(--r);border:1px solid var(--g300);
+  background:var(--g50)}
 .amrow{margin-bottom:13px}
-.amrow h4{margin:0 0 4px;font:700 10px var(--mono);letter-spacing:.09em;
- text-transform:uppercase;color:var(--muted)}
-.amrow code{display:block;font:11.5px var(--mono);background:#f7f5f1;border:1px solid var(--line);
- border-radius:7px;padding:7px 9px;word-break:break-all;color:var(--ink2)}
-/* The shareable URL, shown in full rather than behind a button. It is long and
-   token-heavy on purpose, and somebody about to hand it to a reviewer should
-   be able to see exactly what they are handing over. */
-.amrow code.amurl{margin-top:6px;font-size:10.5px;background:#fffaf2;border-color:#f0dcc0;
- color:#8a5000}
-.amact{display:flex;gap:7px;margin-top:6px;flex-wrap:wrap}
-.amact button,.amact a{font:600 11.5px var(--sans);padding:5px 11px;border-radius:7px;
- border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;text-decoration:none}
-.amact .go{background:#FF9900;border-color:#e08800;color:#12140f}
-.amact button:hover{background:#f3f1ec}
-.amnote{font:10.5px var(--mono);color:var(--muted);line-height:1.55;margin-top:5px}
+.amrow h4{margin:0 0 5px;font:600 10px var(--sans);letter-spacing:.07em;
+  text-transform:uppercase;color:var(--muted)}
+.amrow code{display:block;font:11.5px var(--mono);background:var(--g75);
+  border:1px solid var(--g300);border-radius:var(--r);padding:7px 9px;
+  word-break:break-all;color:var(--g700)}
+.amrow code.amurl{margin-top:6px;font-size:10.5px;background:var(--accent-soft);
+  border-color:var(--accent);color:var(--accent-hi)}
+.amact{display:flex;gap:7px;margin-top:7px;flex-wrap:wrap}
+.amact button,.amact a{font:500 12px var(--sans);padding:6px 12px;
+  border-radius:var(--r);border:1px solid var(--g400);background:var(--g200);
+  color:var(--ink);cursor:pointer;text-decoration:none}
+.amact .go{background:var(--accent);border-color:var(--accent);color:#fff}
+.amact button:hover{background:var(--g300)}
+.amnote{font:11px var(--mono);color:var(--g500);line-height:1.6;margin-top:6px}
+.libbody{padding:15px;max-height:62vh;overflow-y:auto}
+.libgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(124px,1fr));gap:10px}
+.libitem{display:flex;flex-direction:column;gap:5px;padding:8px;cursor:pointer;
+  border:1px solid var(--g300);border-radius:var(--r2);background:var(--g75);
+  text-align:center}
+.libitem:hover{border-color:var(--accent)}
+.libthumb{display:block;width:100%;aspect-ratio:1;border-radius:3px;
+  overflow:hidden;background:var(--g50)}
+.libthumb img{width:100%;height:100%;object-fit:cover;display:block}
+.libname{font:500 10.5px var(--sans);color:var(--g800);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.libmeta{font:9.5px var(--mono);color:var(--g500)}
+.libempty{font:12px var(--sans);color:var(--g500);text-align:center;
+  padding:30px 10px;line-height:1.7}
 
-/* ---- provider keys ---- */
-.chk{display:flex;align-items:center;gap:7px;padding:8px 11px;border:1px solid var(--line);
- border-radius:8px;background:#fff;font-size:13px;cursor:pointer;white-space:nowrap}
-.chk input{margin:0;cursor:pointer}
-.chk.on{border-color:var(--accent);background:#fffaf7}
-.keylink{border:0;background:transparent;color:var(--accent);font:600 11px var(--sans);
- cursor:pointer;padding:0 0 0 7px;text-decoration:underline}
-#keypanel{background:var(--card);border:1px solid var(--line);border-radius:12px;
- padding:14px 16px;margin:14px 0}
-#keypanel h3{margin:0 0 4px;font-size:13px}
-#keypanel .sub{font-size:11.5px;color:var(--muted);margin-bottom:11px}
-.prov{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)}
+/* ---------- provider keys panel ---------- */
+#keypanel{background:var(--g100);border:1px solid var(--g300);
+  border-radius:var(--r2);padding:14px 16px;margin-bottom:14px}
+#keypanel[hidden]{display:none}
+.prov{border-top:1px solid var(--g300);padding:11px 0}
 .prov:first-of-type{border-top:0}
-.prov .nm{font:600 12.5px var(--sans);min-width:96px}
-.prov .st{font:10px var(--mono);letter-spacing:.05em;text-transform:uppercase;
- padding:2px 7px;border-radius:99px}
-.prov .st.on{background:rgba(12,163,12,.1);color:var(--pass)}
-.prov .st.off{background:#f2efe9;color:var(--muted)}
-.prov .fields{display:flex;gap:7px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
-.prov input{padding:5px 9px;border:1px solid var(--line);border-radius:6px;font:11.5px var(--mono);
- width:212px;background:#fff}
-.prov button{padding:5px 12px;border:1px solid var(--ink);background:var(--ink);color:#fff;
- border-radius:6px;font:600 11.5px var(--sans);cursor:pointer}
-.prov button:disabled{opacity:.45;cursor:default}
-#keymsg{font:11.5px var(--sans);margin-top:9px}
-#stalebanner{background:#fff5f5;border:1px solid #f2c9c9;color:#8a2b2b;border-radius:11px;
- padding:12px 15px;margin:14px 0;font-size:13.5px}
-#stalebanner b{display:block;margin-bottom:3px}
-#stalebanner code{background:#fff;padding:1px 5px;border-radius:4px;border:1px solid #f2c9c9}
-.prov.target{background:#fffdf3;box-shadow:inset 3px 0 0 var(--accent)}
-.prov.target .nm{font-weight:700}
+.prov .nm{font:600 12.5px var(--sans);color:var(--g900)}
+#stalebanner{background:var(--block-soft);border:1px solid var(--block);
+  border-radius:var(--r);padding:11px 14px;margin-bottom:12px;
+  font-size:12.5px;color:var(--g800);line-height:1.6}
+#stalebanner[hidden]{display:none}
+#stalebanner code{font:11.5px var(--mono);background:var(--g75);padding:1px 5px;
+  border-radius:3px}
 
-/* ---- flow canvas ---- */
-.flowpanel{background:var(--card);border:1px solid var(--line);border-radius:12px;
- margin:18px 0;overflow:hidden}
-.flowpanel h2{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
- margin:0;padding:12px 15px;border-bottom:1px solid var(--line);font-weight:700;
- display:flex;align-items:center;gap:10px}
-.flowpanel h2 .hint{font-weight:600;letter-spacing:0;text-transform:none;font-size:11.5px;
- color:var(--muted);margin-left:auto}
-.flowscroll{overflow-x:auto;padding:6px 0 2px;background:
-  radial-gradient(circle at 1px 1px, rgba(0,0,0,.075) 1px, transparent 0) 0 0/22px 22px;
- background-color:#f4f2ed}
-svg.flow{display:block}
-.nd rect.body{fill:#fff;stroke:#d9d6cd;stroke-width:1.5;rx:11}
-.nd.active rect.body{stroke:#e0a020;stroke-width:2.5}
-.nd.done rect.body{stroke:#8fbf8f}
-.nd.skip rect.body{fill:#f4f2ed;stroke:#e2e0d8;stroke-dasharray:4 3}
-.nd rect.accent{rx:3}
-.nd text.t{font:640 11.5px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#12140f}
-.nd text.s{font:11px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#8b8d85}
+[hidden]{display:none !important}
+
+/* ==========================================================================
+   Carried over from the previous sheet, re-themed.
+
+   These are the selectors the rewrite above does not name: the SVG flow
+   diagram, the small status chips, and the product-card states. They were
+   drawn for a light page -- white node fills, pale chips -- so they are not
+   copied, they are restated against the dark tokens. A #fff node on a #1d1d1d
+   ground is a flashlight, not a diagram.
+   ========================================================================== */
+
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+
+/* ---------- verdict chips ---------- */
+.b-pass  {color:var(--pass);  border-color:rgba(51,171,132,.4); background:var(--pass-soft)}
+.b-review{color:var(--review);border-color:rgba(230,134,25,.4); background:var(--review-soft)}
+.b-block {color:var(--block); border-color:rgba(227,72,80,.4);  background:var(--block-soft)}
+
+/* Over a photograph the soft chips vanish, so the deliverable badge gets
+   solid fills at higher specificity. A verdict nobody can read is a verdict
+   nobody acts on. */
+.delbadge.b-pass  {background:var(--pass);  color:#08130f;border-color:transparent}
+.delbadge.b-review{background:var(--review);color:#1b1004;border-color:transparent}
+.delbadge.b-block {background:var(--block); color:#fff;   border-color:transparent}
+
+/* ---------- product card states ---------- */
+.fbadge{display:inline-block;font:700 9px var(--mono);letter-spacing:.05em;
+  padding:2px 6px;border-radius:99px;text-transform:uppercase;
+  vertical-align:1px;margin-left:6px}
+.fbadge.reuse {background:var(--pass-soft);  color:var(--pass)}
+.fbadge.gen   {background:var(--review-soft);color:var(--review)}
+.fbadge.resurf{background:var(--accent-soft);color:var(--accent-hi)}
+
+.pstate{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:-2px 0 8px}
+.pstate-t{font:10.5px var(--mono);color:var(--muted);line-height:1.5;
+  flex:1;min-width:150px}
+.pstate-t b{color:var(--review)}
+.pstate-b{border:1px solid var(--g400);background:var(--g200);color:var(--ink);
+  border-radius:var(--r);padding:4px 10px;font:500 11px var(--sans);
+  cursor:pointer;white-space:nowrap}
+.pstate-b:hover{border-color:var(--accent);color:var(--g900)}
+.pstate-b.on{border-color:var(--accent);color:#fff;background:var(--accent)}
+.pstate-b[disabled]{opacity:.4;cursor:not-allowed}
+
+/* When a product is reused AS SHOT the prompt fields are inert. Say it in the
+   styling as well as in the words -- nobody reads the words. */
+.fcard.reusing textarea[data-p$=".subject"],
+.fcard.reusing input[data-p$=".surface"]{opacity:.4;background:var(--g75)}
+/* Resurfacing is the third state and the one the styling has to get right:
+   the photo is kept, so Subject and Surface are BOTH live -- Surface
+   describes the new scene, Subject tells the model which object it may not
+   redesign. Greying either would be a lie about which field does the work. */
+.fcard.resurfacing input[data-p$=".surface"]{border-color:var(--pass)}
+
+/* ---------- provider rows ---------- */
+.prov .st{font:10px var(--mono);letter-spacing:.05em;text-transform:uppercase;
+  padding:2px 7px;border-radius:99px}
+.prov .st.on {background:var(--pass-soft);color:var(--pass)}
+.prov .st.off{background:var(--g200);color:var(--muted)}
+.prov.target{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.prov.target .nm{font-weight:600;color:var(--g900)}
+
+/* ---------- numbers ---------- */
+.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.num.good,.good{color:var(--pass)}
+.spark{display:block}
+
+/* ---------- the flow diagram (SVG) ---------- */
+.nd rect.body{fill:var(--g100);stroke:var(--g300);stroke-width:1.5;rx:8}
+.nd.active rect.body{stroke:var(--accent);stroke-width:2.5}
+.nd.done   rect.body{stroke:var(--pass)}
+.nd.skip   rect.body{fill:var(--g75);stroke:var(--g200);stroke-dasharray:4 3}
+.nd rect.accent{rx:2}
+.nd text.t{font:600 11.5px var(--sans);fill:var(--g800)}
+.nd text.s{font:11px var(--sans);fill:var(--muted)}
 .nd text.ic{font-size:15px}
-.nd.skip text.t,.nd.skip text.s{fill:#b6b4ac}
-.nd .badge-c{fill:#12140f}
-.nd .badge-t{font:700 10px ui-monospace,Menlo,monospace;fill:#fff}
-.nd.active .badge-c{fill:#e0a020}
-.pipe{fill:none;stroke:#cfccc2;stroke-width:2}
-.pipe.on{stroke:#0ca30c}
-.pipe.flow{stroke:#0ca30c;stroke-dasharray:7 7;animation:dash .7s linear infinite}
+.nd.skip text.t,.nd.skip text.s{fill:var(--g500)}
+.nd .badge-c{fill:var(--g400)}
+.nd .badge-t{font:700 10px var(--mono);fill:#fff}
+.nd.active .badge-c{fill:var(--accent)}
+
+.pipe{fill:none;stroke:var(--g400);stroke-width:2}
+.pipe.on  {stroke:var(--pass)}
+.pipe.flow{stroke:var(--pass);stroke-dasharray:7 7;animation:dash .7s linear infinite}
+.pipe.dim {stroke:var(--g200);stroke-dasharray:4 4}
+.plab{font:700 9.5px var(--mono);fill:var(--g500)}
+.grpbox{fill:rgba(38,128,235,.06);stroke:rgba(38,128,235,.35);stroke-width:1;
+  stroke-dasharray:5 4;rx:10}
+.grplab{font:700 9.5px var(--sans);fill:var(--accent-hi);letter-spacing:.08em;
+  text-transform:uppercase}
 @keyframes dash{to{stroke-dashoffset:-14}}
-.pipe.dim{stroke:#e2e0d8;stroke-dasharray:4 4}
-.plab{font:700 9.5px ui-monospace,Menlo,monospace;fill:#8b8d85}
-.grpbox{fill:rgba(196,105,74,.05);stroke:rgba(196,105,74,.35);stroke-width:1;
- stroke-dasharray:5 4;rx:12}
-.grplab{font:700 9.5px system-ui;fill:#a8674c;letter-spacing:.08em;text-transform:uppercase}
-@media(prefers-reduced-motion:reduce){.pipe.flow{animation:none}}
+
+
+/* ==========================================================================
+   Analytics
+
+   Two sources, and the layout says so before you read a word: what OUR posts
+   did (a calendar, because posting is periodic and so are the questions), and
+   what the MARKET is doing (trends, virality, where and who). They meet at
+   the bottom in one suggested surface prompt you can render and adopt.
+   ========================================================================== */
+
+.anwarn{
+  display:flex;gap:10px;align-items:flex-start;
+  background:var(--review-soft);border:1px solid rgba(230,134,25,.35);
+  border-left:3px solid var(--review);
+  border-radius:var(--r);padding:10px 13px;margin:0 0 16px;
+  font:11.5px/1.65 var(--sans);color:var(--ink2);
+}
+.anwarn b{color:var(--review)}
+.anwarn code{font:10.5px var(--mono);background:var(--g200);
+  border-radius:3px;padding:1px 4px;color:var(--g700)}
+
+/* ---------- channel + market pickers ---------- */
+.anbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  margin:0 0 16px;padding-bottom:12px;border-bottom:1px solid var(--g200)}
+.chtabs{display:flex;background:var(--g75);border:1px solid var(--g300);
+  border-radius:var(--r);padding:2px;gap:2px}
+.chtabs button{
+  background:transparent;border:0;border-radius:2px;cursor:pointer;
+  color:var(--g600);font:500 12px var(--sans);padding:6px 13px;
+  display:flex;align-items:center;gap:7px;white-space:nowrap;
+}
+.chtabs button:hover{color:var(--g800);background:var(--g200)}
+.chtabs button.on{background:var(--accent);color:#fff}
+.chtabs .cdot{width:7px;height:7px;border-radius:50%;background:currentColor;
+  opacity:.55;flex:none}
+.chtabs button.on .cdot{opacity:1}
+
+.anmkt{display:flex;align-items:center;gap:7px;
+  font:11px var(--sans);color:var(--muted)}
+.anmkt select{
+  background:var(--g200);border:1px solid var(--g400);color:var(--ink);
+  border-radius:var(--r);padding:5px 9px;font:12px var(--sans);
+}
+.anapi{margin-left:auto;font:10px var(--mono);color:var(--g500);
+  letter-spacing:.02em}
+.ansyn{font:700 9px var(--mono);letter-spacing:.09em;
+  background:var(--review);color:#1b1004;border-radius:99px;padding:2px 7px}
+
+/* ---------- section frames ---------- */
+.ansec{background:var(--g100);border:1px solid var(--g300);
+  border-radius:var(--r2);margin:0 0 16px;overflow:hidden}
+.ansech{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:11px 15px;border-bottom:1px solid var(--g200);background:var(--g75)}
+.ansech h3{margin:0;font:600 12.5px var(--sans);color:var(--g900);
+  letter-spacing:-.005em}
+.ansech .src{font:10px var(--mono);color:var(--g500)}
+.ansecb{padding:15px}
+
+/* ---------- headline numbers ---------- */
+.ankpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(126px,1fr));
+  gap:1px;background:var(--g300);border-bottom:1px solid var(--g300)}
+.ankpi{background:var(--g100);padding:11px 15px}
+.ankpi .k{font:10px var(--sans);color:var(--muted);letter-spacing:.03em;
+  text-transform:uppercase}
+.ankpi .v{font:600 19px var(--mono);color:var(--g900);
+  font-variant-numeric:tabular-nums;line-height:1.35}
+.ankpi .d{font:10px var(--mono);color:var(--g500)}
+
+/* ---------- calendar ---------- */
+.calgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;
+  background:var(--g300);border:1px solid var(--g300);border-radius:var(--r)}
+.caldow{background:var(--g75);text-align:center;padding:6px 0;
+  font:600 9.5px var(--sans);letter-spacing:.09em;color:var(--g500);
+  text-transform:uppercase}
+.calday{background:var(--g100);min-height:96px;padding:6px;
+  display:flex;flex-direction:column;gap:5px}
+.calday.pad{background:var(--g75)}
+.calday .dnum{font:500 10px var(--mono);color:var(--g500);
+  font-variant-numeric:tabular-nums}
+.calday.hot .dnum{color:var(--accent-hi);font-weight:700}
+
+/* One post inside a day: thumbnail, then the one number that matters for the
+   channel. Anything more and 28 cells become unreadable; the rest is a click
+   away in the modal. */
+.calpost{display:flex;gap:6px;align-items:center;cursor:pointer;
+  background:var(--g200);border:1px solid transparent;border-radius:3px;
+  padding:3px;text-align:left;width:100%;font:inherit;color:inherit}
+.calpost:hover{border-color:var(--accent);background:var(--g300)}
+.calpost.best{box-shadow:inset 2px 0 0 var(--pass)}
+.calpost img{width:26px;height:26px;object-fit:cover;border-radius:2px;
+  background:var(--g50);flex:none}
+.calpost .cpt{min-width:0;flex:1}
+.calpost .cpr{display:block;font:600 9px var(--mono);color:var(--g600)}
+.calpost .cpv{display:block;font:600 10.5px var(--mono);color:var(--g800);
+  font-variant-numeric:tabular-nums}
+
+/* ---------- post modal ---------- */
+#postmodal{position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.72);
+  display:flex;align-items:center;justify-content:center;padding:28px}
+#postmodal[hidden]{display:none}
+.pmcard{background:var(--g100);border:1px solid var(--g400);
+  border-radius:var(--r2);box-shadow:var(--shadow-lg);
+  width:min(700px,100%);max-height:100%;overflow:auto;display:flex;
+  flex-direction:column}
+.pmhead{display:flex;align-items:center;gap:10px;padding:13px 16px;
+  border-bottom:1px solid var(--g300)}
+.pmhead b{font:600 13px var(--sans);color:var(--g900)}
+.pmhead .x{margin-left:auto;background:transparent;border:0;cursor:pointer;
+  color:var(--g600);font:16px var(--sans);padding:2px 8px;border-radius:var(--r)}
+.pmhead .x:hover{background:var(--g200);color:var(--g900)}
+.pmbody{display:grid;grid-template-columns:210px minmax(0,1fr);gap:16px;
+  padding:16px}
+.pmshot{background:var(--g50);border-radius:var(--r);overflow:hidden;
+  display:flex;align-items:center;justify-content:center;min-height:180px}
+.pmshot img{max-width:100%;max-height:280px;display:block}
+.pmstats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;
+  background:var(--g300);border:1px solid var(--g300);border-radius:var(--r);
+  overflow:hidden}
+.pmstat{background:var(--g100);padding:8px 11px}
+.pmstat .k{font:9.5px var(--sans);letter-spacing:.04em;color:var(--muted);
+  text-transform:uppercase}
+.pmstat .v{font:600 15px var(--mono);color:var(--g900);
+  font-variant-numeric:tabular-nums}
+.pmmeta{margin-top:12px;font:11.5px/1.7 var(--sans);color:var(--ink2)}
+.pmmeta code{font:10.5px var(--mono);background:var(--g200);color:var(--g700);
+  border-radius:3px;padding:1px 5px}
+
+/* ---------- external ---------- */
+.excols{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
+  gap:15px}
+@media (max-width:1000px){.excols{grid-template-columns:minmax(0,1fr)}}
+
+.vmeter{display:flex;align-items:center;gap:14px;
+  background:var(--g75);border:1px solid var(--g300);border-radius:var(--r);
+  padding:12px 15px;margin-bottom:13px}
+.vdial{width:64px;height:64px;flex:none;position:relative}
+.vdial svg{transform:rotate(-90deg)}
+.vdial .vnum{position:absolute;inset:0;display:flex;align-items:center;
+  justify-content:center;font:600 17px var(--mono);color:var(--g900);
+  font-variant-numeric:tabular-nums}
+.vtext .vlab{font:10px var(--sans);letter-spacing:.06em;
+  text-transform:uppercase;color:var(--muted)}
+.vtext .vterm{font:600 14px var(--sans);color:var(--g900)}
+.vtext .vsub{font:11px/1.6 var(--sans);color:var(--ink2);margin-top:3px}
+
+.trend{display:grid;grid-template-columns:minmax(0,1fr) 62px 58px 46px;
+  gap:10px;align-items:center;padding:8px 4px;
+  border-bottom:1px solid var(--g200)}
+.trend:last-child{border-bottom:0}
+.trend .tterm{font:500 12px var(--sans);color:var(--ink);min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trend .tkind{font:9px var(--mono);letter-spacing:.05em;text-transform:uppercase;
+  color:var(--g500);display:block}
+.trend .tvol{font:11px var(--mono);color:var(--muted);text-align:right;
+  font-variant-numeric:tabular-nums}
+.trend .tvel{font:600 11px var(--mono);text-align:right;
+  font-variant-numeric:tabular-nums}
+.trend .tvel.up{color:var(--pass)}
+.trend .tvel.dn{color:var(--block)}
+.tbar{height:4px;border-radius:99px;background:var(--g200);overflow:hidden;
+  margin-top:6px}
+.tbar i{display:block;height:100%;background:var(--accent);border-radius:99px}
+
+.exlist{display:flex;flex-direction:column;gap:11px}
+.exrow{display:grid;grid-template-columns:minmax(0,1fr) 46px;gap:2px 9px;
+  align-items:baseline;font:11.5px var(--sans);color:var(--ink2)}
+.exrow .n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.exrow .p{font:600 11px var(--mono);text-align:right;color:var(--g800);
+  font-variant-numeric:tabular-nums}
+.exbar{grid-column:1 / -1;height:4px;border-radius:99px;background:var(--g200)}
+.exbar i{display:block;height:100%;border-radius:99px;background:var(--g500)}
+
+/* ---------- the suggestion ---------- */
+.sug{display:grid;grid-template-columns:minmax(0,1fr) 268px;gap:16px}
+@media (max-width:1000px){.sug{grid-template-columns:minmax(0,1fr)}}
+.sugprompt{background:var(--g50);border:1px solid var(--g400);
+  border-left:3px solid var(--accent);border-radius:var(--r);
+  padding:12px 14px;font:13px/1.6 var(--mono);color:var(--g900)}
+.sugconf{display:inline-flex;align-items:center;gap:6px;
+  font:700 9.5px var(--mono);letter-spacing:.07em;text-transform:uppercase;
+  border-radius:99px;padding:3px 9px}
+.sugconf.high  {background:var(--pass-soft);  color:var(--pass)}
+.sugconf.medium{background:var(--review-soft);color:var(--review)}
+.sugwhy{list-style:none;margin:13px 0 0;padding:0;display:flex;
+  flex-direction:column;gap:8px}
+.sugwhy li{display:flex;gap:9px;align-items:flex-start;
+  font:11.5px/1.6 var(--sans);color:var(--ink2)}
+.sugwhy .tag{font:700 8.5px var(--mono);letter-spacing:.07em;
+  text-transform:uppercase;border-radius:3px;padding:2px 5px;flex:none;
+  margin-top:2px;min-width:62px;text-align:center}
+.sugwhy .tag.internal {background:var(--accent-soft);color:var(--accent-hi)}
+.sugwhy .tag.external {background:rgba(138,79,240,.18);color:#b18cf5}
+.sugwhy .tag.agreement{background:var(--pass-soft);color:var(--pass)}
+.sugwhy .tag.conflict {background:var(--review-soft);color:var(--review)}
+.sugacts{display:flex;gap:8px;margin-top:15px;flex-wrap:wrap}
+
+/* The sample panel: ONE render, so trying a suggestion costs about what
+   looking at it is worth. Eighteen deliverables to answer "does this look
+   right" is a bill nobody would pay twice. */
+.sampbox{background:var(--g75);border:1px solid var(--g300);
+  border-radius:var(--r);padding:12px;display:flex;flex-direction:column;
+  gap:10px;align-self:start}
+.samphead{font:600 11px var(--sans);letter-spacing:.03em;color:var(--g700);
+  text-transform:uppercase}
+.sampshot{background:var(--g50);border-radius:var(--r);min-height:150px;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
+  padding:8px}
+.sampshot img{max-width:100%;max-height:330px;display:block;border-radius:2px}
+.sampshot .ph{font:11px/1.7 var(--mono);color:var(--g500);text-align:center;
+  padding:16px;white-space:pre-line}
+.sampfacts{display:flex;flex-direction:column;gap:4px;
+  font:10.5px var(--mono);color:var(--muted)}
+.sampfacts b{color:var(--g800);font-weight:600}
+.spin{display:inline-block;width:11px;height:11px;border-radius:50%;
+  border:2px solid var(--g400);border-top-color:var(--accent);
+  animation:sp .7s linear infinite;vertical-align:-1px;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+.anloading{padding:40px 4px;text-align:center;font:12px var(--mono);
+  color:var(--g500)}
+
+/* ---------- top-bar actions ----------
+   Run lives in the chrome, not in a pane: it is the one control you want
+   from wherever you happen to be looking. */
+.topact{margin-left:auto;display:flex;align-items:center;gap:11px;flex:none}
+.topact .dot{margin:0}
+.topact button.primary{padding:6px 15px;font-size:12.5px}
+header.topbar .ghlink{margin-left:14px}
+
+.pane{padding-top:18px}
+.pane[hidden]{display:none}
 </style>
 </head><body>
-<div class="wrap">
+<!-- Four panes, one visible at a time, switched by the tabs in the top bar.
 
-<header>
-  <h1>Creative Automation Pipeline</h1>
-  <span class="sub">campaign brief in &rarr; on-spec, checked social creatives out</span>
+     It used to be one long scroll: controls, brief, log, results, with the
+     analytics buried as a sub-tab of the brief. That works while the page is
+     short and stops working the moment a run produces five markets of
+     creatives, because everything you want to compare is a screen-height
+     apart. Tabs are not decoration here -- they are what makes "look at the
+     stage strip, then look at the deliverables" a click instead of a scroll.
+
+     Run and the status dot stay in the chrome rather than in a pane, because
+     starting a run is the one thing you want to do from anywhere. -->
+<header class="topbar">
+  <div class="brandmark">
+    <span class="glyph" aria-hidden="true"></span>
+    <div>
+      <b>Creative Automation</b><br>
+      <span>campaign brief in &rarr; on-spec, checked creatives out</span>
+    </div>
+  </div>
+
+  <nav class="apptabs" id="apptabs" role="tablist">
+    <button role="tab" data-pane="brief" class="on">Brief</button
+    ><button role="tab" data-pane="analytics">Analytics</button
+    ><button role="tab" data-pane="pipeline">Pipeline</button
+    ><button role="tab" data-pane="results">Results<span class="cnt"
+        id="rescount" hidden>0</span></button>
+  </nav>
+
+  <div class="topact">
+    <span id="dot" class="dot" title="run status"></span>
+    <button id="run" class="primary">Run pipeline</button>
+  </div>
+
   <a class="ghlink" href="https://github.com/DougMckay2389/creative-automation-pipeline"
      target="_blank" rel="noopener" title="source on GitHub">
     <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="currentColor">
@@ -585,78 +890,96 @@ svg.flow{display:block}
     <span>GitHub</span></a>
 </header>
 
-<div class="bar">
-  <div class="f"><label for="brief">Campaign brief</label>
-    <select id="brief"></select></div>
-  <div class="f"><label for="provider">Image provider
-      <button id="keys" class="keylink" type="button">API keys</button></label>
-    <select id="provider"></select></div>
-
-  <div class="f" id="modelwrap" hidden><label for="model">Image model</label>
-    <select id="model"></select></div>
-
-  <div class="f"><label for="regen">Generation</label>
-    <label class="chk" title="Ignore the asset on disk and the cache. Every product is
-generated fresh from its current subject and surface, with a seed salted by the run id.">
-      <input type="checkbox" id="regen"><span>Regenerate every run</span></label></div>
-  <div id="surfacebox"></div>
-
-  <button id="plan">Plan &mdash; what would this cost?</button>
-  <button id="run" class="primary">Run pipeline</button>
-  <div class="spacer"></div>
-  <button id="save">Save brief</button>
-</div>
-
+<!-- Overlays live outside the panes: they are fixed-position and must survive
+     a pane switch, and a modal that unmounts when you change tab behind it is
+     a bug waiting to be filed. -->
 <div id="assetmodal" hidden></div>
 <div id="librarymodal" hidden></div>
+<div id="postmodal" hidden></div>
 <!-- One file input, reused by every product card. Rendering one per card
      would mean N hidden inputs to keep in sync for no benefit; the card that
      opened it is remembered on the element itself. -->
 <input type="file" id="filepick" accept="image/png,image/jpeg,image/webp" hidden>
+
+<div class="wrap">
+
 <div id="stalebanner" hidden></div>
 <div id="keypanel" hidden></div>
-<div id="planout"></div>
 
-<div class="flowpanel">
-  <h2>Pipeline flow
-    <span class="hint">driven by real pipeline events &mdash; the same records written to run.log.jsonl</span>
-  </h2>
-  <div class="flowscroll"><svg class="flow" id="flow" width="1180" height="544"
-       viewBox="0 0 1180 544" role="img" aria-label="pipeline flow diagram"></svg></div>
-</div>
+<!-- ============================ BRIEF ============================ -->
+<section class="pane" id="pane-brief">
 
+  <div class="bar">
+    <div class="f"><label for="brief">Campaign brief</label>
+      <select id="brief"></select></div>
+    <div class="f"><label for="provider">Image provider
+        <button id="keys" class="keylink" type="button">API keys</button></label>
+      <select id="provider"></select></div>
 
-<!-- Brief on its own full-width row, run log beneath it at half height.
-     They were side by side, which gave the brief half the screen to lay out
-     product cards in and gave the log a tall narrow column it never filled.
-     The brief is the thing you edit; the log is the thing you glance at. -->
-<div class="panel">
-  <h2>Brief <span id="briefname" class="tag"></span>
-    <span class="tabs">
-      <button class="tab on" data-tab="form">Form</button
-      ><button class="tab" data-tab="yaml">YAML</button
-      ><button class="tab" data-tab="analytics">Analytics</button>
-    </span>
-  </h2>
-  <div id="formpane" class="formpane"></div>
-  <textarea id="text" spellcheck="false" hidden></textarea>
-  <div id="anpane" class="formpane" hidden></div>
-</div>
+    <div class="f" id="modelwrap" hidden><label for="model">Image model</label>
+      <select id="model"></select></div>
 
-<div class="panel logpanel">
-  <h2><span id="dot" class="dot"></span> Run log</h2>
-  <pre class="console" id="log">Pick a brief and press Plan, or go straight to Run.
+    <div class="f"><label for="regen">Generation</label>
+      <label class="chk" title="Ignore the asset on disk and the cache. Every product is
+generated fresh from its current subject and surface, with a seed salted by the run id.">
+        <input type="checkbox" id="regen"><span>Regenerate every run</span></label></div>
+    <div id="surfacebox"></div>
+
+    <button id="plan">Plan &mdash; what would this cost?</button>
+    <div class="spacer"></div>
+    <button id="save">Save brief</button>
+  </div>
+
+  <div id="planout"></div>
+
+  <div class="panel">
+    <h2>Brief <span id="briefname" class="tag"></span>
+      <span class="tabs">
+        <button class="tab on" data-tab="form">Form</button
+        ><button class="tab" data-tab="yaml">YAML</button>
+      </span>
+    </h2>
+    <div id="formpane" class="formpane"></div>
+    <textarea id="text" spellcheck="false" hidden></textarea>
+  </div>
+
+</section>
+
+<!-- ========================== ANALYTICS ========================== -->
+<section class="pane" id="pane-analytics" hidden>
+  <div id="anpane"></div>
+</section>
+
+<!-- ========================== PIPELINE =========================== -->
+<section class="pane" id="pane-pipeline" hidden>
+
+  <div class="flowpanel">
+    <h2>Pipeline flow
+      <span class="hint">driven by real pipeline events &mdash; the same records written to run.log.jsonl</span>
+    </h2>
+    <div class="flowscroll"><svg class="flow" id="flow" width="1180" height="544"
+         viewBox="0 0 1180 544" role="img" aria-label="pipeline flow diagram"></svg></div>
+  </div>
+
+  <div class="panel logpanel">
+    <h2>Run log</h2>
+    <pre class="console" id="log">Pick a brief and press Plan, or go straight to Run.
 
 The default provider is offline and deterministic, so this needs no API key
 and produces the same pixels every time.</pre>
+  </div>
+
+</section>
+
+<!-- =========================== RESULTS =========================== -->
+<!-- Filled in DURING the run: each creative is prepended to its market's row
+     as it lands, so the newest is the leftmost and the row grows right. -->
+<section class="pane" id="pane-results" hidden>
+  <div id="results"></div>
+</section>
+
 </div>
 
-<!-- Under the brief and the run log, and filled in DURING the run: each
-     creative is prepended to its market's row as it lands, so the newest is
-     the leftmost and the row grows to the right. -->
-<div id="results"></div>
-
-</div>
 <script>
 const $ = s => document.querySelector(s);
 let poll = null;
@@ -1486,171 +1809,449 @@ function toYaml(b){
 
 function syncYaml(){ if (BRIEF) $('#text').value = toYaml(BRIEF); }
 
+/* ------------------------------------------------------------------ *
+ * Panes — the four top-level tabs
+ *
+ * One visible at a time. The alternative, one long scroll, is what this was
+ * and it stopped working the moment a run produced five markets: the stage
+ * strip you want to read and the deliverables you want to check it against
+ * ended up two screens apart.
+ *
+ * Switching is deliberately dumb -- toggle `hidden`, nothing is unmounted.
+ * A pane that rebuilt itself on every switch would throw away the analytics
+ * you just loaded and the results you just scrolled to.
+ * ------------------------------------------------------------------ */
+
+function showPane(name){
+  document.querySelectorAll('#apptabs button').forEach(
+    b => b.classList.toggle('on', b.dataset.pane === name));
+  document.querySelectorAll('.pane').forEach(
+    p => { p.hidden = p.id !== 'pane-' + name; });
+  window.scrollTo(0, 0);
+  // Fetched on first view rather than on load: a whole extra request for a
+  // tab most sessions never open.
+  if (name === 'analytics') loadInsights();
+}
+
+$('#apptabs').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-pane]');
+  if (b) showPane(b.dataset.pane);
+});
+
+/* The Form/YAML switch inside the Brief pane. Analytics used to be a third
+   button here; it is a top-level pane now, which is where a second data
+   source and a render button belong. */
 function showTab(which){
-  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.dataset.tab===which));
+  document.querySelectorAll('.panel .tab').forEach(
+    t => t.classList.toggle('on', t.dataset.tab === which));
   $('#formpane').hidden = which !== 'form';
   $('#text').hidden     = which !== 'yaml';
-  $('#anpane').hidden   = which !== 'analytics';
-  // Fetched on first view rather than on load: it is a whole extra request
-  // for a tab most sessions never open.
-  if (which === 'analytics') loadInsights();
 }
 
 /* ------------------------------------------------------------------ *
- * Analytics — SYNTHETIC channel history, and what it should change
+ * Analytics — SYNTHETIC, and it says so in four places
  *
- * Every figure below is generated, from a fixed seed, and says so on screen
- * in three places. Nothing connects to Meta, TikTok, X or Google. That is
- * laboured on purpose: a fabricated metric that escapes a demo as a real one
- * is the worst thing this tool could do, and an unlabelled dashboard is how
- * that happens.
+ * Every figure on this tab is generated from a fixed seed. Nothing connects
+ * to Google, Meta, TikTok or YouTube. That is laboured on purpose: a
+ * fabricated metric that escapes a demo as a real one is the worst thing
+ * this tool could do, and an unlabelled dashboard is exactly how that
+ * happens. The `api` string on each channel names the endpoint a real
+ * integration would call, so the shape of the work is visible even though
+ * the work is not done.
  *
- * The reason it exists is the exercise's fifth business goal — "learn what
- * content, creative and localization drives the best business outcomes". A
- * pipeline that only pushes creative out answers four of five; the missing
- * one is the loop back. So this tab does not stop at charts: each market's
- * history produces two changes you can APPLY to the brief — the order the
- * placements get produced in, and the surface treatment that is working in
- * that market. A dashboard that produces a feeling is decoration; one that
- * produces a diff is a tool.
+ * The reason the tab exists at all is the exercise's fifth business goal --
+ * "learn what content, creative and localization drives the best business
+ * outcomes". A pipeline that only pushes creative out answers four of five.
+ * So this does not stop at charts. Two sources go in:
+ *
+ *   INTERNAL  what our own posts did, per channel, laid out as a calendar,
+ *             because posting is periodic and so are the questions you ask
+ *             about it -- "what were we doing in week three", not "which
+ *             row is highest".
+ *   EXTERNAL  what the market is doing regardless of us: trending terms
+ *             with a velocity, a virality score, where the audience is and
+ *             who they are.
+ *
+ * and one thing comes out: a surface prompt, with the evidence for it, that
+ * you can render ONE sample from and then adopt into the brief. A dashboard
+ * that produces a feeling is decoration; one that produces a diff is a tool.
  * ------------------------------------------------------------------ */
 
-let INSIGHTS = null;
+const AN = {path:'', channel:'', locale:'', d:null, sample:null, busy:false};
 
 async function loadInsights(force){
   const pane = $('#anpane');
   const path = $('#brief').value;
-  if (INSIGHTS && INSIGHTS.path === path && !force) return;
+  if (AN.d && AN.path === path && !force) return;
+  if (AN.path !== path) { AN.channel = ''; AN.locale = ''; AN.sample = null; }
+  AN.path = path;
   pane.innerHTML = `<div class="anloading">Reading channel history…</div>`;
+
+  const q = new URLSearchParams({path});
+  if (AN.channel) q.set('channel', AN.channel);
+  if (AN.locale)  q.set('locale',  AN.locale);
+
   let r;
-  try { r = await (await fetch('/api/insights?path=' + encodeURIComponent(path))).json(); }
-  catch { r = {error: 'could not load'}; }
+  try { r = await (await fetch('/api/insights?' + q)).json(); }
+  catch { r = {error:'could not load'}; }
   if (r.error) { pane.innerHTML = `<div class="note err">${esc(r.error)}</div>`; return; }
-  INSIGHTS = Object.assign({path}, r);
+
+  AN.d = r; AN.channel = r.channel; AN.locale = r.locale;
   paintInsights();
 }
 
-const SRC_NAME = {meta:'Meta (FB/IG)', tiktok:'TikTok', x:'X (Twitter)', gsc:'Search Console'};
+const fmt = (n) => n >= 1e6 ? (n/1e6).toFixed(1) + 'M'
+                 : n >= 1e3 ? Math.round(n/1e3) + 'k' : String(n);
 
-function spark(vals){
-  // Inline SVG rather than a chart library: this page has no build step, and
+function spark(vals, up){
+  // Inline SVG rather than a chart library: this page has no build step and
   // eight points do not need 90KB of dependency to be drawn.
   if (!vals || vals.length < 2) return '';
-  const w = 58, h = 18, max = Math.max(...vals), min = Math.min(...vals);
+  const w = 56, h = 16, max = Math.max(...vals), min = Math.min(...vals);
   const span = Math.max(1, max - min);
-  const pts = vals.map((v, i) =>
-    `${(i / (vals.length - 1) * w).toFixed(1)},${(h - (v - min) / span * h).toFixed(1)}`);
-  const up = vals[vals.length - 1] >= vals[0];
+  const pts = vals.map((v,i) =>
+    `${(i/(vals.length-1)*w).toFixed(1)},${(h-(v-min)/span*h).toFixed(1)}`);
+  const rising = up === undefined ? vals[vals.length-1] >= vals[0] : up;
   return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"
     aria-hidden="true"><polyline points="${pts.join(' ')}" fill="none"
-    stroke="${up ? '#3d6b48' : '#a33'}" stroke-width="1.5"
+    stroke="${rising ? '#33ab84' : '#e34850'}" stroke-width="1.5"
     stroke-linejoin="round" stroke-linecap="round"/></svg>`;
 }
 
 function paintInsights(){
-  const d = INSIGHTS;
-  const pane = $('#anpane');
-  pane.innerHTML = `
-    <div class="anwarn">
-      <b>Sample data.</b> Every figure on this tab is synthetic, generated from a
-      fixed seed so it is identical on every machine. Nothing here is connected to
-      Meta, TikTok, X or Google. A real integration would need the Meta Graph API
-      (<code>insights</code> edge), the TikTok Business API, the X Ads API (paid
-      tier) and the Search Console API — all per-market, all rate-limited, all
-      returning a different shape for the same idea, which is the argument for an
-      adapter layer like <code>providers/</code> and <code>storage/</code>.
+  const d = AN.d, rep = d.report, cal = rep.calendar, ex = rep.external;
+  const ch = d.channels.find(c => c.id === d.channel) || d.channels[0];
+
+  $('#anpane').innerHTML = `
+    <div class="anwarn"><div><b>Sample data.</b> Every figure on this tab is
+      synthetic, generated from a fixed seed so it is identical on every
+      machine. Nothing here is connected to Google, Meta, TikTok or YouTube.
+      Each channel names the API a real integration would call
+      (<code>${esc(ch.api)}</code> for this one) &mdash; all per-market, all
+      rate-limited, all returning a different shape for the same idea, which
+      is the argument for an adapter layer like <code>providers/</code> and
+      <code>storage/</code>.</div></div>
+
+    <div class="anbar">
+      <div class="chtabs">${d.channels.map(c => `
+        <button data-ch="${esc(c.id)}" class="${c.id===d.channel?'on':''}"
+          ><span class="cdot"></span>${esc(c.name)}</button>`).join('')}
+      </div>
+      <div class="anmkt"><label for="anlocale">Market</label>
+        <select id="anlocale">${d.locales.map(l =>
+          `<option${l===d.locale?' selected':''}>${esc(l)}</option>`).join('')}
+        </select></div>
+      <span class="ansyn">SYNTHETIC</span>
+      <span class="anapi">${esc(ch.api)}</span>
     </div>
-    ${d.markets.map(m => marketInsight(m)).join('')}`;
+
+    ${internalHtml(cal, ch)}
+    ${externalHtml(ex)}
+    ${suggestHtml(rep.suggestion)}`;
+
+  $('#anlocale').addEventListener('change', (e) => {
+    AN.locale = e.target.value; AN.sample = null; loadInsights(true);
+  });
 }
 
-function marketInsight(m){
-  const rec = m.recommendation || {};
-  const bySource = {};
-  for (const row of m.rows) (bySource[row.source] ||= []).push(row);
+/* ---------------- internal: our own posts, as a calendar --------------- */
 
-  return `<div class="anmkt">
-    <div class="anhead"><span class="loc">${esc(m.locale)}</span>
-      <span class="anlab">channel history &mdash; last 8 weeks</span>
-      <span class="ansyn">SYNTHETIC</span></div>
-
-    <div class="anrec">
-      <div class="anrectxt">
-        <div class="anrech">What this suggests for ${esc(m.locale)}</div>
-        <ol class="anwhy">${(rec.why || []).filter(Boolean)
-          .map(w => `<li>${esc(w)}</li>`).join('')}</ol>
-        <div class="anchg">
-          <span>Produce in this order:</span>
-          ${(rec.ratio_order || []).map((rt, i) =>
-            `<code>${i ? '&rarr; ' : ''}${esc(rt)}</code>`).join(' ')}
-        </div>
-        <div class="anchg"><span>Surface treatment, on every product:</span>
-          <code>${esc(rec.surface || '')}</code></div>
-        <div class="annote">Applying edits the brief in place &mdash; it reorders the
-          placements and overwrites each product's surface prompt. Nothing is written
-          to disk until you press Save, so reloading the brief undoes it.</div>
-      </div>
-      <button class="anapply" data-apply="${esc(m.locale)}">Apply to brief</button>
+function internalHtml(cal, ch){
+  const t = cal.totals;
+  return `<div class="ansec">
+    <div class="ansech"><h3>Internal &mdash; what we posted</h3>
+      <span class="src">${esc(ch.name)} · ${esc(cal.start)} → ${esc(cal.end)}
+        · ${cal.days} days</span></div>
+    <div class="ankpis">
+      <div class="ankpi"><div class="k">Posts</div>
+        <div class="v">${t.posts}</div><div class="d">in ${cal.days} days</div></div>
+      <div class="ankpi"><div class="k">${esc(ch.metric)}</div>
+        <div class="v">${fmt(t.impressions)}</div><div class="d">total</div></div>
+      <div class="ankpi"><div class="k">Engagement</div>
+        <div class="v">${t.engagement_rate}%</div>
+        <div class="d">impression-weighted</div></div>
+      <div class="ankpi"><div class="k">CTR</div>
+        <div class="v">${t.ctr}%</div><div class="d">impression-weighted</div></div>
+      <div class="ankpi"><div class="k">Saves</div>
+        <div class="v">${fmt(t.saves)}</div><div class="d">total</div></div>
     </div>
-
-    <div class="antables">
-      ${Object.keys(bySource).map(src => `
-        <div class="antbl">
-          <div class="antblh">${esc(SRC_NAME[src] || src)}</div>
-          <table><thead><tr>
-            <th>Placement</th><th>Impr.</th><th>CTR</th><th>CVR</th><th>CPA</th><th>8wk</th>
-          </tr></thead><tbody>
-          ${bySource[src].map(row => `<tr>
-            <td><b>${esc(row.ratio)}</b> <span class="anplace">${esc(row.placement)}</span></td>
-            <td class="num">${(row.impressions/1000).toFixed(0)}k</td>
-            <td class="num">${row.ctr}%</td>
-            <td class="num">${row.cvr}%</td>
-            <td class="num${row.cpa_index <= 1 ? ' good' : ''}">${row.cpa_index}</td>
-            <td>${spark(row.trend)}</td>
-          </tr>`).join('')}
-          </tbody></table>
-        </div>`).join('')}
-    </div>
-
-    <div class="antreat">
-      <div class="antblh">Creative treatments &mdash; how each has performed here</div>
-      ${m.treatments.map((t, i) => `
-        <div class="antrow${i === 0 ? ' best' : ''}">
-          <span class="antlabel">${esc(t.label)}</span>
-          <span class="antsurf">${esc(t.surface)}</span>
-          <span class="antnum">${t.ctr}% CTR</span>
-          <span class="antnum">${t.saves}% saves</span>
-          <span class="antruns">${t.runs} runs</span>
-        </div>`).join('')}
-    </div>
+    <div class="ansecb">${calendarHtml(cal)}</div>
   </div>`;
 }
 
-/* Applying a recommendation is a real edit to the brief, and it is shown as
-   one: the aspect ratios reorder and the surface prompts change in the Form
-   tab and in the YAML. Nothing is saved to disk until Save is pressed, so a
-   suggestion you dislike costs one undo -- reload the brief. */
-$('#anpane').addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-apply]');
-  if (!btn || !INSIGHTS || !BRIEF) return;
-  const m = INSIGHTS.markets.find(x => x.locale === btn.dataset.apply);
-  if (!m) return;
-  const rec = m.recommendation || {};
+function calendarHtml(cal){
+  const byDate = {};
+  for (const p of cal.posts) (byDate[p.date] ||= []).push(p);
 
-  // Reorder, never drop. Removing a placement because eight weeks of data
+  // Pad to a Monday so the columns are weekdays. Without this the grid is
+  // seven cells wide but tells you nothing about weekday vs weekend, which
+  // is most of the reason to draw a calendar rather than a list.
+  const start = new Date(cal.start + 'T00:00:00');
+  const end   = new Date(cal.end   + 'T00:00:00');
+  const lead  = (start.getDay() + 6) % 7;
+
+  const cells = [];
+  for (let i = 0; i < lead; i++) cells.push(`<div class="calday pad"></div>`);
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const iso = d.toISOString().slice(0, 10);
+    const posts = byDate[iso] || [];
+    const hot = posts.some(p => p.id === cal.best_id);
+    cells.push(`<div class="calday${hot ? ' hot' : ''}">
+      <span class="dnum">${d.getDate()}</span>
+      ${posts.map(p => `
+        <button class="calpost${p.id === cal.best_id ? ' best' : ''}"
+                data-post="${esc(p.id)}" title="${esc(p.caption)}">
+          ${p.thumb ? `<img src="/out/${esc(p.thumb)}" alt="" loading="lazy">`
+                    : `<img alt="">`}
+          <span class="cpt"><span class="cpr">${esc(p.ratio)}</span>
+            <span class="cpv">${fmt(p.impressions)}</span></span>
+        </button>`).join('')}
+    </div>`);
+  }
+
+  return `<div class="calgrid">
+    ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
+       .map(x => `<div class="caldow">${x}</div>`).join('')}
+    ${cells.join('')}
+  </div>`;
+}
+
+/* ---------------- external: the market, regardless of us --------------- */
+
+function dial(v){
+  // 0-100 on a 64px ring. An arc rather than a bar because a virality score
+  // is a single bounded reading, and a bar invites comparison against the
+  // bars next to it that the number does not support.
+  const r = 26, c = 2 * Math.PI * r;
+  const hue = v >= 66 ? '#e34850' : v >= 33 ? '#e68619' : '#2680eb';
+  return `<div class="vdial"><svg width="64" height="64" viewBox="0 0 64 64">
+    <circle cx="32" cy="32" r="${r}" fill="none" stroke="#3b3b3b" stroke-width="6"/>
+    <circle cx="32" cy="32" r="${r}" fill="none" stroke="${hue}" stroke-width="6"
+      stroke-linecap="round" stroke-dasharray="${(c*v/100).toFixed(1)} ${c.toFixed(1)}"/>
+  </svg><span class="vnum">${v}</span></div>`;
+}
+
+function externalHtml(ex){
+  const maxVol = Math.max(...ex.trends.map(t => t.volume), 1);
+  const top = ex.trends[0] || {};
+  return `<div class="ansec">
+    <div class="ansech"><h3>External &mdash; what the market is doing</h3>
+      <span class="src">public APIs + scraping · ${esc(ex.locale)}</span></div>
+    <div class="ansecb"><div class="excols">
+
+      <div>
+        <div class="vmeter">${dial(ex.virality)}
+          <div class="vtext">
+            <div class="vlab">Virality meter</div>
+            <div class="vterm">${esc(top.term || '—')}</div>
+            <div class="vsub">Velocity ${top.velocity > 0 ? '+' : ''}${top.velocity}×
+              week over week on ${fmt(top.volume || 0)} searches. The score is
+              velocity normalised against the range seen across all markets,
+              not raw volume &mdash; a term everyone already uses is not a
+              trend.</div>
+          </div>
+        </div>
+        ${ex.trends.map(t => `
+          <div class="trend">
+            <div><span class="tterm">${esc(t.term)}</span>
+              <span class="tkind">${esc(t.kind)}</span>
+              <div class="tbar"><i style="width:${(t.volume/maxVol*100).toFixed(0)}%"></i></div>
+            </div>
+            <span class="tvol">${fmt(t.volume)}</span>
+            <span class="tvel ${t.velocity >= 0 ? 'up' : 'dn'}"
+              >${t.velocity > 0 ? '+' : ''}${t.velocity}×</span>
+            ${spark(t.spark, t.velocity >= 0)}
+          </div>`).join('')}
+      </div>
+
+      <div>
+        <div class="samphead" style="margin-bottom:9px">Where</div>
+        <div class="exlist">${ex.locations.map(l => `
+          <div class="exrow"><span class="n">${esc(l.city)}</span>
+            <span class="p">${l.share}%</span>
+            <span class="exbar"><i style="width:${Math.min(100,l.share*3).toFixed(0)}%"></i></span>
+          </div>`).join('')}</div>
+
+        <div class="samphead" style="margin:18px 0 9px">Who</div>
+        <div class="exlist">${ex.audience.map(a => `
+          <div class="exrow"><span class="n">${esc(a.bucket)}</span>
+            <span class="p">${a.share}%</span>
+            <span class="exbar"><i style="width:${Math.min(100,a.share*2).toFixed(0)}%"></i></span>
+          </div>`).join('')}</div>
+        <div class="sampfacts" style="margin-top:11px">
+          <span>${ex.female_share}% female · skew from channel norms, not
+            declared demographics</span></div>
+      </div>
+
+    </div></div>
+  </div>`;
+}
+
+/* ---------------- the thing the two sources are for -------------------- */
+
+function suggestHtml(s){
+  const samp = AN.sample;
+  return `<div class="ansec">
+    <div class="ansech"><h3>Suggested surface</h3>
+      <span class="src">internal history × external trend</span>
+      <span class="sugconf ${esc(s.confidence)}">${esc(s.confidence)} confidence</span>
+    </div>
+    <div class="ansecb"><div class="sug">
+
+      <div>
+        <div class="sugprompt">${esc(s.surface)}</div>
+        <ol class="sugwhy">${s.why.map(w => `
+          <li><span class="tag ${esc(w.source)}">${esc(w.source)}</span>
+            <span>${esc(w.text)}</span></li>`).join('')}
+        </ol>
+        <div class="sampfacts" style="margin-top:12px">
+          <span>Produce in this order:
+            <b>${s.ratio_order.map(esc).join(' → ')}</b></span>
+          <span>Adopting rewrites every product's surface prompt, turns
+            <b>regenerate_surface</b> on so the prompt actually reaches the
+            model, and reorders the placements. Nothing is written to disk
+            until you press Save, so reloading the brief undoes it.</span>
+        </div>
+        <div class="sugacts">
+          <button id="ansample" ${AN.busy ? 'disabled' : ''}
+            >${AN.busy ? '<span class="spin"></span>Rendering…'
+                       : 'Render one sample'}</button>
+          <button id="anadopt" class="primary">Adopt into brief</button>
+        </div>
+      </div>
+
+      <div class="sampbox">
+        <div class="samphead">Sample &mdash; one creative</div>
+        <div class="sampshot">${
+          samp && samp.path
+            ? `<img src="/out/${esc(samp.path)}?t=${Date.now()}" alt="sample creative">`
+            : `<span class="ph">${AN.busy
+                 ? 'rendering one product × one market × one ratio…'
+                 : samp && samp.error ? esc(samp.error)
+                 : 'Nothing rendered yet.\nOne product, one market, one ratio —\nnot the eighteen a full run makes.'}</span>`
+        }</div>
+        ${samp && samp.path ? `<div class="sampfacts">
+          <span>origin <b>${esc(samp.origin)}</b> · provider
+            <b>${esc(samp.provider)}</b></span>
+          <span>compliance <b>${samp.score}</b>/100 ·
+            <b>${esc(samp.verdict)}</b></span>
+          <span>${samp.seconds}s · written to <b>.cache/samples/</b>, never
+            to output/</span></div>` : ''}
+      </div>
+
+    </div></div>
+  </div>`;
+}
+
+/* ---------------- interaction ------------------------------------------ */
+
+$('#anpane').addEventListener('click', async (e) => {
+  const ch = e.target.closest('[data-ch]');
+  if (ch) {
+    if (ch.dataset.ch === AN.channel) return;
+    AN.channel = ch.dataset.ch; AN.sample = null;
+    return loadInsights(true);
+  }
+
+  const post = e.target.closest('[data-post]');
+  if (post) return openPost(post.dataset.post);
+
+  if (e.target.closest('#ansample')) return renderSample();
+  if (e.target.closest('#anadopt'))  return adoptSuggestion();
+});
+
+/* One render, not eighteen. "Act on a suggestion" has to mean *see it*
+   first, and a full run is eighteen deliverables and two paid model calls;
+   this is one of each, so trying a suggestion costs about what looking at it
+   is worth. */
+async function renderSample(){
+  const s = AN.d && AN.d.report.suggestion;
+  if (!s || AN.busy) return;
+  AN.busy = true; AN.sample = null; paintInsights();
+
+  const q = new URLSearchParams({
+    path: AN.path, surface: s.surface, locale: AN.locale,
+    ratio: s.ratio_order[0] || '', provider: currentProvider(),
+  });
+  let r;
+  try { r = await (await fetch('/api/sample?' + q)).json(); }
+  catch { r = {error:'the render request failed'}; }
+
+  AN.busy = false; AN.sample = r; paintInsights();
+}
+
+function adoptSuggestion(){
+  const s = AN.d && AN.d.report.suggestion;
+  if (!s || !BRIEF) return;
+
+  // Reorder, never drop. Removing a placement because four weeks of data
   // disliked it is the over-fitting a media team would rightly refuse; the
   // pipeline still produces every spec, just best-performing first.
-  const order = rec.ratio_order || [];
-  BRIEF.aspect_ratios = (BRIEF.aspect_ratios || []).slice().sort(
-    (a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+  const order = s.ratio_order || [];
+  BRIEF.aspect_ratios = (BRIEF.aspect_ratios || []).slice()
+    .sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
 
-  if (rec.surface) for (const p of (BRIEF.products || [])) p.surface = rec.surface;
+  for (const p of (BRIEF.products || [])) {
+    p.surface = s.surface;
+    // Without this the prompt is written into a brief that never sends it:
+    // a product reused as-shot ignores its surface entirely. Adopting a
+    // suggestion that silently does nothing is worse than not offering one.
+    if (!p.regenerate_product) p.regenerate_surface = true;
+  }
 
   renderForm();
-  btn.textContent = 'Applied';
-  btn.classList.add('done');
-  setTimeout(() => { btn.textContent = 'Apply to brief'; btn.classList.remove('done'); }, 2200);
+  showPane('brief');
+  const b = $('#anadopt');
+  if (b) { b.textContent = 'Adopted'; b.classList.add('done'); }
+}
+
+/* The modal is the second half of the calendar: the grid shows cadence and
+   one number, because 28 cells with six numbers each is unreadable. The rest
+   is one click away rather than crammed in. */
+function openPost(id){
+  const cal = AN.d && AN.d.report.calendar;
+  const p = cal && cal.posts.find(x => x.id === id);
+  if (!p) return;
+  const stat = (k, v) => `<div class="pmstat"><div class="k">${k}</div>
+    <div class="v">${v}</div></div>`;
+
+  $('#postmodal').innerHTML = `<div class="pmcard">
+    <div class="pmhead"><b>${esc(p.date)}</b>
+      <span class="tag">${esc(p.ratio)} · ${esc(p.placement)}</span>
+      <span class="ansyn">SYNTHETIC</span>
+      <button class="x" data-close aria-label="close">✕</button></div>
+    <div class="pmbody">
+      <div class="pmshot">${p.thumb
+        ? `<img src="/out/${esc(p.thumb)}" alt="post creative">`
+        : '<span class="ph">no image</span>'}</div>
+      <div>
+        <div class="pmstats">
+          ${stat('Impressions', fmt(p.impressions))}
+          ${stat('Engagement', p.engagement_rate + '%')}
+          ${stat('CTR', p.ctr + '%')}
+          ${stat('Saves', fmt(p.saves))}
+          ${stat('Comments', fmt(p.comments))}
+          ${stat('Shares', fmt(p.shares))}
+          ${p.watch_through ? stat('Watch-through', p.watch_through + '%')
+                              + '<div class="pmstat"></div>' : ''}
+        </div>
+        <div class="pmmeta">${esc(p.caption)}<br>
+          Treatment: <code>${esc(p.treatment)}</code><br>
+          ${p.id === cal.best_id
+            ? 'Best post of the period, by engagement × impressions.'
+            : ''}</div>
+      </div>
+    </div>
+  </div>`;
+  $('#postmodal').hidden = false;
+}
+
+$('#postmodal').addEventListener('click', (e) => {
+  if (e.target.id === 'postmodal' || e.target.closest('[data-close]'))
+    $('#postmodal').hidden = true;
 });
-document.querySelectorAll('.tab').forEach(t =>
+
+document.querySelectorAll('.panel .tab').forEach(t =>
   t.addEventListener('click', () => showTab(t.dataset.tab)));
 
 /* Typing in the raw YAML has to win: it is the thing that gets saved. The
@@ -1709,6 +2310,12 @@ async function doRun(){
   $('#results').innerHTML=''; $('#log').textContent=''; SEEN.clear();
   $('#run').disabled = true; $('#dot').classList.add('live');
   running = true; drawFlow({});
+  // Pressing Run from the Analytics tab and watching nothing happen is the
+  // obvious failure of a tabbed layout, so the tabs follow the work: to the
+  // flow diagram and the log while it runs, to the deliverables when it is
+  // done. Both are still one click back.
+  setResultCount(0);
+  showPane('pipeline');
   const r = await (await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({path:$('#brief').value, text:$('#text').value,
                         provider:$('#provider').value,
@@ -1749,8 +2356,18 @@ async function tick(){
     clearInterval(poll); poll=null;
     $('#run').disabled=false; $('#dot').classList.remove('live');
     running = false; drawFlow(s.graph);
-    if(s.summary) render(s.summary, s.report);
+    if(s.summary){ render(s.summary, s.report); showPane('results'); }
   }
+}
+
+/* The count on the Results tab. It is not decoration: it is the only thing
+   on screen that says how many deliverables exist while you are looking at
+   a different pane. */
+function setResultCount(n){
+  const el = $('#rescount');
+  if (!el) return;
+  el.textContent = n;
+  el.hidden = !n;
 }
 
 /* One creative, as a tile. Shared by the live path and the final render so
@@ -1811,6 +2428,7 @@ function paintLanded(landed){
     SEEN.add(r.variant);
     placeCard(host, r, '/out/' + String(r.out_dir).replace(/\\/g,'/') + '/');
   }
+  setResultCount(SEEN.size);
 }
 
 /* One card into the right place: a product's strip, inside its market's block.
@@ -1886,6 +2504,7 @@ function render(sum, report){
 
   html += order.map(locale => marketPanel(locale, sum, base)).join('');
   $('#results').innerHTML = html;
+  setResultCount((sum.results || []).length);
   SEEN.clear();                     // the final render owns the DOM from here
 }
 
@@ -2163,7 +2782,21 @@ $('#assetmodal').addEventListener('click', async (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') $('#assetmodal').hidden = true;
+  if (e.key !== 'Escape') return;
+  // Every overlay, not just the first one written. A modal that ignores Esc
+  // is the kind of thing nobody files a bug about and everybody resents.
+  for (const id of ['#assetmodal', '#librarymodal', '#postmodal'])
+    $(id).hidden = true;
+});
+
+/* Number keys move between panes. This is a tool somebody demos live, and
+   reaching for a tab with the mouse mid-sentence is the fumble that shows. */
+document.addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+  const panes = ['brief', 'analytics', 'pipeline', 'results'];
+  const i = ['1', '2', '3', '4'].indexOf(e.key);
+  if (i >= 0) showPane(panes[i]);
 });
 
 /* ------------------------------------------------------------------ *

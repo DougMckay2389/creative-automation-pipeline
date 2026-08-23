@@ -33,7 +33,7 @@ from PIL import Image
 
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qsl, unquote, urlparse
 from urllib.request import Request, urlopen
 
 from pipeline.brief import BriefError, load_brief
@@ -258,6 +258,63 @@ def _on_event(rec: dict) -> None:
                  "stored_uri", "share_url")})
 
 
+def _render_sample(brief, product, market, ratio, surface: str,
+                   provider_name: str = "") -> dict:
+    """One creative, from a suggested surface prompt.
+
+    Calls the SAME resolver and compositor a full run calls. That is the whole
+    reason this is trustworthy: if the sample were rendered by a shortcut path
+    it would be a picture of what the pipeline might do, and adopting it would
+    be a guess. Here, adopting it produces exactly this.
+
+    `dataclasses.replace` rather than mutating: Product is frozen, and the
+    brief on disk must not acquire a surface somebody was only auditioning.
+    """
+    from dataclasses import replace
+
+    from pipeline.assets import AssetResolver
+    from pipeline.brief import Variant, stable_seed
+    from pipeline.compose import Composer
+    from pipeline.checks import compliance_score, evaluate
+    from pipeline.providers import default_provider, get_provider
+    from pipeline.runner import load_brand
+
+    trial = replace(product, surface=surface)
+    variant = Variant(trial, market, ratio)
+
+    name = provider_name or default_provider()
+    provider = get_provider(name)
+    brand = load_brand("brandkit/brand.yaml")
+
+    out_dir = os.path.join(ROOT, ".cache", "samples")
+    os.makedirs(out_dir, exist_ok=True)
+    stamp = time.strftime("%H%M%S")
+    out_path = os.path.join(out_dir, f"{trial.id}-{market.locale}-"
+                                     f"{ratio.slug}-{stamp}.jpg")
+
+    t0 = time.monotonic()
+    resolver = AssetResolver(provider, cache_dir=os.path.join(ROOT, ".cache", "masters"))
+    master = resolver.resolve(trial, stable_seed(brief.campaign_id, trial.id, surface))
+    comp = Composer(brand).compose(master.path, variant, out_path)
+    res = evaluate(comp, variant, brand, brief.prohibited_terms)
+
+    return {
+        "ok": True,
+        "path": os.path.relpath(out_path, ROOT).replace("\\", "/"),
+        "product": trial.id,
+        "locale": market.locale,
+        "ratio": ratio.id,
+        "surface": surface,
+        "origin": master.origin,
+        "provider": getattr(provider, "name", name),
+        "model": master.model or getattr(provider, "model", ""),
+        "verdict": res.verdict.value,
+        "score": compliance_score(res.findings),
+        "findings": [f.as_dict() for f in res.findings],
+        "seconds": round(time.monotonic() - t0, 1),
+    }
+
+
 def _do_run(brief_path: str, provider: str, regen: bool = False,
             storage: str = "", model: str = "") -> None:
     """Executed on a worker thread so the browser can poll for progress."""
@@ -365,27 +422,83 @@ class Handler(SimpleHTTPRequestHandler):
                                "cwd": ROOT})
 
         if route == "/api/insights":
-            """Synthetic channel history for every market in a brief.
+            """One channel's history for one market, plus what it suggests.
 
             Marked `synthetic: true` in the payload and labelled as sample
-            data everywhere it is drawn. Nothing here reaches Meta, TikTok, X
-            or Google -- see pipeline/insights.py for what a real integration
-            would take.
+            data everywhere it is drawn. Nothing here reaches Google, Meta,
+            TikTok or YouTube -- each channel carries the name of the API a
+            real integration would call, and pipeline/insights.py says what
+            that would take.
             """
-            rel = unquote(urlparse(self.path).query.split("path=", 1)[-1])
-            p = self._safe(rel)
+            q = dict(parse_qsl(urlparse(self.path).query))
+            p = self._safe(q.get("path", ""))
             if not p or not os.path.isfile(p):
                 return self._json({"error": "not found"}, 404)
             try:
                 b = load_brief(p)
             except BriefError as exc:
                 return self._json({"error": str(exc)}, 200)
-            ratios = [r.id for r in b.ratios]
+
+            channel = q.get("channel") or insights.CHANNEL_IDS[0]
+            if channel not in insights.CHANNEL_IDS:
+                return self._json({"error": f"unknown channel '{channel}'"}, 400)
+            # One channel at a time. Building all four for every market up
+            # front is four times the work for a tab you can only look at one
+            # of, and it made the payload big enough to feel slow.
+            locales = [m.locale for m in b.markets]
+            locale = q.get("locale") or (locales[0] if locales else "en-US")
             return self._json({
                 "synthetic": True,
-                "ratios": ratios,
-                "markets": [insights.report(m.locale, ratios) for m in b.markets],
+                "channels": insights.CHANNELS,
+                "channel": channel,
+                "locales": locales,
+                "locale": locale,
+                "ratios": [r.id for r in b.ratios],
+                "report": insights.report(locale, channel, ROOT),
             })
+
+        if route == "/api/sample":
+            """Render ONE creative from a suggested surface, and nothing else.
+
+            The point of the Analytics tab is a prompt you can act on, and
+            "act on" has to mean *see it* before you commit. A full run is
+            eighteen deliverables and two paid model calls; this is one of
+            each, so trying a suggestion costs about what looking at it is
+            worth.
+
+            It writes to .cache/samples/ rather than output/, because a sample
+            is not a deliverable and must never turn up in the folder a
+            reviewer is told holds the campaign.
+            """
+            q = dict(parse_qsl(urlparse(self.path).query))
+            p = self._safe(q.get("path", ""))
+            if not p or not os.path.isfile(p):
+                return self._json({"error": "not found"}, 404)
+            surface = (q.get("surface") or "").strip()
+            if not surface:
+                return self._json({"error": "no surface prompt given"}, 400)
+            try:
+                b = load_brief(p)
+            except BriefError as exc:
+                return self._json({"error": str(exc)}, 200)
+            if not b.products or not b.markets or not b.ratios:
+                return self._json({"error": "brief has nothing to render"}, 400)
+
+            locale = q.get("locale") or b.markets[0].locale
+            market = next((m for m in b.markets if m.locale == locale), b.markets[0])
+            ratio_id = q.get("ratio") or b.ratios[0].id
+            ratio = next((r for r in b.ratios if r.id == ratio_id), b.ratios[0])
+            product = b.products[0]
+
+            try:
+                return self._json(_render_sample(b, product, market, ratio,
+                                                 surface,
+                                                 q.get("provider", "")))
+            except Exception as exc:                              # noqa: BLE001
+                # Surfaced rather than logged: this is a button somebody just
+                # pressed, and "nothing happened" is the worst answer.
+                traceback.print_exc()
+                return self._json({"error": f"{type(exc).__name__}: {exc}"}, 200)
 
         if route == "/api/assets":
             """Every product image already uploaded, for reuse.

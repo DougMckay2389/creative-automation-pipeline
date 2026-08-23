@@ -611,9 +611,12 @@ variants.
 brief, see what it would cost, run it, watch the log, look at the results.
 One folder, one double-click, no install beyond Python.
 
-**Technically.** Python's standard-library `ThreadingHTTPServer`. Six
+**Technically.** Python's standard-library `ThreadingHTTPServer`. The
 endpoints: `/api/init`, `/api/brief`, `/api/save`, `/api/plan`, `/api/run`,
-`/api/progress`. A run executes on a worker thread and the page polls
+`/api/progress`, plus `/api/assets` and `/api/upload` for the asset library,
+`/api/insights` and `/api/sample` for the analytics loop, `/api/signed` for a
+time-boxed S3 link, and `/api/whoami` + `/api/shutdown` for the
+one-instance-at-a-time handshake. A run executes on a worker thread and the page polls
 `/api/progress` every 400ms for log lines, so the console feels live without
 websockets. Static output is served through `/out/` with a path-traversal
 guard.
@@ -670,6 +673,171 @@ No, and I would not pretend otherwise. It binds to localhost, runs one job at
 a time, has no auth and no queue. It is a demo surface and an operator tool.
 Production is the CLI in a scheduler, or the pipeline behind a proper job
 runner — which is why the logic lives in `pipeline/` and not in `app.py`.
+
+---
+
+### `pipeline/insights.py` + the Analytics tab — the loop back
+
+**In plain words.** The brief tells the pipeline what to make. This tab is the
+other direction: it looks at how previous posts did and what the market is
+talking about, and turns that into a prompt you can actually run. You look at
+one sample render, and if you like it you press Adopt and it goes into the
+brief.
+
+**Why it exists at all.** Read the exercise's business goals again. Four of
+the five are about pushing creative *out* — speed, volume, consistency, cost.
+The fifth is "**learn what content, creative and localization drives the best
+business outcomes**", and that one points the other way. A pipeline with no
+feedback path answers four of five. This is the fifth.
+
+**The one sentence to say:**
+
+> "A dashboard that produces a feeling is decoration. One that produces a
+> diff is a tool. Every number on that tab exists to justify one specific
+> change to the brief — the surface prompt and the order the placements get
+> produced in — and there is a button that makes the change."
+
+#### The two sources, and why they are drawn differently
+
+| | Internal | External |
+|---|---|---|
+| What | our own posts, per channel | what the market is doing regardless of us |
+| Shape | a **calendar** | trend rows + a virality dial + where/who |
+| Real source would be | GA4 Data API `runReport`, Meta Graph `insights`, TikTok Business API, YouTube Analytics API | search-trend APIs and scraping |
+| Answers | "what were we doing, and did it work" | "what should we be doing next" |
+
+The calendar is a deliberate choice and worth defending. A sortable table
+answers *which post won*. A calendar answers *what were we doing* — the run of
+Stories in week three, the empty weekends, the two-post days. Posting is
+periodic, so the questions you ask about it are periodic, and a table throws
+that axis away. The grid is padded to start on a Monday for the same reason:
+without that, weekday-vs-weekend is invisible and you have drawn a table with
+extra steps.
+
+The grid shows a thumbnail and **one** number per post. Twenty-eight cells
+with six numbers each is unreadable; the other five are one click away in the
+modal. That is the whole rule.
+
+#### The synthetic-data problem, and how it is handled
+
+Every figure is generated from `SEED = 20260823`. Nothing touches a real API.
+It says **SYNTHETIC** in four places: the orange banner, a chip in the toolbar,
+a chip in every post modal, and `"synthetic": true` in the JSON payload.
+
+**Say this before they ask:**
+
+> "This is fabricated data and I have made it hard to mistake for anything
+> else. A made-up metric that escapes a demo as a real one is the worst thing
+> a tool like this could do, and an unlabelled dashboard is exactly how that
+> happens. What is *not* fabricated is the shape: each channel names the API a
+> real integration would call, and the reason there is an adapter layer for
+> providers and storage is the same reason there would need to be one here —
+> four vendors returning four shapes for the same idea, all per-market, all
+> rate-limited."
+
+Two details that show the numbers were thought about rather than randomised:
+
+* **Impression-weighted averages.** `calendar()` computes engagement and CTR
+  as `sum(rate × impressions) / sum(impressions)`, not a plain mean. A 6% rate
+  on 900 views must not outrank 2% on 900,000. Un-weighted averaging is how
+  dashboards end up celebrating the smallest sample they have.
+* **Virality is normalised velocity, not volume.** The score is
+  `(velocity − VELOCITY_MIN) / (VELOCITY_MAX − VELOCITY_MIN)` mapped onto
+  8–92 with jitter. The first version was `38 + velocity × 26`, which
+  overflowed and clamped nearly every term to 98–100 — a meter that always
+  reads maximum is a meter nobody looks at twice. A term everyone already
+  uses is not a trend; a term that doubled last week is.
+
+#### How the suggestion is made, and what it does when the sources disagree
+
+`suggest()` takes the best treatment from our own history (ranked by
+impression-weighted engagement) and the treatment implied by the
+fastest-moving external term, and compares them.
+
+* **They agree** → confidence `high`, and the `why` list says so.
+* **They disagree** → confidence `medium`, and *the external signal wins*.
+
+That second rule is the interesting one and you should volunteer the reason:
+
+> "Our own history can only rank treatments we have already tried. If it
+> disagrees with a term that is moving in the market, the disagreement is
+> usually a gap in our sample, not a finding. So the external signal takes it
+> — but the tab says `CONFLICT` in the evidence list rather than hiding the
+> disagreement behind a single number. A recommendation you can't audit is a
+> recommendation you shouldn't take."
+
+The placement order is a **reorder, never a drop**. Four weeks of data
+disliking 16:9 is not grounds for cutting a placement the campaign committed
+to — that is the over-fitting a media team would rightly refuse. Every spec is
+still produced; the best-performing one is just produced first.
+
+#### `/api/sample` — one render, not eighteen
+
+"Act on a suggestion" has to mean *see it* first, and a full run is eighteen
+deliverables and two paid model calls. `_render_sample()` builds exactly one:
+one product × one market × one ratio.
+
+Three things about it are worth pointing at:
+
+1. **It calls the same code the real run does** — the same `AssetResolver`,
+   the same `Composer`, the same `evaluate`. It is not a preview renderer. A
+   sample that goes through a different path is a sample that can lie.
+2. **It writes to `.cache/samples/`, never `output/`.** A sample is not a
+   deliverable and must never turn up in the folder a reviewer has been told
+   holds the campaign.
+3. **`Product` is frozen**, so it uses `dataclasses.replace(product,
+   surface=…)` rather than mutating. Immutability was a deliberate choice in
+   `brief.py`; this is the place it stops being an inconvenience and starts
+   being the reason a sample can't corrupt the brief it came from.
+
+#### Adopt, and the bug it would have shipped with
+
+Adopting writes the surface prompt into every product, reorders the ratios,
+and — this is the part worth mentioning — **sets `regenerate_surface: true`**.
+
+Without that line the feature is a silent no-op for any product being reused
+as-shot: the prompt lands in the brief, the brief never sends it, and the next
+run produces the identical creative. A suggestion that quietly does nothing is
+worse than not offering one, because now the tool has lied about cause and
+effect. Nothing is written to disk until Save, so an adoption you dislike
+costs one brief reload.
+
+---
+
+### The theme — Spectrum dark, macOS type
+
+**In plain words.** It looks like an Adobe application because it is a tool
+you look at images in.
+
+**Technically.** One token set: Spectrum's dark grey ramp (`--g50`…`--g900`),
+Spectrum blue 500 (`#2680eb`) as the accent, and semantic colours for the
+three verdicts. Type is the system stack — SF on macOS, Segoe on Windows —
+with Inter named after them for machines that have it.
+
+**Three decisions to defend:**
+
+1. **Dark, and that is not a preference.** A light chrome around a photograph
+   biases how the photograph reads. Photoshop, Premiere and Lightroom are all
+   dark for this reason, and this app's entire job is showing you creatives
+   and asking whether they pass.
+2. **The stylesheet was rewritten, not patched.** The old one carried 189
+   hard-coded colour literals across 90 distinct values. Converting those one
+   at a time gives you a half-themed app where one panel is warm paper and the
+   next is dark — which looks worse than either. It was cheaper and safer to
+   restate the whole sheet against one token set, and the splice was done by a
+   script so a 500-line edit could not half-apply.
+3. **No webfont is fetched.** Adobe Clean is proprietary and cannot ship here,
+   and a lookalike would be worse than the platform's own face. Loading Inter
+   from a CDN would also mean a tool meant to run on a laptop with no network
+   flashes a fallback on every load — for a font nobody is grading.
+
+**If they ask about the tabs:** the page used to be one long scroll. That works
+until a run produces five markets, at which point the stage strip you want to
+read and the deliverables you want to check it against are two screens apart.
+Run and the status dot stay in the chrome rather than in a pane, because
+starting a run is the one thing you want to do from wherever you are — and
+the tabs follow the work: to Pipeline while it runs, to Results when it
+finishes.
 
 ---
 
