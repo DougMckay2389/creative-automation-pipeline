@@ -18,6 +18,7 @@ import glob
 import json
 import mimetypes
 import os
+import sys
 import threading
 import traceback
 import webbrowser
@@ -38,6 +39,27 @@ from pipeline.runner import run_campaign
 ROOT = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(ROOT, ".env"))
 HOST, PORT = "127.0.0.1", 8765
+
+# When this process loaded its own source.
+#
+# A server that is still running yesterday's code is invisible from the
+# browser: index.html is read from disk on every request, so a stale process
+# happily serves the NEW page with the OLD Python behind it. That has been
+# mistaken for four different bugs -- an empty provider list, a missing form,
+# a toggle that does nothing, a checkbox that is ignored -- and every time the
+# page looked perfectly current.
+#
+# Comparing the mtime we started with against the file now is enough to catch
+# it, needs no version constants to keep in sync, and is reported to the UI so
+# the person sees it instead of debugging a ghost.
+_LOADED_AT = os.path.getmtime(os.path.abspath(__file__))
+
+
+def _is_stale() -> bool:
+    try:
+        return os.path.getmtime(os.path.abspath(__file__)) > _LOADED_AT
+    except OSError:
+        return False
 
 # --------------------------------------------------------------------------
 # Run state. One run at a time -- this is a local demo tool, not a service,
@@ -197,6 +219,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json({"briefs": briefs,
                                "providers": provider_status(),
                                "default_provider": default_provider(),
+                               "stale": _is_stale(),
                                "cwd": ROOT})
 
         if route == "/api/brief":
@@ -225,6 +248,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json({"running": STATE["running"],
                                    "lines": STATE["lines"],
                                    "landed": STATE["landed"],
+                                   "stale": _is_stale(),
                                    "graph": STATE["graph"],
                                    "summary": STATE["summary"],
                                    "report": STATE["report"],
@@ -371,15 +395,42 @@ def _write_env(values: dict[str, str], path: str = ".env") -> None:
 
 
 def main() -> None:
-    srv = ThreadingHTTPServer((HOST, PORT), Handler)
-    url = f"http://{HOST}:{PORT}"
+    port = PORT
+    for i, a in enumerate(sys.argv):                       # --port 8766
+        if a == "--port" and i + 1 < len(sys.argv):
+            port = int(sys.argv[i + 1])
+
+    try:
+        srv = ThreadingHTTPServer((HOST, port), Handler)
+    except OSError as exc:
+        # Fail LOUDLY on a port clash.
+        #
+        # The default here is quietly dangerous: the new process dies, the old
+        # one keeps serving, and the browser shows an app that looks fine and
+        # is running yesterday's code. That has been mistaken for three
+        # different bugs -- an empty provider list, a missing form, a toggle
+        # that "does nothing" -- each time because the server answering was
+        # not the server just started.
+        print(f"\n  Port {port} is already in use.\n")
+        print("  An older copy of this app is almost certainly still running.")
+        print("  It will keep answering on this port and it is serving the OLD")
+        print("  code, so anything you just changed will appear to have no effect.\n")
+        print("  Stop it first:")
+        print(f"    Windows   for /f \"tokens=5\" %a in "
+              f"('netstat -ano ^| findstr :{port}') do taskkill /PID %a /F")
+        print(f"    macOS/Linux   kill $(lsof -ti tcp:{port})\n")
+        print(f"  ...or run this one somewhere else:  python app.py --port {port + 1}\n")
+        raise SystemExit(2) from exc
+
+    url = f"http://{HOST}:{port}"
     print("\n  Creative Automation Pipeline")
     print(f"  running at  {url}")
     print("  press Ctrl-C to stop\n")
-    try:
-        webbrowser.open(url)
-    except Exception:
-        pass
+    if "--no-open" not in sys.argv:
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

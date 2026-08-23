@@ -9,13 +9,13 @@ products:
   - id: "hydra-glow-serum"
     name: "HydraGlow Serum"
     asset: "campaigns/assets/hydra-glow-serum.png"
-    subject: "a heart shaped semi frosted glass jar with fresh spices inside  with a matte white cap"
+    subject: "a balloon shaped semi frosted glass jar with fresh spices inside  with a matte white cap"
     surface: "blue desert stone with soft water droplets and fire under the stone"
   - id: "velvet-matte-lip"
     name: "Velvet Matte Lip"
     asset: "campaigns/assets/velvet-matte-lip.png"
-    subject: "a slim matte pink  lipstick bullet, cap off, angled upright"
-    surface: "polished steel on a water fall during sunset, lens flare 100mm cinematic "
+    subject: "a slim matte neon green  lipstick bullet, cap off, angled upright"
+    surface: "polished steel on a water fall made of fire during sunset, lens flare 100mm cinematic "
 
 markets:
   - locale: "en-US"
