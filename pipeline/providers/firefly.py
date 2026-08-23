@@ -44,6 +44,12 @@ SCOPES = "openid,AdobeID,session,additional_info,read_organizations,firefly_api,
 class FireflyProvider:
     name = "firefly"
     model = "firefly-image-v3"
+    # Firefly Services does expose the capability (Generative Fill / Expand,
+    # and Object Composite), but this adapter only implements text-to-image,
+    # and declaring otherwise would make the resurface path fail deep inside a
+    # request instead of at the point of choice. False here is not a statement
+    # about the vendor; it is a statement about this file.
+    supports_edit = False
 
     def __init__(self, rpm: float = 4.0, timeout_s: float = 120.0, **_ignored):
         self.client_id = os.environ.get("FIREFLY_CLIENT_ID", "")

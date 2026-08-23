@@ -148,14 +148,20 @@ def _on_event(rec: dict) -> None:
         # that is the order the gallery shows them in and doing it here means
         # the page does not have to re-sort on every poll.
         if rec.get("event") == "variant":
+            # stored_uri and share_url were missing from this list, which is
+            # why the cloud chip only ever appeared after a run finished: the
+            # live card and the final card are built by the same function, and
+            # the live one was being handed a record with the fields stripped
+            # out. The gallery is not supposed to change when the run ends.
             STATE["landed"].insert(0, {
                 k: rec.get(k) for k in
                 ("variant", "verdict", "product", "locale", "ratio",
-                 "message", "path", "out_dir", "findings")})
+                 "message", "path", "out_dir", "findings",
+                 "stored_uri", "share_url")})
 
 
 def _do_run(brief_path: str, provider: str, regen: bool = False,
-            storage: str = "local", model: str = "") -> None:
+            storage: str = "", model: str = "") -> None:
     """Executed on a worker thread so the browser can poll for progress."""
     try:
         _emit(f"starting  brief={os.path.basename(brief_path)}  provider={provider}")
@@ -171,6 +177,17 @@ def _do_run(brief_path: str, provider: str, regen: bool = False,
             _emit(f"  {r.verdict.upper():<6} {r.product_id} · {r.locale} · {r.ratio}")
         _emit(f"done      {summary.variants_planned} creatives · "
               f"pass {c.get('pass',0)} / review {c.get('review',0)} / block {c.get('block',0)}")
+        # The one link worth copying: the manifest lists every creative and
+        # its own URL, so handing somebody this is handing them the whole run.
+        st = summary.storage or {}
+        if st.get("objects"):
+            _emit(f"mirrored  {st['objects']} objects to {st['backend']} "
+                  f"({st['bytes'] // 1024} KB)")
+        if st.get("share_url"):
+            _emit(f"share     {st['share_url']}")
+            if not st.get("public"):
+                _emit("          (signed link -- expires; run tools/make_public.py "
+                      "for permanent links)")
         with LOCK:
             STATE["summary"] = json.loads(json.dumps(summary, default=lambda o: o.__dict__))
             STATE["report"] = os.path.relpath(report, ROOT).replace("\\", "/")
@@ -305,7 +322,12 @@ class Handler(SimpleHTTPRequestHandler):
             never to an arbitrary object that happens to share the bucket.
             """
             key = unquote(urlparse(self.path).query.split("key=", 1)[-1])
-            if not key.startswith("runs/") or ".." in key:
+            # Both layouts this pipeline has ever written. `public/` is where
+            # runs go now; `runs/` is the older prefix, kept so a manifest
+            # from an earlier run still resolves. Anything else is refused --
+            # this endpoint must never become a way to sign an arbitrary
+            # object that happens to share the bucket.
+            if not key.startswith(("public/", "runs/")) or ".." in key:
                 return self._json({"error": "only run artifacts can be signed"}, 400)
             try:
                 st = get_storage("s3")

@@ -52,6 +52,11 @@ class Product:
     asset: str | None          # path to a pre-existing hero asset, if any
     subject: str               # what to generate if the asset is missing
     surface: str
+    # Reuse the approved photograph but generate a NEW scene around it.
+    # Off by default: reusing an asset exactly as shot is the safe reading of
+    # "reuse", and putting an approved product somewhere it has never been
+    # photographed is a decision somebody should make on purpose.
+    regenerate_surface: bool = False
 
     def has_asset(self) -> bool:
         """True only if the file is actually there AND is non-empty.
@@ -195,6 +200,7 @@ def load_brief(path: str) -> Brief:
             asset=p.get("asset"),
             subject=str(p.get("subject") or p.get("name")),
             surface=str(p.get("surface") or "a clean neutral surface"),
+            regenerate_surface=bool(p.get("regenerate_surface", False)),
         ))
 
     markets_raw = raw.get("markets") or []

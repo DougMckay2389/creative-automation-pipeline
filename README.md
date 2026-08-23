@@ -176,7 +176,7 @@ one a model produced.
 Run the tests:
 
 ```bash
-python tests/test_pipeline.py        # 23 tests, no pytest needed
+python tests/test_pipeline.py        # 38 tests, no pytest needed
 ```
 
 ### Storage
@@ -187,19 +187,73 @@ never a question of *which* vendor — it is whichever one the client already
 pays for — so the pipeline talks to a `Storage` and the class is chosen by a
 flag, exactly like the image providers.
 
+**It happens by itself.** If the environment has S3 credentials, every run
+mirrors — no flag. A configured backend that sits idle because nobody
+remembered `--storage s3` is a footgun, not a safety feature. `--storage local`
+still opts out, and with no credentials the fallback is local, so a reviewer
+who cloned this two minutes ago still gets a complete run.
+
 ```bash
-python run.py run campaigns/aurora-spring.yaml --storage s3
+python run.py run campaigns/aurora-spring.yaml                  # mirrors if it can
+python run.py run campaigns/aurora-spring.yaml --storage local  # deliberately not
 ```
 
 ```
-s3://creative-automation-doug/runs/<run-id>/
+s3://creative-automation-doug/public/pMiWtaE3oz-H29KJ2apJgIy51hH1dnUE/
     hydra-glow-serum/1x1/hydra-glow-serum_en-US_1x1.jpg
     ...
     manifest.json
 ```
 
 Verified against real AWS: **19 objects, 18 creatives plus the manifest, 0
-errors**, and each result carries its `stored_uri`.
+errors**, and each result carries both its `stored_uri` and a `share_url`.
+
+#### The link you can actually send someone
+
+`s3://bucket/key` is an identifier, not a URL — paste it in a browser and
+nothing happens. There are only two honest ways to fix that, and this repo does
+both, choosing per object:
+
+| Where the object is | Link it gets | Lifetime |
+|---|---|---|
+| `public/<token>/…` | plain `https://…` | permanent |
+| anywhere else | SigV4 query-signed | expires (7 days max) |
+
+The public prefix is protected by **obscurity that is actually strong enough to
+carry the weight**: 24 bytes from `secrets.token_urlsafe` — 32 characters,
+about 190 bits — generated per run, and the bucket policy denies `ListBucket`,
+so the prefix cannot be enumerated. `secrets`, not `random`: `random` is a
+Mersenne Twister seeded from the clock, and observing a few outputs recovers
+its state and therefore every other run's token.
+
+The bucket configuration is deliberately *mixed*, not "public":
+
+```
+BlockPublicAcls        true    no object can be exposed by ACL, ever
+IgnorePublicAcls       true    and any existing public ACL is ignored
+BlockPublicPolicy      false   one policy may grant public read
+RestrictPublicBuckets  false   and it is honoured
+
+policy:  s3:GetObject  on  arn:aws:s3:::<bucket>/public/*   — and nothing else
+```
+
+Only the two policy flags move, so the single policy above is the *only* route
+to public access; there is no second mechanism by which a stray upload can
+expose itself. Applying it is a separate, explicit command that dry-runs by
+default — a pipeline that quietly relaxes Block Public Access the first time it
+wants a link is one you cannot let near a client's account:
+
+```bash
+python tools/make_public.py              # print exactly what would change
+python tools/make_public.py --yes        # apply it
+python tools/make_public.py --revoke --yes
+```
+
+**Say the trade out loud.** A permanent unguessable link is right for work a
+reviewer opens three weeks later, and it is *not revocable* — anyone who has
+ever seen the link keeps access until the objects are deleted. That is why
+masters, logs and anything not meant for an outside reader stay outside the
+prefix and get signed, expiring links instead.
 
 **It mirrors, it does not replace.** The task also requires outputs saved to a
 folder organised by product and aspect ratio, so the local tree is written
@@ -249,6 +303,98 @@ Read`, and roll it once the review is done.
 
 Without a key the zip still runs — the offline provider needs no credentials —
 and `examples/cloudflare-run/` is a committed real run either way.
+
+### Keep the approved product, change the world around it
+
+Reuse used to be all-or-nothing: a product either had a photograph on disk and
+was used exactly as shot, or it had none and was invented whole. That is a
+false choice for the thing this pipeline is *for*. Marketing has one approved
+shot and needs it on volcanic rock this month and marble the next — and
+re-shooting is the cost the whole exercise exists to remove.
+
+```yaml
+products:
+  - id: "hydra-glow-serum"
+    asset: "campaigns/assets/hydra-glow-serum.png"   # approved, never regenerated
+    subject: "a frosted glass serum bottle with a white dropper cap"
+    surface: "volcanic black rock with soft water droplets and warm light"
+    regenerate_surface: true
+```
+
+or press **Generate a new surface** on that product in the app. The approved
+photograph goes to the model as a *reference image*; only the scene changes.
+The bottle is never described to a model and rebuilt from words, which is the
+point — a model does not get to reinvent a bottle legal signed off on.
+`master_origin` records it as `resurfaced`, distinct from `brief` and
+`generated`, so the manifest never blurs the three.
+
+**The first implementation was wrong, and how it was wrong is the interesting
+part.** It was classical: flood-fill inward from the four corners, call
+whatever the fill reaches background, paste the remainder onto a generated
+scene. Sixty lines, no API. It rested on an assumption that sounds reasonable
+and is false — that an approved product asset is a studio shot on a clean
+backdrop. Measured against the real asset in this repo:
+
+```
+corner (0,0)        (213, 204, 189)     warm grey, lit
+corner (1023,1023)  ( 59,  82,  90)     near-black wet stone
+border sample, R    5 .. 217            the full range, not a flat field
+```
+
+It is a finished photograph — wet stones, droplets, a reflection. There is no
+flat region to fill. The fill stopped at 31% of the frame, `getbbox()` on the
+resulting alpha returned `(0, 0, 1024, 1024)` — the whole image — and the
+"cutout" pasted a rectangular slab of the original background over the new
+scene. No tolerance value fixes that, because the premise was never true.
+
+What matters is not that it failed but that it failed **silently**: every
+function returned a plausible value, nothing raised, and the only signal was
+the picture looking wrong. So the replacement is built to make that class of
+mistake loud. A provider either declares `supports_edit` and is asked to do the
+whole job, or the run stops with a message naming what to switch to. It never
+falls back to plain generation — that would hand back an invented product
+under a banner reading *your approved photograph, new surface*, and wrong-and-
+confident is worse than stopped.
+
+| Provider | Reference-image editing |
+|---|---|
+| `cloudflare` | ✅ FLUX.2 (`flux-2-klein-9b` default, `-4b`, `-dev`) |
+| `gemini` | ✅ `gemini-2.5-flash-image` ("nano banana") |
+| `mock` | ✅ offline stand-in, so tests cover the path |
+| `firefly` | ❌ this adapter is text-to-image only |
+
+**Why klein-9b and not dev.** Same reference, same prompt: `flux-2-dev` 37.5s,
+`flux-2-klein-9b` 2.7s. Fourteen times faster, and klein held the product
+identity at least as well. A pipeline whose selling point is turning one hero
+into many deliverables cannot afford 37s per product when 2.7s buys the same
+thing.
+
+Everything here was established by probing the live endpoint, because the
+published schema for these models is a bare `multipart{}` object that says
+nothing:
+
+```
+prompt + input_image_0 + steps + width + height  -> 200
++ seed=12345, twice                              -> byte-identical
++ seed=99999                                     -> a different image
+1024 / 1280 / 1440 / 1600 square                 -> 200
+2048 square                                      -> 500, not 400
+```
+
+That last line is why the size clamp exists in code rather than in the
+degrade-on-400 retry: an oversize request fails with a **500**, which the retry
+path never sees, so the run would die on a number that could have been rounded
+down before it was ever sent.
+
+The good news in the second line: unlike `flux-1-schnell`, the edit path keeps
+seeded reproducibility, so the repo's central claim — same brief, same seed,
+same pixels — does not have to be qualified here.
+
+**A resurface is a paid call, and the report says so.** It counts toward
+`generative_calls` exactly like a from-scratch generation. Counting only
+`generated` under-reported spend by one per resurfaced product, and the entire
+argument this pipeline makes is about how few model calls it takes — which is
+worth nothing if the number is flattering.
 
 ### Regenerating on purpose
 

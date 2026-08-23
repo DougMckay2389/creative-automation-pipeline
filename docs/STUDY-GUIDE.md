@@ -50,9 +50,119 @@ persuading for you.
 | Deliverables from the sample brief | 18 (2 products × 3 markets × 3 ratios) |
 | Generative calls | 1 |
 | Products reused from disk | 1 |
-| Tests | 23, no pytest required |
+| Tests | 38, no pytest required |
 | Rules in the gate | 8 (`SPEC-001..003`, `BRAND-001..003`, `LEGAL-001`, `SYS-00x`) |
 | Firefly default rate limit | 4 requests/minute |
+| Resurface latency (flux-2-klein-9b vs dev) | 2.7s vs 37.5s |
+| Share token | 24 bytes → 32 chars, ~190 bits, from `secrets` |
+| Objects mirrored per run | 19 (18 creatives + manifest), 0 errors
+
+---
+
+## Part 0.5 — The two newest pieces, and the story to tell about them
+
+These are the freshest code in the repo, so they are the most likely to be
+probed. Both are worth telling as *stories about being wrong*, because that is
+what a Forward Deployed Engineer actually does all day.
+
+### Resurfacing — "keep the bottle, change the world"
+
+**In plain words.** Marketing has one approved photo of the product. They need
+it on volcanic rock this month and marble next month. Re-shooting costs money
+and weeks. So: hand the approved photo to the model as a *reference*, and ask
+it to change only the surface. The product is never re-invented from a text
+description — a model does not get to redesign a bottle legal signed off on.
+
+**Technically.** `Product.regenerate_surface` turns on step 0 of
+`AssetResolver.resolve()`. `pipeline/resurface.py` builds the prompt and sizes
+the reference (Workers AI caps reference images at 512×512), and
+`provider.edit(EditRequest(...))` does it in one call. `EditRequest` is a
+separate type from `GenerationRequest` **on purpose** — if the reference were
+just an optional field on the generate path, a provider that cannot edit would
+silently ignore it and return a freshly invented bottle labelled as the
+approved one.
+
+**The story to tell.** Lead with the failure, not the fix:
+
+> "I built the obvious thing first — flood-fill from the corners, cut the
+> product out, paste it on a generated scene. Sixty lines, no API. Then I ran
+> it on the actual asset and got a rectangular slab of the original background
+> pasted over the new scene. I measured why: the corners are (213,204,189) and
+> (59,82,90), the border red channel runs 5 to 217. It's a finished
+> photograph — wet stones, droplets, a reflection — not a studio shot on a
+> clean backdrop. The fill covered 31% and the alpha bbox came back as the
+> entire frame.
+>
+> The premise was wrong, so no tolerance value was going to fix it. But the
+> part that actually bothered me is that it failed *quietly* — every function
+> returned a plausible value, nothing raised, and the only signal was that the
+> picture looked wrong. So the replacement is built so that same class of
+> mistake is loud: a provider either declares it can take a reference image, or
+> the run stops and names what to switch to. It never falls back to plain
+> generation, because handing back an invented product under the words 'your
+> approved photograph' is worse than stopping."
+
+**If they ask "why not a segmentation model?"** Because Workers AI does not
+host one — checked, 64 models, no segmentation task — and because reference
+conditioning makes the cutout *unnecessary* rather than merely better: one call
+replaces generate-plus-cut-plus-composite, and the model relights the product
+to match the new scene, which no paste operation can do.
+
+**If they ask "how do you know flux-2 keeps the seed?"** Because the published
+schema for it is a bare `multipart{}` object that says nothing, so I probed it:
+same seed twice → byte-identical; different seed → different image. Same
+discipline that caught `flux-1-schnell` rejecting `seed` while documenting it.
+
+**Point at:** `pipeline/resurface.py`, the module docstring — the measurements
+are in it.
+
+---
+
+### Automatic mirroring and the shareable URL
+
+**In plain words.** Everything a run makes goes to S3 automatically, and each
+file gets a link you can actually open in a browser. The link contains a long
+random string, and the bucket cannot be listed — so the link works for anyone
+you send it to, and cannot be found by anyone you don't.
+
+**Technically.** Three separate decisions, and it is worth separating them:
+
+1. **Automatic.** `default_storage()` mirrors `default_provider()`: if the
+   environment has credentials, use them. A configured backend that sits idle
+   because nobody passed `--storage s3` is a footgun, not a safety feature.
+2. **Unguessable.** `secrets.token_urlsafe(24)` per run — 32 characters, ~190
+   bits. `secrets`, not `random`: `random` is a Mersenne Twister seeded from
+   the clock, and a few observed outputs recover its state and therefore every
+   other run's token.
+3. **Scoped.** The bucket policy grants `s3:GetObject` on `/public/*` and
+   nothing else. `ListBucket` stays denied, so the prefix cannot be
+   enumerated. The ACL block flags stay ON, so a policy is the *only* route to
+   public access — there is no second mechanism a stray upload could use.
+
+**The line that shows judgement.** Say the trade out loud before they ask:
+
+> "A permanent unguessable link is right for something a reviewer opens three
+> weeks later. It is also *not revocable* — anyone who has ever had the link
+> keeps access until I delete the object. So masters, logs, anything not meant
+> for an outside reader stays outside that prefix and gets a signed, expiring
+> link instead. And flipping the bucket setting is a separate command that
+> dry-runs by default, because a pipeline that quietly relaxes Block Public
+> Access the first time it wants a link is one you cannot let near a client's
+> account."
+
+**If they ask "why not just presigned URLs?"** AWS caps them at seven days with
+long-term IAM credentials. Fine for internal review, wrong for anything handed
+over. Both exist; `share_url()` picks per object so no caller has to know the
+rules.
+
+**If they ask "isn't this security through obscurity?"** Yes, and that is a
+legitimate design when the obscurity is 190 bits and enumeration is denied at
+the policy layer. The thing that makes it illegitimate — a guessable or
+listable namespace — is exactly what the token and the `ListBucket` denial
+remove.
+
+**Point at:** `pipeline/storage/s3.py` (`share_url`, `is_public_key`) and
+`tools/make_public.py`, whose docstring is the whole argument.
 
 ---
 

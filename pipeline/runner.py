@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import time
 from dataclasses import asdict, dataclass, field
 
@@ -24,7 +25,7 @@ import yaml
 
 from .assets import AssetResolver, MasterAsset
 from .brief import Brief, Variant, load_brief, stable_seed
-from .storage import StorageError, get_storage
+from .storage import PUBLIC_ROOT, StorageError, default_storage, get_storage
 from .checks import Finding, Verdict, evaluate, preflight_brief
 from .compose import Composer
 from .providers import get_provider
@@ -39,6 +40,10 @@ class VariantResult:
     path: str
     verdict: str
     stored_uri: str = ""          # where the mirror put it; "" when local-only
+    # An https link a person can actually open. Separate from stored_uri
+    # because `s3://bucket/key` is an identifier and not a URL -- the two look
+    # interchangeable in a manifest and exactly one of them works in a browser.
+    share_url: str = ""
     findings: list[dict] = field(default_factory=list)
     font_family: str = ""
     message: str = ""
@@ -118,10 +123,30 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
                  rpm: float | None = None, quiet: bool = False,
                  cache_dir: str = ".cache/masters", on_event=None,
                  force_generate: bool = False,
-                 storage_name: str = "local",
+                 storage_name: str = "",
                  model: str = "") -> RunSummary:
     t0 = time.monotonic()
     run_id = time.strftime("%Y%m%d-%H%M%S")
+
+    # Empty means "decide for me", which is the default: if the environment
+    # has object-storage credentials, mirror there. Passing "local"
+    # explicitly still opts out. This is deliberately not the same as None --
+    # the caller saying "local" is a decision and must be honoured.
+    if not storage_name:
+        storage_name = default_storage()
+
+    # The unguessable half of every shared link.
+    #
+    # `secrets`, not `random`: this token is the ONLY thing standing between a
+    # public-prefix object and anyone on the internet, and `random` is a
+    # Mersenne Twister seeded from the clock -- observing a few outputs
+    # recovers its state and therefore every other run's token. `token_urlsafe`
+    # reads from the OS CSPRNG. 24 bytes is 32 characters and about 190 bits,
+    # which is not brute-forceable and is still short enough to paste.
+    #
+    # Per RUN rather than per object: one link gives a reviewer the whole run,
+    # and a single token is one thing to revoke by deleting one prefix.
+    share_token = secrets.token_urlsafe(24)
 
     brief: Brief = load_brief(brief_path)
     brand = load_brand(brand_path)
@@ -165,10 +190,19 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
     # written either way and the backend receives a copy. Opened HERE, before
     # any generative call, so a bad key or a missing bucket fails at once
     # rather than after eighteen paid-for renders.
+    #
+    # Everything for this run lands under ONE key prefix, and that prefix
+    # carries the random token. `public/` is the only root the bucket policy
+    # exposes, so putting the run there is what makes the links openable; the
+    # token is what keeps them private. Both halves are needed and neither is
+    # sufficient alone.
     store = None
+    key_prefix = f"{PUBLIC_ROOT}/{share_token}"
     if storage_name and storage_name != "local":
         store = get_storage(storage_name)
-        log("storage-open", backend=store.name, target=store.uri(f"runs/{run_id}/"))
+        log("storage-open", backend=store.name,
+            target=store.uri(key_prefix + "/"),
+            share=store.share_url(f"{key_prefix}/manifest.json"))
     composer = Composer(brand)
 
     # --- 3. one master per product ----------------------------------------
@@ -191,10 +225,19 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
                 else stable_seed(brief.campaign_id, p.id))
         masters[p.id] = resolver.resolve(p, seed)
 
-    gen = sum(1 for m in masters.values() if m.origin == "generated")
+    # "resurfaced" counts as a generative call, because it IS one -- a paid,
+    # rate-limited round trip to the model. Counting only "generated" made the
+    # cost line under-report by one per resurfaced product, and a report that
+    # quietly understates spend is worse than no report: the entire argument
+    # this pipeline makes is about how few model calls it takes, and that
+    # argument is only worth anything if the number is honest.
+    PAID = ("generated", "resurfaced")
+    gen = sum(1 for m in masters.values() if m.origin in PAID)
+    resurfaced = sum(1 for m in masters.values() if m.origin == "resurfaced")
     from_brief = sum(1 for m in masters.values() if m.origin == "brief")
     from_cache = sum(1 for m in masters.values() if m.origin == "cache")
-    log("masters-ready", generated=gen, from_brief=from_brief, from_cache=from_cache)
+    log("masters-ready", generated=gen, resurfaced=resurfaced,
+        from_brief=from_brief, from_cache=from_cache)
 
     # --- 4 + 5. compose and check every variant ---------------------------
     results: list[VariantResult] = []
@@ -215,14 +258,21 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
         counts[res.verdict.value] += 1
         rel = os.path.relpath(path, out_dir).replace(os.sep, "/")
         stored_uri = ""
+        share_url = ""
         if store is not None:
             # An upload failure must not lose the run. The creative already
             # exists on disk and has already been checked; a network blip is
             # something to report, not a reason to discard eighteen files.
             try:
                 with open(path, "rb") as fh:
-                    obj = store.put(f"runs/{run_id}/{rel}", fh.read(), "image/jpeg")
+                    obj = store.put(f"{key_prefix}/{rel}", fh.read(), "image/jpeg")
                 stored_uri = obj.uri
+                # The openable link, recorded per object. `s3://` is an
+                # identifier and nothing more -- paste it in a browser and
+                # nothing happens -- so the thing a person actually needs is
+                # stored alongside it rather than reconstructed later by
+                # somebody who has to know the sharing rules.
+                share_url = store.share_url(obj.key)
                 uploaded.append(obj)
             except StorageError as exc:
                 storage_errors.append(f"{rel}: {exc}")
@@ -231,7 +281,7 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
         results.append(VariantResult(
             variant_id=v.id, product_id=v.product.id, locale=v.market.locale,
             ratio=v.ratio.id, path=os.path.relpath(path, out_dir),
-            stored_uri=stored_uri,
+            stored_uri=stored_uri, share_url=share_url,
             verdict=res.verdict.value,
             findings=[f.as_dict() for f in res.findings],
             font_family=comp.font_family, message=comp.message,
@@ -246,7 +296,7 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
             product=v.product.id, locale=v.market.locale, ratio=v.ratio.id,
             message=v.market.message, out_dir=out_dir,
             path=os.path.relpath(path, out_dir).replace(os.sep, "/"),
-            stored_uri=stored_uri,
+            stored_uri=stored_uri, share_url=share_url,
             findings=[f.as_dict() for f in res.findings])
 
     summary = RunSummary(
@@ -258,7 +308,13 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
         counts=counts, preflight=[f.as_dict() for f in pre],
         results=results, output_dir=out_dir,
         storage=({"backend": store.name,
-                  "target": store.uri(f"runs/{run_id}/"),
+                  "target": store.uri(key_prefix + "/"),
+                  # The token is recorded so the run can be found again, and
+                  # so deleting exactly this prefix is the revocation story.
+                  "share_token": share_token,
+                  "share_url": store.share_url(f"{key_prefix}/manifest.json"),
+                  "public": getattr(store, "is_public_key", lambda k: False)(
+                      f"{key_prefix}/manifest.json"),
                   "objects": len(uploaded),
                   "bytes": sum(o.size for o in uploaded),
                   "errors": storage_errors} if store is not None else None))
@@ -267,10 +323,14 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
     # The manifest goes up too. A bucket full of creatives with no record of
     # which brief, model and seed produced them is an archive nobody can audit,
     # which is the opposite of the point of putting them there.
+    #
+    # Written LAST, deliberately: it is the only object that lists every
+    # share_url, so it is the single link worth handing to somebody, and it
+    # cannot be assembled until every variant has been uploaded.
     if store is not None:
         try:
             with open(os.path.join(out_dir, "manifest.json"), "rb") as fh:
-                store.put(f"runs/{run_id}/manifest.json", fh.read(), "application/json")
+                store.put(f"{key_prefix}/manifest.json", fh.read(), "application/json")
         except StorageError as exc:
             log("storage-error", error=f"manifest: {exc}"[:200])
     log("run-end", **counts, generative_calls=gen,

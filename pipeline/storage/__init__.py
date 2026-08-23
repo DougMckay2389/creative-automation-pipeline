@@ -7,11 +7,17 @@ from __future__ import annotations
 
 import os
 
-from .base import Storage, StorageError, StoredObject
+from .base import PUBLIC_ROOT, Storage, StorageError, StoredObject
 from .local import LocalStorage
 
-__all__ = ["Storage", "StorageError", "StoredObject", "get_storage",
-           "available_storages", "storage_status", "STORAGE_CREDENTIALS"]
+__all__ = ["Storage", "StorageError", "StoredObject", "PUBLIC_ROOT", "get_storage",
+           "available_storages", "storage_status", "default_storage",
+           "STORAGE_CREDENTIALS"]
+
+# Tried in order by `default_storage()`. Local is the floor, never a
+# candidate here -- it always runs, and picking it explicitly would mean
+# "mirror to nowhere" was a choice rather than a fallback.
+STORAGE_PREFERENCE = ("s3",)
 
 _REGISTRY: dict[str, type] = {"local": LocalStorage}
 
@@ -46,6 +52,24 @@ def storage_status() -> list[dict]:
         out.append({"name": name, "requires": needs, "missing": missing,
                     "configured": not missing})
     return out
+
+
+def default_storage() -> str:
+    """Mirror automatically wherever the credentials allow it.
+
+    Same argument as `default_provider()`: a backend that is configured and
+    then not used because nobody passed a flag is a footgun, not a safety
+    feature. If the environment has S3 credentials, the person who put them
+    there wanted their output in S3.
+
+    Falls back to `local`, which needs nothing -- so a reviewer who cloned
+    this two minutes ago still gets a complete run.
+    """
+    have = {s["name"] for s in storage_status() if s["configured"]}
+    for name in STORAGE_PREFERENCE:
+        if name in have:
+            return name
+    return "local"
 
 
 def get_storage(name: str = "local", **kwargs) -> Storage:

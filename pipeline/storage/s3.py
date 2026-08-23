@@ -28,10 +28,36 @@ from urllib.parse import quote
 
 import requests
 
-from .base import Storage, StorageError, StoredObject
+from .base import PUBLIC_ROOT, Storage, StorageError, StoredObject
 
 ALGORITHM = "AWS4-HMAC-SHA256"
 UNSIGNED = "UNSIGNED-PAYLOAD"
+
+# PUBLIC_ROOT is imported, not defined here. What it MEANS, though, is
+# entirely about this backend:
+#
+# This is the hinge of the sharing design, so it is worth being explicit about
+# what it does and does not buy.
+#
+# The bucket keeps Block Public Access ON for ACLs, keeps `s3:ListBucket`
+# denied to the public, and carries a policy granting `s3:GetObject` on
+# `arn:aws:s3:::<bucket>/public/*` and nothing else. Every run then writes
+# under `public/<token>/`, where the token is 32 URL-safe characters of
+# `secrets` randomness -- around 190 bits. Nobody can enumerate the bucket, so
+# the only way to reach a run is to be given its link.
+#
+# What that is: a shareable URL that never expires, which is what a submission
+# reviewed weeks later needs.
+#
+# What it is NOT: revocable. Anyone who has ever seen the link keeps access
+# until the objects are deleted. That is the trade, it was made deliberately,
+# and it is why masters, logs and anything not meant for an outside reader
+# stay outside this prefix and are reachable only by a signed link.
+
+# AWS caps a SigV4 presigned URL at seven days when it is signed with
+# long-term IAM credentials. Anything larger is rejected at signing time, not
+# at use time, so it is clamped here rather than discovered later.
+MAX_PRESIGN_SECONDS = 7 * 24 * 3600
 
 
 def _sha256(b: bytes) -> str:
@@ -155,6 +181,45 @@ class S3Storage(Storage):
         return f"s3://{self.bucket}/{self._full_key(key)}"
 
     # ------------------------------------------------------------------
+    def public_url(self, key: str) -> str:
+        """The plain https URL, with no signature on it.
+
+        Only actually openable for keys under PUBLIC_ROOT, and only once the
+        bucket policy from `tools/make_public.py` has been applied. It is
+        computed here regardless because the URL is a property of the key, not
+        of the policy -- and because a caller that wants to print the link
+        before the policy exists should get the real link, not an empty
+        string.
+        """
+        url, _, _ = self._url_and_path(key)
+        return url
+
+    def is_public_key(self, key: str) -> bool:
+        """Would the bucket policy make this key anonymously readable?
+
+        Tested against the FULL key, prefix included, because S3_PREFIX shifts
+        everything: with `S3_PREFIX=archive`, the key `public/x/y.jpg` really
+        lives at `archive/public/x/y.jpg`, which the policy does not cover.
+        Getting this wrong in the optimistic direction would hand somebody a
+        link that 403s, so it is checked where the object actually is.
+        """
+        return self._full_key(key).startswith(PUBLIC_ROOT + "/")
+
+    def share_url(self, key: str, expires: int = MAX_PRESIGN_SECONDS) -> str:
+        """One call that always returns a link somebody can open.
+
+        Public prefix -> a permanent unsigned URL.
+        Anywhere else -> a signed URL that expires.
+
+        The point of choosing between them HERE is that no caller has to know
+        the sharing rules. The runner asks for a link to an object and gets
+        the strongest one that object is entitled to.
+        """
+        if self.is_public_key(key):
+            return self.public_url(key)
+        return self.presigned_url(key, expires=expires)
+
+    # ------------------------------------------------------------------
     def presigned_url(self, key: str, expires: int = 3600) -> str:
         """A link that actually opens the object, without making it public.
 
@@ -177,6 +242,10 @@ class S3Storage(Storage):
         amzdate = now.strftime("%Y%m%dT%H%M%SZ")
         datestamp = now.strftime("%Y%m%d")
         scope = f"{datestamp}/{self.region}/s3/aws4_request"
+        # Clamp rather than let AWS reject the signature. Asking for eight
+        # days does not produce a link that lasts eight days; it produces a
+        # 400 at signing time, and the caller wanted a link.
+        expires = max(1, min(int(expires), MAX_PRESIGN_SECONDS))
 
         params = {
             "X-Amz-Algorithm": ALGORITHM,

@@ -24,6 +24,16 @@ class StorageError(RuntimeError):
     """Raised when a backend cannot store or fetch an object."""
 
 
+# The one key prefix a backend is allowed to expose to anonymous readers.
+#
+# Defined HERE rather than in s3.py, even though S3 is the only backend that
+# does anything with it, because the runner needs it to build keys and the S3
+# adapter is imported behind a try/except -- a backend whose dependency is
+# missing must not be able to take the whole run down. base.py imports nothing
+# outside the standard library, so it is always safe to reach for.
+PUBLIC_ROOT = "public"
+
+
 @dataclass(frozen=True)
 class StoredObject:
     """Where something ended up, and how to find it again."""
@@ -54,3 +64,15 @@ class Storage:
 
     def uri(self, key: str) -> str:
         raise NotImplementedError
+
+    def share_url(self, key: str, expires: int = 3600) -> str:
+        """A link a person can open, or "" if this backend has no such thing.
+
+        Defined on the base class with a working default so the runner can
+        call it on any backend without a `hasattr` dance. The local filesystem
+        genuinely has no shareable link -- a path on one machine is not a URL
+        anywhere else -- and the honest answer to that is an empty string,
+        which the manifest and the UI both read as "no link", rather than a
+        `file://` URI that looks like one and works for nobody.
+        """
+        return ""

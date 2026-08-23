@@ -16,7 +16,8 @@ import time
 
 import requests
 
-from .base import GenerationRequest, GenerationResult, ProviderError, RateLimiter
+from .base import (EditRequest, GenerationRequest, GenerationResult,
+                   ProviderError, RateLimiter)
 
 API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_MODEL = "gemini-2.5-flash-image"
@@ -24,6 +25,8 @@ DEFAULT_MODEL = "gemini-2.5-flash-image"
 
 class GeminiProvider:
     name = "gemini"
+    # Image editing is this family's headline capability, not a bolt-on.
+    supports_edit = True
 
     def __init__(self, rpm: float = 10.0, timeout_s: float = 120.0,
                  model: str | None = None, **_ignored):
@@ -62,6 +65,53 @@ class GeminiProvider:
             model=self.model,
             prompt=req.prompt,
             seed=req.seed,
+            latency_s=time.monotonic() - t0,
+            cost_units=None,
+        )
+
+    def edit(self, req: EditRequest) -> GenerationResult:
+        """Keep the subject of a reference image, change the scene around it.
+
+        This is what the "nano banana" family is actually FOR -- image editing
+        is its headline capability, not a bolt-on. Mechanically it is the same
+        `generateContent` call as `generate()`, with one extra part in the
+        request: the reference image as `inline_data`.
+
+        Order matters. The image part goes FIRST and the instruction second,
+        which is Google's documented ordering for edit prompts and is not
+        cosmetic -- with the text first the model tends to read the image as a
+        style example and generate something new in that style, which is
+        exactly the failure this feature exists to prevent.
+        """
+        t0 = time.monotonic()
+        self.limiter.acquire()
+
+        url = f"{API_BASE}/models/{self.model}:generateContent"
+        body = {
+            "contents": [{"parts": [
+                {"inline_data": {
+                    "mime_type": "image/png",
+                    "data": base64.b64encode(req.reference_png).decode("ascii"),
+                }},
+                {"text": req.prompt},
+            ]}],
+            "generationConfig": {"responseModalities": ["IMAGE"]},
+        }
+        r = requests.post(url, params={"key": self.api_key}, json=body,
+                          timeout=self.timeout_s)
+        if r.status_code != 200:
+            raise ProviderError(f"gemini edit failed: {r.status_code} {r.text[:300]}")
+
+        return GenerationResult(
+            png_bytes=self._extract_image(r.json()),
+            provider=self.name,
+            model=self.model,
+            prompt=req.prompt,
+            # Gemini takes no seed, so this image is NOT reproducible. Recorded
+            # as 0 for the same reason the Cloudflare adapter does it: the
+            # manifest should say "not reproducible" rather than print a seed
+            # that never left the process.
+            seed=0,
             latency_s=time.monotonic() - t0,
             cost_units=None,
         )

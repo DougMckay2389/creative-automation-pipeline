@@ -93,10 +93,19 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .pstate-b{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:7px;
   padding:4px 10px;font:600 11px var(--sans);cursor:pointer;white-space:nowrap}
 .pstate-b:hover{border-color:var(--accent);color:var(--accent)}
-/* When a product is reused, the prompt fields are inert. Say it in the styling
-   as well as in the words -- nobody reads the words. */
+.fbadge.resurf{background:#e6ecf4;color:#3c5578}
+/* When a product is reused AS SHOT, the prompt fields are inert. Say it in the
+   styling as well as in the words -- nobody reads the words. */
 .fcard.reusing textarea[data-p$=".subject"],
 .fcard.reusing input[data-p$=".surface"]{opacity:.45;background:#f4f2ed}
+/* Resurfacing is the third state, and it is the one the styling has to get
+   right: the photo is kept, so Subject and Surface are BOTH live again --
+   Surface describes the new scene, Subject tells the model which object it is
+   forbidden to redesign. Greying either one here would be a lie about which
+   field is doing the work. */
+.fcard.resurfacing input[data-p$=".surface"]{border-color:#3c5578;background:#fbfcfe}
+.pstate-b.on{border-color:#3c5578;color:#3c5578;background:#eef2f8}
+.pstate-b[disabled]{opacity:.4;cursor:not-allowed}
 
 textarea{width:100%;height:340px;border:0;padding:14px 15px;resize:vertical;
  font:12.5px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
@@ -171,6 +180,10 @@ a.rep{font-size:13px;color:var(--accent)}
       color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .loc1.s3{background:#fff3e0;color:#b26a00}
 .loc1.off{opacity:.6}
+/* The chip is an <a> when there is a link to follow. It has to stop looking
+   like the inert chips beside it, or nobody discovers it is clickable. */
+a.loc1.link{text-decoration:none;cursor:pointer;font-weight:700}
+a.loc1.link:hover{background:#ffe6bf;color:#8a5000}
 
 /* ---- the detail view ---- */
 #assetmodal{position:fixed;inset:0;z-index:60;background:rgba(18,20,15,.55);
@@ -191,6 +204,11 @@ a.rep{font-size:13px;color:var(--accent)}
  text-transform:uppercase;color:var(--muted)}
 .amrow code{display:block;font:11.5px var(--mono);background:#f7f5f1;border:1px solid var(--line);
  border-radius:7px;padding:7px 9px;word-break:break-all;color:var(--ink2)}
+/* The shareable URL, shown in full rather than behind a button. It is long and
+   token-heavy on purpose, and somebody about to hand it to a reviewer should
+   be able to see exactly what they are handing over. */
+.amrow code.amurl{margin-top:6px;font-size:10.5px;background:#fffaf2;border-color:#f0dcc0;
+ color:#8a5000}
 .amact{display:flex;gap:7px;margin-top:6px;flex-wrap:wrap}
 .amact button,.amact a{font:600 11.5px var(--sans);padding:5px 11px;border-radius:7px;
  border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;text-decoration:none}
@@ -650,18 +668,50 @@ async function paintProductStates(){
         exists = !!r.exists;
       } catch { exists = false; }
     }
-    card.classList.toggle('reusing', exists);
-    host.innerHTML = exists
-      ? `<span class="fbadge reuse">reused</span>
-         <span class="pstate-t">that file exists, so it is used as-is —
-           <b>subject and surface below are ignored</b> for this product.</span>
-         <button class="pstate-b" data-clear="${i}">Generate from the prompt instead</button>`
-      : path
-        ? `<span class="fbadge gen">will generate</span>
-           <span class="pstate-t">nothing at that path yet, so the prompt below is used.</span>`
-        : `<span class="fbadge gen">will generate</span>
-           <span class="pstate-t">no asset path, so the prompt below is used.</span>`;
+    // Three states, not two. The middle one is the whole point: an approved
+    // photograph does not have to be an all-or-nothing choice between "use it
+    // exactly as shot" and "throw it away and invent a new product".
+    const resurf = !!p.regenerate_surface && exists;
+    card.classList.toggle('reusing', exists && !resurf);
+    card.classList.toggle('resurfacing', resurf);
+
+    // Resurfacing needs a provider that accepts a reference image. Say so on
+    // the control itself rather than letting someone tick it and discover at
+    // run time that their provider cannot do it.
+    const canEdit = EDIT_CAPABLE.has(currentProvider());
+    const why = canEdit ? ''
+      : ` disabled title="the ${currentProvider()} provider cannot take a reference image`
+        + ` — switch to cloudflare or gemini"`;
+
+    host.innerHTML = !exists
+      ? (path
+          ? `<span class="fbadge gen">will generate</span>
+             <span class="pstate-t">nothing at that path yet, so the prompt below is used.</span>`
+          : `<span class="fbadge gen">will generate</span>
+             <span class="pstate-t">no asset path, so the prompt below is used.</span>`)
+      : resurf
+        ? `<span class="fbadge resurf">new surface</span>
+           <span class="pstate-t">the approved photo is kept and
+             <b>only the surface is regenerated</b> — Surface describes the new
+             scene, Subject names what must not change.</span>
+           <button class="pstate-b on" data-resurf="${i}">Reuse as shot</button>
+           <button class="pstate-b" data-clear="${i}">Generate from the prompt instead</button>`
+        : `<span class="fbadge reuse">reused</span>
+           <span class="pstate-t">that file exists, so it is used as-is —
+             <b>subject and surface below are ignored</b> for this product.</span>
+           <button class="pstate-b" data-resurf="${i}"${why}>Generate a new surface</button>
+           <button class="pstate-b" data-clear="${i}">Generate from the prompt instead</button>`;
   }));
+}
+
+/* Which providers can take a reference image, and which one is selected.
+ *
+ * Filled from /api/credentials, which reports `supports_edit` per adapter --
+ * read off the class, so it is known before anybody has supplied a key. */
+const EDIT_CAPABLE = new Set();
+function currentProvider(){
+  const el = document.getElementById('provider');
+  return (el && el.value) || 'mock';
 }
 
 /* Write one edited control back into BRIEF by its dotted path. */
@@ -718,7 +768,23 @@ $('#formpane').addEventListener('click', (e) => {
   if (clear) {
     // Emptying the asset path IS the mechanism -- no hidden per-product flag,
     // and the change is visible in the YAML tab like every other edit.
-    BRIEF.products[+clear.dataset.clear].asset = '';
+    const p = BRIEF.products[+clear.dataset.clear];
+    p.asset = '';
+    // Drop the flag with the asset. Leaving it set would put the brief in a
+    // state the resolver reads as "resurface a photograph that is not there",
+    // which is only reachable through the UI and would be baffling to debug.
+    delete p.regenerate_surface;
+    return renderForm();
+  }
+  const resurf = e.target.closest('[data-resurf]');
+  if (resurf) {
+    const p = BRIEF.products[+resurf.dataset.resurf];
+    // Toggle, and store the flag ONLY when it is on -- an absent key and
+    // `false` mean the same thing to the loader, and emitting `false` into
+    // the YAML for every product that never used the feature is noise in a
+    // file somebody has to read.
+    if (p.regenerate_surface) delete p.regenerate_surface;
+    else p.regenerate_surface = true;
     return renderForm();
   }
   const rm = e.target.closest('[data-rm]'), add = e.target.closest('[data-add]');
@@ -759,6 +825,11 @@ function toYaml(b){
     if (p.asset)   L.push(`    asset: ${q(p.asset)}`);
     if (p.subject) L.push(`    subject: ${q(p.subject)}`);
     if (p.surface) L.push(`    surface: ${q(p.surface)}`);
+    // Booleans are emitted BARE, not quoted. `q()` wraps everything in
+    // quotes, and "true" as a YAML string is truthy-looking but is not a
+    // boolean -- the loader coerces with bool(), and bool("false") is True,
+    // so a quoted flag would be impossible to turn off.
+    if (p.regenerate_surface) L.push('    regenerate_surface: true');
   }
   L.push('');
   L.push('markets:');
@@ -873,12 +944,17 @@ function cardHtml(r, base){
     `<div><code>${esc(x.rule)}</code> → ${esc(x.routes_to)}</div>`).join('');
   const rel = String(r.path).replace(/\\/g,'/');
   const s3  = r.stored_uri || '';
+  // The openable link, kept separate from the s3:// identifier. They are not
+  // interchangeable: one is an address the browser understands and the other
+  // is a name that means nothing outside an AWS client.
+  const url = r.share_url || '';
   // Both locations live on the card in the dataset, so opening the detail view
   // never has to reconstruct a path -- it shows what the run actually recorded.
   return `<div class="card" data-v="${esc(r.variant || r.variant_id || '')}"
        data-src="${base}${rel}" data-rel="${esc(rel)}"
        data-dir="${esc(String(r.out_dir || '').replace(/\\/g,'/'))}"
-       data-s3="${esc(s3)}" title="click to see where this file lives">
+       data-s3="${esc(s3)}" data-url="${esc(url)}"
+       title="click to see where this file lives">
     <div class="ph"><img loading="lazy" src="${base}${rel}" alt=""></div>
     <div class="m"><span class="badge ${cls}">${esc(r.verdict)}</span>
     <div class="t">${esc(r.ratio)}</div>
@@ -887,8 +963,15 @@ function cardHtml(r, base){
       r.master_origin ? 'master: ' + esc(r.master_origin) : ''}</div>
     <div class="where">
       <span class="loc1" title="${esc(rel)}">📁 ${esc(rel.split('/').pop())}</span>
-      ${s3 ? `<span class="loc1 s3" title="${esc(s3)}">☁ s3</span>`
-           : `<span class="loc1 off" title="this run was local only">☁ not mirrored</span>`}
+      ${url
+          // A real anchor, so it opens in a tab and can be right-click-copied
+          // like any other link. stopPropagation because the card itself opens
+          // the detail modal, and clicking a link should follow the link.
+          ? `<a class="loc1 s3 link" href="${esc(url)}" target="_blank" rel="noopener"
+                onclick="event.stopPropagation()"
+                title="open the live S3 copy&#10;${esc(url)}">☁ open ↗</a>`
+          : s3 ? `<span class="loc1 s3" title="${esc(s3)}">☁ s3</span>`
+               : `<span class="loc1 off" title="this run was local only">☁ not mirrored</span>`}
     </div>
     ${f}</div></div>`;
 }
@@ -1032,15 +1115,27 @@ $('#run').addEventListener('click', doRun);
  * because they answer different questions: the path is what you open, the URI
  * is what you hand to someone else.
  *
- * The S3 link is signed on demand rather than stored. `s3://bucket/key` is an
- * identifier, not a URL, and the alternative -- making the bucket public so
- * the link works -- is how unreleased campaign art ends up indexed months
- * early. A signed link opens the object for fifteen minutes and expires by
- * itself; nothing about the bucket changes.
+ * `s3://bucket/key` is an identifier, not a URL -- paste it in a browser and
+ * nothing happens -- so the run records a real https link alongside it, and
+ * which KIND of link depends on where the object sits:
+ *
+ *   under public/<token>/  a permanent unsigned URL. The bucket policy allows
+ *                          anonymous GET on that prefix and nothing else, and
+ *                          the bucket cannot be listed, so the 32-character
+ *                          token is what keeps it private. Right for something
+ *                          handed to a reviewer who opens it next month.
+ *
+ *   anywhere else          a signed URL that expires by itself. Nothing about
+ *                          the bucket changes to produce it.
+ *
+ * Both are shown truthfully rather than described as one thing, because the
+ * difference is exactly what somebody needs to know before they share it.
  * ------------------------------------------------------------------ */
 function openAsset(card){
   const m = $('#assetmodal');
   const s3 = card.dataset.s3 || '';
+  const url = card.dataset.url || '';
+  const isPublic = /\/public\//.test(s3);
   const dir = card.dataset.dir || '';
   const rel = card.dataset.rel || '';
   const localPath = (dir ? dir.replace(/\/$/,'') + '/' : '') + rel;
@@ -1062,17 +1157,28 @@ function openAsset(card){
           </div>
           <div class="amrow">
             <h4>Object storage</h4>
-            ${s3 ? `<code>${esc(s3)}</code>
-              <div class="amact">
-                <button data-copy="${esc(s3)}">Copy URI</button>
-                <button class="go" data-sign="${esc(s3)}">Get live link</button>
-              </div>
-              <div class="amnote">The bucket is private. A signed link opens this
-                object for 15 minutes and then stops working — nothing is made
-                public to produce it.</div>`
-            : `<code>not mirrored — this run was local only</code>
-               <div class="amnote">Run with <b>--storage s3</b>, or pick S3 in the app,
-                 to mirror every artifact and its manifest.</div>`}
+            ${!s3
+              ? `<code>not mirrored — this run was local only</code>
+                 <div class="amnote">Mirroring happens automatically when S3
+                   credentials are present. This run had none, or was started
+                   with <b>--storage local</b>.</div>`
+              : `<code>${esc(s3)}</code>
+                 <div class="amact">
+                   <button data-copy="${esc(s3)}">Copy URI</button>
+                   ${url ? `<a class="go" href="${esc(url)}" target="_blank"
+                               rel="noopener">Open ↗</a>
+                           <button data-copy="${esc(url)}">Copy link</button>`
+                         : `<button class="go" data-sign="${esc(s3)}">Get live link</button>`}
+                 </div>
+                 ${url ? `<code class="amurl">${esc(url)}</code>` : ''}
+                 <div class="amnote">${isPublic
+                   ? `Anyone with this link can open it, and it does not expire.
+                      The bucket still cannot be listed, so the link cannot be
+                      guessed — the 32-character token in the path is the only
+                      way in. To revoke it, delete this run's prefix.`
+                   : `Outside the shared prefix, so the link is signed and
+                      expires by itself. Nothing is made public to produce it.`}
+                 </div>`}
           </div>
           <div class="amrow" id="amsigned"></div>
         </div>
@@ -1149,6 +1255,11 @@ function paintStale(stale){
 
 function paintProviders(r){
   PROVIDERS = r.providers || [];
+  // Which adapters can take a reference image. Rebuilt on every refresh so
+  // saving a key immediately enables the "new surface" control instead of
+  // leaving it dead until a page reload.
+  EDIT_CAPABLE.clear();
+  PROVIDERS.filter(p => p.supports_edit).forEach(p => EDIT_CAPABLE.add(p.name));
   const sel = $('#provider'), keep = sel.value;
 
   // Two kinds of entry, and they do different things.
@@ -1211,7 +1322,14 @@ async function paintModels(){
    holding a provider that cannot run. */
 $('#provider').addEventListener('change', (e) => {
   const v = e.target.value;
-  if (!v.startsWith('__add:')) { e.target.dataset.last = v; paintModels(); return; }
+  if (!v.startsWith('__add:')) {
+    e.target.dataset.last = v;
+    paintModels();
+    // Whether "Generate a new surface" is available depends on the provider,
+    // so the per-product controls have to be repainted when it changes.
+    paintProductStates();
+    return;
+  }
   const name = v.slice(6);
   e.target.value = e.target.dataset.last || 'mock';
   const panel = $('#keypanel');

@@ -22,7 +22,7 @@ import time
 
 from PIL import Image, ImageDraw, ImageFilter
 
-from .base import GenerationRequest, GenerationResult
+from .base import EditRequest, GenerationRequest, GenerationResult
 
 
 def _palette_from_prompt(prompt: str) -> list[tuple[int, int, int]]:
@@ -44,6 +44,10 @@ def _palette_from_prompt(prompt: str) -> list[tuple[int, int, int]]:
 class MockProvider:
     name = "mock"
     model = "offline-deterministic-v1"
+    # The offline provider implements edit() too, so the resurface path is
+    # covered by tests that never touch the network. A mock that only
+    # implements the easy half of the interface lets the hard half rot.
+    supports_edit = True
 
     def __init__(self, **_ignored):
         pass
@@ -112,3 +116,48 @@ class MockProvider:
             latency_s=time.monotonic() - t0,
             cost_units=0.0,          # offline: free, and we say so rather than lying with None
         )
+
+    def edit(self, req: EditRequest) -> GenerationResult:
+        """Offline stand-in for reference-image editing.
+
+        It cannot relight anything, but it models the ONE property the real
+        feature is judged on and that a grey rectangle could not: **pixels from
+        the reference survive into the output.** The reference is pasted at a
+        known scale into the centre of a prompt-derived scene, so a test can
+        read the centre of the result and assert it matches the reference
+        rather than merely asserting "an image came back".
+
+        That is the difference between a mock that tests the plumbing and one
+        that tests the contract.
+        """
+        t0 = time.monotonic()
+        w, h = req.size
+
+        scene_png = self.generate(GenerationRequest(
+            prompt=req.prompt, seed=req.seed, size=(w, h))).png_bytes
+        scene = Image.open(io.BytesIO(scene_png)).convert("RGB")
+
+        with Image.open(io.BytesIO(req.reference_png)) as ref_src:
+            ref = ref_src.convert("RGB")
+            target_h = max(1, int(h * self.EDIT_FILL))
+            scale = target_h / ref.height
+            ref = ref.resize((max(1, int(ref.width * scale)), target_h), Image.LANCZOS)
+
+        scene.paste(ref, ((w - ref.width) // 2, (h - ref.height) // 2))
+
+        buf = io.BytesIO()
+        scene.save(buf, format="PNG", optimize=True)
+        return GenerationResult(
+            png_bytes=buf.getvalue(),
+            provider=self.name,
+            model=self.model,
+            prompt=req.prompt,
+            seed=req.seed,
+            latency_s=time.monotonic() - t0,
+            cost_units=0.0,
+        )
+
+    # Fraction of the frame height the pasted reference occupies. Exposed as a
+    # class attribute so a test can compute exactly where it landed instead of
+    # hard-coding a number that drifts out of sync with this file.
+    EDIT_FILL = 0.6

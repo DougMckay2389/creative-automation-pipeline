@@ -32,7 +32,9 @@ import os
 from dataclasses import dataclass
 
 from .brief import Product
-from .providers import GenerationRequest, Provider
+from .resurface import (build_resurface_prompt, prepare_reference,
+                        reference_fingerprint)
+from .providers import EditRequest, GenerationRequest, Provider, ProviderError
 
 
 @dataclass
@@ -40,7 +42,11 @@ class MasterAsset:
     """The one high-resolution image every variant of a product is cut from."""
     product_id: str
     path: str
-    origin: str              # "brief" | "cache" | "generated"
+    # "brief"      -- the creative team's own file, used exactly as shot
+    # "cache"      -- something an earlier run already produced
+    # "generated"  -- invented from the prompt, no source photograph
+    # "resurfaced" -- the approved photograph, new scene around it
+    origin: str
     provider: str = ""
     model: str = ""
     prompt: str = ""
@@ -107,6 +113,54 @@ class AssetResolver:
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:20]
 
     def resolve(self, product: Product, seed: int) -> MasterAsset:
+        # --- 0. approved product, generated scene ---------------------------
+        #
+        # The middle option between "use the photo exactly as shot" and
+        # "regenerate the whole thing". Marketing has one approved shot and
+        # needs it on volcanic rock this month and marble the next; the
+        # product is never regenerated -- a model does not get to reinvent a
+        # bottle legal signed off -- only the scene around it is.
+        if product.has_asset() and product.regenerate_surface and not self.force:
+            if not getattr(self.provider, "supports_edit", False):
+                # Refuse at the point of choice, not three calls deep. The
+                # alternative -- quietly falling back to plain generation --
+                # would hand back an invented product under a banner that says
+                # "your approved photograph, new surface". Wrong and confident
+                # is worse than stopped.
+                raise ProviderError(
+                    f"product '{product.id}' asks to regenerate its surface, which needs a "
+                    f"provider that accepts a reference image. The '{self.provider.name}' "
+                    f"adapter does not. Use --provider cloudflare (FLUX.2) or gemini, or "
+                    f"turn off 'generate a new surface' for this product.")
+
+            reference = prepare_reference(product.asset)
+            prompt = build_resurface_prompt(product.subject, product.surface)
+            # The reference is part of the cache key BY CONTENT. Keying on the
+            # prompt alone would serve an image built from the previous
+            # approved photograph after marketing replaced the file.
+            key = self._cache_key(
+                "RESURFACE::" + prompt + "::" + reference_fingerprint(reference), seed)
+            cached = os.path.join(self.cache_dir, f"{product.id}-scene-{key}.png")
+            if os.path.isfile(cached) and os.path.getsize(cached) > 0:
+                self.log("cache-hit", product=product.id, source=cached)
+                return MasterAsset(product.id, cached, origin="cache",
+                                   prompt=prompt, seed=seed)
+
+            self.log("resurface", product=product.id, prompt=prompt, seed=seed,
+                     source=product.asset)
+            res = self.provider.edit(EditRequest(
+                prompt=prompt, reference_png=reference,
+                seed=seed, size=self.master_size))
+
+            tmp = cached + ".part"
+            with open(tmp, "wb") as fh:
+                fh.write(res.png_bytes)
+            os.replace(tmp, cached)
+            return MasterAsset(
+                product_id=product.id, path=cached, origin="resurfaced",
+                provider=res.provider, model=res.model, prompt=prompt,
+                seed=res.seed, latency_s=res.latency_s)
+
         # --- 1. the creative team's own asset, if it is really there --------
         # Skipped under force: an asset on disk short-circuits everything, so
         # while it is there the product's `subject` and `surface` are never

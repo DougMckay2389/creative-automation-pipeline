@@ -29,8 +29,10 @@ from pipeline.checks import (Severity, Verdict, evaluate,            # noqa: E40
                              redmean_distance, rule_catalogue)
 from pipeline.compose import crop_to_ratio                           # noqa: E402
 from pipeline.localize import font_for                               # noqa: E402
-from pipeline.providers import get_provider                          # noqa: E402
+from pipeline.providers import get_provider, ProviderError           # noqa: E402
 from pipeline.providers.base import GenerationRequest                # noqa: E402
+from pipeline.resurface import (build_resurface_prompt,              # noqa: E402
+                                prepare_reference, reference_fingerprint)
 
 BRIEF = "campaigns/aurora-spring.yaml"
 BRAND = "brandkit/brand.yaml"
@@ -315,6 +317,193 @@ def test_cache_prevents_a_second_generation():
     assert a.origin == "generated" and bres.origin == "cache"
 
 
+# --- resurfacing: keep the approved product, change the scene ---------------
+
+def _brief_with_resurfacing(tmp, colour=(200, 120, 90)):
+    """A brief whose first product has a real asset AND asks to be resurfaced."""
+    import yaml
+    raw = yaml.safe_load(open(BRIEF, encoding="utf-8"))
+    shot = os.path.join(tmp, "approved.png")
+    Image.new("RGB", (300, 300), colour).save(shot)
+    raw["products"][0]["asset"] = shot
+    raw["products"][0]["regenerate_surface"] = True
+    path = os.path.join(tmp, "brief.yaml")
+    with open(path, "w", encoding="utf-8") as fh:
+        yaml.safe_dump(raw, fh, allow_unicode=True)
+    return load_brief(path), shot
+
+
+def test_resurfacing_edits_the_approved_asset_instead_of_generating():
+    """The whole point of the feature, pinned as three separate claims.
+
+    It is not enough that an image comes back. A plain text-to-image call
+    would also return an image, and it would look fine, and it would be a
+    different bottle from the one legal approved. So this asserts:
+
+      * `edit()` was called and `generate()` was NOT -- the product was never
+        described to a model and re-invented from words;
+      * the reference handed to the provider really is the approved file;
+      * pixels from the approved file survive into the master.
+    """
+    seen = {"edit": 0, "generate": 0, "reference": None}
+    inner = get_provider("mock")
+
+    class Watcher:
+        name, model = inner.name, inner.model
+        supports_edit = True
+
+        def generate(self, req):
+            seen["generate"] += 1
+            return inner.generate(req)
+
+        def edit(self, req):
+            seen["edit"] += 1
+            seen["reference"] = req.reference_png
+            return inner.edit(req)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        brief, shot = _brief_with_resurfacing(tmp, colour=(200, 120, 90))
+        r = AssetResolver(Watcher(), cache_dir=os.path.join(tmp, "c"),
+                          master_size=(256, 256))
+        m = r.resolve(brief.products[0], seed=5)
+
+        assert m.origin == "resurfaced"
+        assert seen["edit"] == 1, "the edit path must be the one that runs"
+        assert seen["generate"] == 0, \
+            "the product must never be re-invented from a text prompt"
+        assert seen["reference"] == prepare_reference(shot), \
+            "the reference sent to the provider must be the approved asset"
+
+        # The mock pastes the reference into the middle of the scene, so the
+        # centre pixel has to be the approved colour. This is the claim a
+        # reviewer actually cares about: the master contains the real product.
+        with Image.open(m.path) as out:
+            assert out.convert("RGB").getpixel((128, 128)) == (200, 120, 90), \
+                "pixels from the approved asset must survive into the master"
+
+
+def test_resurfacing_refuses_a_provider_that_cannot_edit():
+    """Refuse loudly rather than quietly generating something else.
+
+    The dangerous failure here is not an exception -- it is a fallback. A
+    resolver that shrugged and called generate() would return a plausible
+    image of a product nobody approved, labelled as the approved one. So the
+    absence of a generate() call is as much the point as the raise.
+    """
+    calls = []
+
+    class CannotEdit:
+        name, model = "cannot-edit", "x"
+        supports_edit = False
+
+        def generate(self, req):
+            calls.append(req)
+            return get_provider("mock").generate(req)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        brief, _ = _brief_with_resurfacing(tmp)
+        r = AssetResolver(CannotEdit(), cache_dir=os.path.join(tmp, "c"))
+        try:
+            r.resolve(brief.products[0], seed=5)
+        except ProviderError as exc:
+            assert "reference image" in str(exc)
+            assert "cannot-edit" in str(exc), "the message must name the provider"
+        else:
+            raise AssertionError("a provider that cannot edit must not silently generate")
+    assert not calls, "it must not fall back to plain generation"
+
+
+def test_resurfacing_cache_follows_the_reference_CONTENT():
+    """Replace the approved photograph, keep the path -- must miss the cache.
+
+    This is the bug the content hash exists to prevent, and it is invisible
+    until it bites: key the cache on the prompt (or the file path) alone, and
+    the day marketing drops a new shot in over the old one, every run keeps
+    serving an image built from the photograph they just replaced. Nothing
+    errors. The pictures just quietly stay wrong.
+    """
+    edits = []
+    inner = get_provider("mock")
+
+    class Watcher:
+        name, model = inner.name, inner.model
+        supports_edit = True
+
+        def generate(self, req):
+            return inner.generate(req)
+
+        def edit(self, req):
+            edits.append(req.reference_png)
+            return inner.edit(req)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        brief, shot = _brief_with_resurfacing(tmp, colour=(200, 120, 90))
+        cache = os.path.join(tmp, "c")
+        r = AssetResolver(Watcher(), cache_dir=cache, master_size=(256, 256))
+
+        first = r.resolve(brief.products[0], seed=5)
+        assert first.origin == "resurfaced"
+
+        # identical inputs -> cache hit, no second call
+        assert r.resolve(brief.products[0], seed=5).origin == "cache"
+        assert len(edits) == 1
+
+        # SAME path, DIFFERENT pixels -> must miss and re-edit
+        Image.new("RGB", (300, 300), (20, 90, 160)).save(shot)
+        again = r.resolve(brief.products[0], seed=5)
+        assert again.origin == "resurfaced", \
+            "a replaced approved photograph must invalidate the cache"
+        assert len(edits) == 2
+        assert edits[0] != edits[1]
+        assert reference_fingerprint(edits[0]) != reference_fingerprint(edits[1])
+
+
+def test_reference_is_sized_for_the_providers_slot():
+    """Workers AI caps reference images at 512x512. Downscale, never upscale."""
+    with tempfile.TemporaryDirectory() as tmp:
+        big = os.path.join(tmp, "big.png")
+        Image.new("RGB", (2048, 1024), (10, 20, 30)).save(big)
+        with Image.open(io_bytes(prepare_reference(big))) as im:
+            assert max(im.size) <= 512
+            # aspect ratio preserved, not squashed into a square
+            assert abs((im.width / im.height) - 2.0) < 0.02
+
+        small = os.path.join(tmp, "small.png")
+        Image.new("RGB", (120, 90), (10, 20, 30)).save(small)
+        with Image.open(io_bytes(prepare_reference(small))) as im:
+            assert im.size == (120, 90), "a small asset must not be upscaled into softness"
+
+
+def test_resurface_prompt_states_the_constraint():
+    """The prompt is the only thing stopping the model redesigning the product."""
+    p = build_resurface_prompt("a frosted glass serum bottle", "polished white marble")
+    assert "a frosted glass serum bottle" in p
+    assert "polished white marble" in p
+    low = p.lower()
+    assert "keep it exactly as it is" in low
+    assert "do not redesign" in low
+
+
+def test_flux2_size_is_clamped_before_it_is_sent():
+    """2048 returns a 500, not a 400, so the degrade-on-400 path never sees it.
+
+    Clamping has to happen before the request or an oversize master size kills
+    the whole run on a number that could have been rounded down.
+    """
+    from pipeline.providers.cloudflare import FLUX2_MAX_EDGE, _flux2_size
+
+    assert _flux2_size((1600, 1600)) == (1600, 1600)
+    w, h = _flux2_size((4096, 2048))
+    assert max(w, h) <= FLUX2_MAX_EDGE
+    assert abs((w / h) - 2.0) < 0.05, "clamping must not distort the aspect ratio"
+    assert w % 32 == 0 and h % 32 == 0, "sizes must land on a latent tile boundary"
+
+
+def io_bytes(b):
+    import io
+    return io.BytesIO(b)
+
+
 # --- providers -------------------------------------------------------------
 
 def test_mock_provider_is_deterministic():
@@ -453,6 +642,107 @@ def test_rule_ids_are_unique():
     assert len(ids) == len(set(ids))
 
 
+# --- sharing: automatic mirror, unguessable public URL ---------------------
+
+def test_storage_is_chosen_automatically_from_the_environment():
+    """Credentials present means mirror; absent means local. No flag needed.
+
+    Pinned because the alternative -- a configured backend that silently does
+    nothing because nobody passed `--storage s3` -- is the exact failure the
+    default exists to remove.
+    """
+    from pipeline.storage import default_storage
+    keys = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "S3_BUCKET")
+    saved = {k: os.environ.get(k) for k in keys}
+    try:
+        for k in keys:
+            os.environ.pop(k, None)
+        assert default_storage() == "local", "no credentials must fall back to local"
+
+        for k in keys:
+            os.environ[k] = "x"
+        assert default_storage() == "s3", "credentials must select s3 without a flag"
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def test_only_the_public_prefix_is_treated_as_shareable():
+    """`share_url` must not hand out an unsigned link to a private key.
+
+    The dangerous direction is optimism: returning a plain URL for an object
+    the bucket policy does not cover produces a link that 403s for the
+    recipient and works for the person who generated it, because their browser
+    has nothing to do with it either way. So the rule is checked against the
+    FULL key, S3_PREFIX included.
+    """
+    from pipeline.storage.s3 import MAX_PRESIGN_SECONDS, S3Storage
+    env = {"AWS_ACCESS_KEY_ID": "AKIAIOSFODNN7EXAMPLE",
+           "AWS_SECRET_ACCESS_KEY": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+           "S3_BUCKET": "example-bucket"}
+    saved = {k: os.environ.get(k) for k in env}
+    try:
+        os.environ.update(env)
+
+        s = S3Storage(prefix="")
+        assert s.is_public_key("public/tok/a.jpg")
+        assert not s.is_public_key("runs/2026/a.jpg")
+        assert not s.is_public_key("publicity/a.jpg"), \
+            "prefix matching must be on the path segment, not the string"
+
+        # public -> a plain URL, no signature anywhere in it
+        pub = s.share_url("public/tok/a.jpg")
+        assert pub.startswith("https://")
+        assert "X-Amz-Signature" not in pub
+
+        # private -> a signed, expiring URL
+        priv = s.share_url("runs/2026/a.jpg")
+        assert "X-Amz-Signature" in priv and "X-Amz-Expires" in priv
+
+        # An S3_PREFIX pushes everything below the policy's reach, so nothing
+        # is public any more -- including a key that literally starts "public/".
+        nested = S3Storage(prefix="archive")
+        assert not nested.is_public_key("public/tok/a.jpg")
+        assert "X-Amz-Signature" in nested.share_url("public/tok/a.jpg")
+
+        # over-long expiries are clamped rather than rejected by AWS later
+        assert f"X-Amz-Expires={MAX_PRESIGN_SECONDS}" in \
+            s.share_url("runs/x.jpg", expires=99 * 24 * 3600)
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def test_share_tokens_are_unguessable_and_never_repeat():
+    """The token is the only thing protecting a public-prefix object.
+
+    Two properties, both load-bearing: enough entropy that it cannot be
+    brute-forced, and a CSPRNG rather than `random` -- whose state is
+    recoverable from a handful of outputs, which would mean seeing one run's
+    token exposed every other run's.
+    """
+    import secrets
+    seen = {secrets.token_urlsafe(24) for _ in range(500)}
+    assert len(seen) == 500, "tokens must not collide"
+    assert all(len(t) >= 32 for t in seen), "24 bytes should encode to >= 32 chars"
+
+
+def test_local_storage_offers_no_share_url():
+    """A path on one machine is not a link. Say so with "", not a fake URL."""
+    from pipeline.storage import get_storage
+    with tempfile.TemporaryDirectory() as tmp:
+        st = get_storage("local", root=tmp)
+        st.put("a/b.txt", b"hi", "text/plain")
+        assert st.share_url("a/b.txt") == "", \
+            "local storage must not pretend to have a shareable link"
+
+
 # --- end to end ------------------------------------------------------------
 
 def test_full_run_produces_every_deliverable():
@@ -461,8 +751,15 @@ def test_full_run_produces_every_deliverable():
     try:
         # isolated cache dir: otherwise a warm .cache from a previous run
         # makes this assert 0 generations and the test becomes meaningless
+        #
+        # storage_name="local" is NOT redundant. The default is now "decide
+        # from the environment", so a shell with AWS credentials exported
+        # would make this test upload eighteen files to a real bucket on every
+        # run -- slow, billable, and dependent on a network. Tests state what
+        # they want.
         s = run_campaign(BRIEF, BRAND, provider_name="mock", out_root=tmp,
-                         quiet=True, cache_dir=os.path.join(tmp, "cache"))
+                         quiet=True, cache_dir=os.path.join(tmp, "cache"),
+                         storage_name="local")
         assert s.variants_planned == 18
         assert s.generative_calls == 1, "must not generate per variant"
         jpgs = [f for _r, _d, fs in os.walk(tmp) for f in fs if f.endswith(".jpg")]

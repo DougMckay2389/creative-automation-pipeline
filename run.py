@@ -64,6 +64,21 @@ def cmd_run(args) -> int:
     print(f"  pass {c.get('pass',0)}   review {c.get('review',0)}   block {c.get('block',0)}")
     print(f"  output   {summary.output_dir}")
     print(f"  report   {report}")
+    # The mirror is the half a person cannot see by looking at the folder, so
+    # it is the half that has to be printed. A run that silently uploaded
+    # nineteen objects and said nothing is indistinguishable from one that
+    # uploaded none.
+    st = summary.storage or {}
+    if st.get("objects"):
+        print(f"  mirrored {st['objects']} objects to {st['backend']} "
+              f"({st['bytes'] // 1024} KB)")
+    if st.get("errors"):
+        print(f"  storage  {len(st['errors'])} upload(s) FAILED - see manifest")
+    if st.get("share_url"):
+        print(f"  share    {st['share_url']}")
+        if not st.get("public"):
+            print("           signed link, expires - run tools/make_public.py "
+                  "for permanent links")
     print("-" * 62 + "\n")
     if args.open:
         webbrowser.open("file://" + os.path.abspath(report))
@@ -99,9 +114,14 @@ def main(argv=None) -> int:
     r.add_argument("--model", default="",
                    help="image model to use, e.g. @cf/leonardo/phoenix-1.0 "
                         "(defaults to the adapter's own choice)")
-    r.add_argument("--storage", default="local",
-                   help="where to mirror artifacts: local | s3 (local is always "
-                        "written either way)")
+    # Default is EMPTY, not "local": empty means "decide from the
+    # environment", so a machine with S3 credentials mirrors without anyone
+    # having to remember a flag. Passing --storage local is still an explicit
+    # opt out and is honoured.
+    r.add_argument("--storage", default="",
+                   help="where to mirror artifacts: local | s3. Default: s3 if "
+                        "credentials are present, otherwise local. The organised "
+                        "local folder is written either way.")
     r.add_argument("--regen", action="store_true",
                    help="regenerate every product this run, ignoring the asset "
                         "on disk and the cache (seeded from the run id, so the "

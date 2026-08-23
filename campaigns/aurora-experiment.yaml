@@ -8,7 +8,6 @@ default_message: "Your skin, wide awake."
 products:
   - id: "hydra-glow-serum"
     name: "HydraGlow Serum"
-    asset: "campaigns/assets/hydra-glow-serum.png"
     subject: "The new Mountain Dew soda Drink, with fire graphics on the bottle"
     surface: "Volcano mountain desert stone with soft water droplets and fire under the stone"
   - id: "velvet-matte-lip"

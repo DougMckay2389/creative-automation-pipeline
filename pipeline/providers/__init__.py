@@ -25,12 +25,14 @@ from __future__ import annotations
 
 import os
 
-from .base import GenerationRequest, GenerationResult, Provider, ProviderError
+from .base import (EditRequest, GenerationRequest, GenerationResult, Provider,
+                   ProviderError)
 
 __all__ = [
-    "Provider", "GenerationRequest", "GenerationResult", "ProviderError",
+    "Provider", "GenerationRequest", "GenerationResult", "EditRequest",
+    "ProviderError",
     "get_provider", "available_providers", "provider_status", "default_provider",
-    "CREDENTIALS",
+    "supports_edit", "CREDENTIALS",
 ]
 
 # What each adapter needs in the environment before it can do anything.
@@ -94,8 +96,25 @@ def provider_status() -> list[dict]:
         needs = CREDENTIALS.get(name, [])
         missing = [k for k in needs if not (os.environ.get(k) or "").strip()]
         out.append({"name": name, "requires": needs, "missing": missing,
-                    "configured": not missing})
+                    "configured": not missing,
+                    # Carried here so the app can enable or grey out the
+                    # "generate a new surface" control in the same request
+                    # that populates the provider dropdown.
+                    "supports_edit": supports_edit(name)})
     return out
+
+
+def supports_edit(name: str) -> bool:
+    """Can this adapter take a reference image?
+
+    Read off the CLASS, not an instance, so the UI can ask before anyone has
+    supplied credentials -- constructing a provider raises without a key, and
+    "you must configure Cloudflare before we can tell you whether Cloudflare
+    can do this" is a silly thing to say to somebody choosing an option.
+    """
+    if not _REGISTRY:
+        _register()
+    return bool(getattr(_REGISTRY.get(name), "supports_edit", False))
 
 
 def default_provider() -> str:
