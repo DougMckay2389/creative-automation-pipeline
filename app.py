@@ -18,6 +18,7 @@ import glob
 import json
 import mimetypes
 import os
+import socket
 import sys
 import threading
 import traceback
@@ -51,15 +52,49 @@ HOST, PORT = "127.0.0.1", 8765
 # a toggle that does nothing, a checkbox that is ignored -- and every time the
 # page looked perfectly current.
 #
-# Comparing the mtime we started with against the file now is enough to catch
+# Comparing the mtime we started with against the files now is enough to catch
 # it, needs no version constants to keep in sync, and is reported to the UI so
 # the person sees it instead of debugging a ghost.
-_LOADED_AT = os.path.getmtime(os.path.abspath(__file__))
+#
+# It watches EVERY module this process actually imported, not just app.py.
+# Watching one file was close to useless in practice: almost all the code
+# lives in pipeline/, so editing the resolver, a provider or the runner --
+# exactly the edits whose effect you are trying to see -- left the check
+# perfectly happy. Walking `sys.modules` and filtering to this tree answers
+# the precise question ("is anything I have in memory older than the file on
+# disk?") with no list to maintain and no false positives from files this
+# process never loaded, like tests/ or tools/.
+#
+# Deliberately NOT included: webui/index.html. It is read from disk on every
+# request, so an edit to it is already live and flagging it would be a lie.
+
+def _newest_loaded_mtime() -> float:
+    newest = 0.0
+    for mod in list(sys.modules.values()):
+        path = getattr(mod, "__file__", None)
+        if not path:
+            continue
+        path = os.path.abspath(path)
+        # __main__ is app.py itself, which lives at ROOT rather than under it.
+        if not (path.startswith(ROOT + os.sep) or path == os.path.abspath(__file__)):
+            continue
+        try:
+            newest = max(newest, os.path.getmtime(path))
+        except OSError:
+            continue
+    return newest
+
+
+_LOADED_AT = _newest_loaded_mtime()
 
 
 def _is_stale() -> bool:
     try:
-        return os.path.getmtime(os.path.abspath(__file__)) > _LOADED_AT
+        # A small tolerance, because filesystem timestamp granularity and the
+        # gap between "import finished" and "we measured" are both real, and a
+        # banner that cries wolf gets ignored exactly like a check that never
+        # fires at all.
+        return _newest_loaded_mtime() > _LOADED_AT + 0.5
     except OSError:
         return False
 
@@ -492,6 +527,53 @@ def _write_env(values: dict[str, str], path: str = ".env") -> None:
     os.replace(tmp, p)                                 # atomic; never a half file
 
 
+class ExclusiveHTTPServer(ThreadingHTTPServer):
+    """A server that REFUSES to start if the port is already being served.
+
+    This exists because the loud port-clash message below was, for a while,
+    unreachable on Windows -- and the bug it was written to prevent happened
+    anyway, in the most confusing possible form.
+
+    `HTTPServer` sets `allow_reuse_address = 1`, which on Unix means the
+    sensible thing: reuse a port sitting in TIME_WAIT after a clean shutdown.
+    On Windows `SO_REUSEADDR` means something quite different -- it permits
+    binding a port another process is ACTIVELY LISTENING on. The second bind
+    succeeds, no OSError is raised, the handler below never runs, and you end
+    up with two live servers on one port. Connections then land on whichever
+    the kernel picks, so the app answers from the new process sometimes and
+    the old one other times.
+
+    That is worse than the failure it was meant to replace. A dead new server
+    is at least consistent; this is a server that is stale INTERMITTENTLY,
+    which is indistinguishable from a flaky bug in whatever you just changed.
+    Observed directly: two `python app.py` processes bound to 8765, and
+    `/api/init` reporting `stale: true` from the older one while the newer
+    one -- the one that had actually loaded the new code -- reported false.
+
+    Two changes, because one is not enough:
+
+    * `allow_reuse_address = False` stops asking for the behaviour at all.
+    * `SO_EXCLUSIVEADDRUSE` is the Windows-specific opposite: it tells the OS
+      that nothing else may bind this port while we hold it, which also stops
+      a LATER process stealing it from us. It does not exist on Unix, hence
+      the `hasattr` guard.
+    """
+
+    allow_reuse_address = False
+
+    def server_bind(self):
+        opt = getattr(socket, "SO_EXCLUSIVEADDRUSE", None)
+        if opt is not None:
+            try:
+                self.socket.setsockopt(socket.SOL_SOCKET, opt, 1)
+            except OSError:
+                # Not fatal: allow_reuse_address = False already produces the
+                # failure we want. Better to serve than to refuse over a
+                # socket option.
+                pass
+        super().server_bind()
+
+
 def main() -> None:
     port = PORT
     for i, a in enumerate(sys.argv):                       # --port 8766
@@ -499,7 +581,7 @@ def main() -> None:
             port = int(sys.argv[i + 1])
 
     try:
-        srv = ThreadingHTTPServer((HOST, port), Handler)
+        srv = ExclusiveHTTPServer((HOST, port), Handler)
     except OSError as exc:
         # Fail LOUDLY on a port clash.
         #
