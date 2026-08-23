@@ -154,6 +154,8 @@ a.rep{font-size:13px;color:var(--accent)}
  border-radius:6px;font:600 11.5px var(--sans);cursor:pointer}
 .prov button:disabled{opacity:.45;cursor:default}
 #keymsg{font:11.5px var(--sans);margin-top:9px}
+.prov.target{background:#fffdf3;box-shadow:inset 3px 0 0 var(--accent)}
+.prov.target .nm{font-weight:700}
 
 /* ---- flow canvas ---- */
 .flowpanel{background:var(--card);border:1px solid var(--line);border-radius:12px;
@@ -823,21 +825,59 @@ $('#run').addEventListener('click', doRun);
  * ------------------------------------------------------------------ */
 let PROVIDERS = [];
 
+const TITLE = {cloudflare:'Cloudflare Workers AI', firefly:'Adobe Firefly',
+               gemini:'Google Gemini', mock:'Offline renderer'};
+
 function paintProviders(r){
   PROVIDERS = r.providers || [];
   const sel = $('#provider'), keep = sel.value;
-  sel.innerHTML = PROVIDERS.map(p=>{
-    const note = p.name === 'mock' ? ' — offline, no key'
-               : p.configured      ? ''
-               : ' — needs a key';
-    return `<option value="${p.name}"${p.configured?'':' disabled'}>${p.name}${note}</option>`;
-  }).join('');
+
+  // Two kinds of entry, and they do different things.
+  //
+  // A provider that CAN run is a choice. One that cannot is not a choice at
+  // all -- a greyed-out row is just a dead end that makes you wonder what you
+  // did wrong. So an unconfigured provider becomes an ACTION: picking it
+  // opens the key panel instead of selecting something that would fail
+  // several seconds into a run.
+  const usable  = PROVIDERS.filter(p => p.configured);
+  const needKey = PROVIDERS.filter(p => !p.configured && p.requires.length);
+
+  sel.innerHTML =
+    usable.map(p =>
+      `<option value="${p.name}">${TITLE[p.name] || p.name}${
+        p.name === 'mock' ? ' — no key needed' : ''}</option>`).join('') +
+    (needKey.length
+      ? `<optgroup label="Connect a provider">` + needKey.map(p =>
+          `<option value="__add:${p.name}">+ Add ${TITLE[p.name] || p.name} API…</option>`
+        ).join('') + `</optgroup>`
+      : '');
+
   // Keep the user's pick if it still works; otherwise take the server's
   // preference, which is cloudflare when it is configured and mock when
   // nothing is.
-  const stillOk = PROVIDERS.some(p=>p.name===keep && p.configured);
+  const stillOk = usable.some(p => p.name === keep);
   sel.value = stillOk ? keep : (r.default_provider || 'mock');
+  sel.dataset.last = sel.value;
 }
+
+/* Picking an "Add …" row is a request to configure, not a selection. Put the
+   dropdown back where it was, open the panel, and focus the field that is
+   actually missing -- there is no state in which the select should be left
+   holding a provider that cannot run. */
+$('#provider').addEventListener('change', (e) => {
+  const v = e.target.value;
+  if (!v.startsWith('__add:')) { e.target.dataset.last = v; return; }
+  const name = v.slice(6);
+  e.target.value = e.target.dataset.last || 'mock';
+  const panel = $('#keypanel');
+  panel.hidden = false;
+  paintKeys(name);
+  const row = panel.querySelector(`.prov[data-prov="${CSS.escape(name)}"]`);
+  if (row) {
+    row.scrollIntoView({behavior:'smooth', block:'center'});
+    row.querySelector('input')?.focus();
+  }
+});
 
 const LABEL = {
   CLOUDFLARE_ACCOUNT_ID:'Account ID', CLOUDFLARE_API_TOKEN:'API token',
@@ -845,10 +885,10 @@ const LABEL = {
   FIREFLY_CLIENT_ID:'Client ID', FIREFLY_CLIENT_SECRET:'Client secret',
 };
 
-function paintKeys(){
+function paintKeys(focus){
   const rows = PROVIDERS.filter(p=>p.requires.length).map(p=>`
-    <div class="prov" data-prov="${p.name}">
-      <span class="nm">${p.name}</span>
+    <div class="prov${p.name===focus?' target':''}" data-prov="${p.name}">
+      <span class="nm">${TITLE[p.name] || p.name}</span>
       <span class="st ${p.configured?'on':'off'}">${p.configured?'configured':'no key'}</span>
       <span class="fields">
         ${p.requires.map(k=>`<input type="password" data-k="${k}" autocomplete="off"

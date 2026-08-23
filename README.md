@@ -91,11 +91,17 @@ load and makes the page flicker. The full report is one click away.
 
 ### Providers and keys
 
-The dropdown lists every adapter and says which ones can actually run; the
-ones missing credentials are disabled rather than offered. It defaults to the
-best provider that works — `cloudflare` when it is configured, `mock` when
-nothing is, so a reviewer who cloned this two minutes ago still gets a working
-default and somebody with a key gets the real model without remembering a flag.
+The dropdown holds two kinds of entry, and they do different things. A
+provider that **can** run is a choice. One that cannot is not a choice at all
+— a greyed-out row is a dead end that makes you wonder what you did wrong — so
+it appears under *Connect a provider* as **+ Add Adobe Firefly API…**, and
+picking it opens the key panel with that provider's first empty field focused
+instead of selecting something that would fail several seconds into a run.
+
+It defaults to the best provider that works: `cloudflare` when it is
+configured, `mock` when nothing is — so a reviewer who cloned this two minutes
+ago still gets a working default, and somebody with a key gets the real model
+without remembering a flag.
 
 **API keys** opens a panel that writes credentials into `.env`. Three things
 make that defensible rather than reckless: the server binds `127.0.0.1` only;
