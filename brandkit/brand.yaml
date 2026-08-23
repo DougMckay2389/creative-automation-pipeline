@@ -1,0 +1,65 @@
+
+# ---------------------------------------------------------------------------
+# Brand kit.
+#
+# Separated from the campaign brief on purpose. A campaign is written by a
+# marketer and changes weekly; a brand kit is owned by Brand Standards and
+# changes rarely. Putting them in one file is how a campaign manager ends up
+# quietly editing the brand palette.
+# ---------------------------------------------------------------------------
+
+name: Aurora
+
+# Approved palette. The brand check does NOT test for exact hex equality --
+# any gradient, resize or JPEG round-trip moves every pixel off-swatch, so an
+# exact test fires on 100% of assets and gets ignored within a week. We
+# measure perceptual distance to the nearest approved swatch instead.
+palette:
+  - name: Aurora Ink
+    hex: "#101820"
+  - name: Aurora Sand
+    hex: "#E8DFD3"
+  - name: Aurora Clay
+    hex: "#C4694A"
+  - name: Aurora Sage
+    hex: "#7C8B72"
+  - name: Paper
+    hex: "#F7F4EF"
+
+# Maximum perceptual distance (redmean, roughly 0-765) a dominant colour may
+# sit from its nearest approved swatch before it is flagged. Tuned so that a
+# JPEG round-trip of an on-brand asset passes and an off-brand accent fails.
+# Brand Standards owns this number, not engineering.
+palette_tolerance: 120.0
+
+# How much of the frame the approved palette must account for.
+min_palette_coverage: 0.55
+
+logo:
+  path: brandkit/logo.png
+  # Logo width as a fraction of the creative's short edge.
+  scale: 0.16
+  # Clearspace, as a multiple of the logo's own height, that must be kept
+  # free on every side. Measured on the composed file, not assumed.
+  min_clearspace: 0.5
+
+typography:
+  # Font resolution is a list, not a single path. The first family that
+  # actually exists on the machine AND can render every glyph in the string
+  # wins. This is the difference between a localized creative and a row of
+  # empty boxes -- see localize.py.
+  latin:
+    - "DejaVuSans-Bold.ttf"
+    - "Arial Bold.ttf"
+    - "arialbd.ttf"
+    - "Helvetica.ttc"
+  cjk:
+    - "NotoSansCJK-Bold.ttc"
+    - "NotoSansCJKjp-Bold.otf"
+    - "YuGothB.ttc"
+    - "msgothic.ttc"
+    - "Hiragino Sans GB.ttc"
+
+# Legibility floor for the campaign message, as a fraction of the creative's
+# short edge. Below this, the message is present but unreadable on a phone.
+min_message_height: 0.045

@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Creative Automation Pipeline</title>
+<style>
+:root{
+  --ink:#12140f; --ink2:#5a5c55; --muted:#8b8d85; --line:#e4e2da;
+  --bg:#faf9f6; --card:#fff; --accent:#c4694a;
+  --pass:#0ca30c; --review:#fab219; --block:#d03b3b;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+ font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1220px;margin:0 auto;padding:26px 22px 70px}
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+h1{font-size:23px;margin:0;letter-spacing:-.02em}
+.sub{color:var(--ink2);font-size:13.5px}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;
+ background:var(--card);border:1px solid var(--line);border-radius:12px;
+ padding:14px 16px;margin:18px 0}
+.f{display:flex;flex-direction:column;gap:5px}
+.f label{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+ color:var(--muted);font-weight:700}
+select,button{font:inherit}
+select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;
+ color:var(--ink);min-width:210px}
+button{cursor:pointer;border-radius:999px;padding:9px 18px;font-weight:640;font-size:14px;
+ border:1px solid var(--line);background:#fff;color:var(--ink)}
+button:hover{background:#f3f1ec}
+button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+button.primary:hover{filter:brightness(1.25)}
+button[disabled]{opacity:.45;cursor:not-allowed}
+.spacer{flex:1}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media(max-width:900px){.cols{grid-template-columns:1fr}}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.panel h2{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+ margin:0;padding:12px 15px;border-bottom:1px solid var(--line);font-weight:700;
+ display:flex;align-items:center;gap:10px}
+.panel .body{padding:14px 15px}
+textarea{width:100%;height:340px;border:0;padding:14px 15px;resize:vertical;
+ font:12.5px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+ color:var(--ink);background:#fcfbf8;outline:none}
+pre.console{margin:0;padding:14px 15px;height:340px;overflow:auto;background:#14161a;color:#d6dae0;
+ font:12px/1.62 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap}
+pre.console .ok{color:#7ee787}.console .warn{color:#ffc866}.console .bad{color:#ff8a8a}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:16px 0 0}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:12px 14px}
+.kpi .n{font-size:23px;font-weight:660;letter-spacing:-.02em;line-height:1.1}
+.kpi .l{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
+ font-weight:700;margin-top:4px}
+.note{font-size:13px;color:var(--ink2);background:#fffdf3;border:1px solid #f0e4bb;
+ border-radius:11px;padding:11px 14px;margin-top:14px}
+.note b{color:var(--ink)}
+.err{background:#fff5f5;border-color:#f2c9c9;color:#8a2b2b}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:13px;margin-top:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:11px;overflow:hidden}
+.card .ph{background:#eeece6;display:flex;align-items:center;justify-content:center;padding:8px}
+.card img{max-width:100%;height:auto;display:block;border-radius:3px}
+.card .m{padding:9px 11px 11px;font-size:11.5px;color:var(--ink2)}
+.card .t{font-size:12.5px;font-weight:640;color:var(--ink)}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;
+ text-transform:uppercase;letter-spacing:.06em;padding:2px 8px;border-radius:999px;
+ border:1px solid;margin-bottom:6px}
+.b-pass{color:var(--pass);border-color:rgba(12,163,12,.35);background:rgba(12,163,12,.07)}
+.b-review{color:#8a6100;border-color:rgba(250,178,25,.45);background:rgba(250,178,25,.10)}
+.b-block{color:var(--block);border-color:rgba(208,59,59,.35);background:rgba(208,59,59,.07)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
+.dot.live{background:var(--pass);animation:p 1.4s infinite}
+@keyframes p{50%{opacity:.25}}
+a.rep{font-size:13px;color:var(--accent)}
+.tag{font-size:10.5px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);
+ color:var(--ink2);background:#f7f5f1;margin-left:6px}
+
+/* ---- flow canvas ---- */
+.flowpanel{background:var(--card);border:1px solid var(--line);border-radius:12px;
+ margin:18px 0;overflow:hidden}
+.flowpanel h2{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+ margin:0;padding:12px 15px;border-bottom:1px solid var(--line);font-weight:700;
+ display:flex;align-items:center;gap:10px}
+.flowpanel h2 .hint{font-weight:600;letter-spacing:0;text-transform:none;font-size:11.5px;
+ color:var(--muted);margin-left:auto}
+.flowscroll{overflow-x:auto;background:
+  radial-gradient(circle at 1px 1px, rgba(0,0,0,.075) 1px, transparent 0) 0 0/22px 22px;
+ background-color:#f4f2ed}
+svg.flow{display:block}
+.nd rect.body{fill:#fff;stroke:#d9d6cd;stroke-width:1.5;rx:11}
+.nd.active rect.body{stroke:#e0a020;stroke-width:2.5}
+.nd.done rect.body{stroke:#8fbf8f}
+.nd.skip rect.body{fill:#f4f2ed;stroke:#e2e0d8;stroke-dasharray:4 3}
+.nd rect.accent{rx:3}
+.nd text.t{font:640 11.5px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#12140f}
+.nd text.s{font:11px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#8b8d85}
+.nd text.ic{font-size:15px}
+.nd.skip text.t,.nd.skip text.s{fill:#b6b4ac}
+.nd .badge-c{fill:#12140f}
+.nd .badge-t{font:700 10px ui-monospace,Menlo,monospace;fill:#fff}
+.nd.active .badge-c{fill:#e0a020}
+.pipe{fill:none;stroke:#cfccc2;stroke-width:2}
+.pipe.on{stroke:#0ca30c}
+.pipe.flow{stroke:#0ca30c;stroke-dasharray:7 7;animation:dash .7s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-14}}
+.pipe.dim{stroke:#e2e0d8;stroke-dasharray:4 4}
+.plab{font:700 9.5px ui-monospace,Menlo,monospace;fill:#8b8d85}
+.grpbox{fill:rgba(196,105,74,.05);stroke:rgba(196,105,74,.35);stroke-width:1;
+ stroke-dasharray:5 4;rx:12}
+.grplab{font:700 9.5px system-ui;fill:#a8674c;letter-spacing:.08em;text-transform:uppercase}
+@media(prefers-reduced-motion:reduce){.pipe.flow{animation:none}}
+</style>
+</head><body>
+<div class="wrap">
+
+<header>
+  <h1>Creative Automation Pipeline</h1>
+  <span class="sub">campaign brief in &rarr; on-spec, checked social creatives out</span>
+</header>
+
+<div class="bar">
+  <div class="f"><label for="brief">Campaign brief</label>
+    <select id="brief"></select></div>
+  <div class="f"><label for="provider">Image provider</label>
+    <select id="provider"></select></div>
+  <button id="plan">Plan &mdash; what would this cost?</button>
+  <button id="run" class="primary">Run pipeline</button>
+  <div class="spacer"></div>
+  <button id="save">Save brief</button>
+</div>
+
+<div id="planout"></div>
+
+<div class="flowpanel">
+  <h2>Pipeline flow
+    <span class="hint">driven by real pipeline events &mdash; the same records written to run.log.jsonl</span>
+  </h2>
+  <div class="flowscroll"><svg class="flow" id="flow" width="1180" height="500"
+       viewBox="0 0 1180 500" role="img" aria-label="pipeline flow diagram"></svg></div>
+</div>
+
+
+<div class="cols">
+  <div class="panel">
+    <h2>Brief <span id="briefname" class="tag"></span></h2>
+    <textarea id="text" spellcheck="false"></textarea>
+  </div>
+  <div class="panel">
+    <h2><span id="dot" class="dot"></span> Run log</h2>
+    <pre class="console" id="log">Pick a brief and press Plan, or go straight to Run.
+
+The default provider is offline and deterministic, so this needs no API key
+and produces the same pixels every time.</pre>
+  </div>
+</div>
+
+<div id="results"></div>
+
+</div>
+<script>
+const $ = s => document.querySelector(s);
+let poll = null;
+
+/* ------------------------------------------------------------------
+   Flow canvas. Node positions are declared once; edges reference node
+   ids. State comes from /api/progress -> graph, which the server folds
+   from the pipeline's own event stream.
+------------------------------------------------------------------ */
+const NW = 158, NH = 60, DY = 26;   // DY: room for the group labels
+const NODES = [
+  {id:'brief',     x:14,  y:34,  ic:'📄', t:'Campaign brief',  s:'YAML in',            c:'#7C8B72'},
+  {id:'preflight', x:196, y:34,  ic:'🛡', t:'Pre-flight',      s:'0 credits',    c:'#7C8B72'},
+
+  {id:'src_disk',  x:378, y:0,   ic:'🖼', t:'Brand asset',     s:'from disk',   c:'#C4694A'},
+  {id:'src_gen',   x:378, y:74,  ic:'✨', t:'Generate hero',   s:'via provider',   c:'#C4694A'},
+  {id:'src_cache', x:378, y:148, ic:'💾', t:'Cache hit',       s:'same inputs',   c:'#C4694A'},
+
+  {id:'master',    x:560, y:74,  ic:'🗻', t:'Master 1600²',    s:'per product',    c:'#204060'},
+
+  {id:'crop',      x:14,  y:300, ic:'✂',  t:'Crop to spec',    s:'subject-aware',      c:'#204060'},
+  {id:'scrim',     x:170, y:300, ic:'🌗', t:'Scrim',           s:'legibility',         c:'#204060'},
+  {id:'message',   x:326, y:300, ic:'🈶', t:'Message',         s:'localized',   c:'#204060'},
+  {id:'logo',      x:482, y:300, ic:'◎',  t:'Logo',            s:'brand scale',        c:'#204060'},
+  {id:'measure',   x:638, y:300, ic:'📐', t:'Measure',         s:'on the render',      c:'#204060'},
+  {id:'checks',    x:794, y:300, ic:'⚖',  t:'Gate',            s:'brand + legal',c:'#d03b3b'},
+  {id:'verdict',   x:950, y:300, ic:'🗂', t:'Sorted queue',    s:'human queue',c:'#0ca30c'},
+  {id:'report',    x:950, y:392, ic:'📊', t:'Report',          s:'JSON + HTML',    c:'#0ca30c'},
+];
+NODES.forEach(n=>{ n.y += DY; });
+const NMAP = Object.fromEntries(NODES.map(n=>[n.id,n]));
+const EDGES = [
+  ['brief','preflight'], ['preflight','src_disk'], ['preflight','src_gen'], ['preflight','src_cache'],
+  ['src_disk','master'], ['src_gen','master'], ['src_cache','master'],
+  ['master','crop','wrap'],
+  ['crop','scrim'], ['scrim','message'], ['message','logo'], ['logo','measure'],
+  ['measure','checks'], ['checks','verdict'], ['verdict','report','down'],
+];
+const SVGNS = 'http://www.w3.org/2000/svg';
+const el = (n,a={}) => { const e=document.createElementNS(SVGNS,n);
+  for(const k in a) e.setAttribute(k,a[k]); return e; };
+
+function pipePath(a,b,kind){
+  if(kind==='wrap'){            // master (row 1) round to crop (row 2)
+    const x1=a.x+NW/2, y1=a.y+NH, x2=b.x+NW/2, y2=b.y;
+    return `M${x1},${y1} C${x1},${y1+70} ${x2},${y2-110} ${x2},${y2}`;
+  }
+  if(kind==='down'){            // verdict down to report
+    const x1=a.x+NW/2, y1=a.y+NH, x2=b.x+NW/2, y2=b.y;
+    return `M${x1},${y1} C${x1},${y1+22} ${x2},${y2-22} ${x2},${y2}`;
+  }
+  const x1=a.x+NW, y1=a.y+NH/2, x2=b.x, y2=b.y+NH/2;
+  const d=Math.max(30,(x2-x1)/2);
+  return `M${x1},${y1} C${x1+d},${y1} ${x2-d},${y2} ${x2},${y2}`;
+}
+
+function drawFlow(graph){
+  graph = graph || {};
+  const svg = document.getElementById('flow');
+  svg.innerHTML = '';
+
+  // group boxes -- these are the two things a reviewer should notice
+  const g1 = el('g'); 
+  g1.appendChild(el('rect',{class:'grpbox',x:366,y:DY-14,width:182,height:236}));
+  const l1 = el('text',{class:'grplab',x:372,y:DY-20});
+  l1.textContent='WHERE THE IMAGE COMES FROM'; g1.appendChild(l1);
+  g1.appendChild(el('rect',{class:'grpbox',x:2,y:DY+286,width:942,height:88}));
+  const l2 = el('text',{class:'grplab',x:8,y:DY+280});
+  l2.textContent='PER DELIVERABLE — RUNS ONCE FOR EVERY OUTPUT FILE'; g1.appendChild(l2);
+  svg.appendChild(g1);
+
+  // latest sequence number = the node that most recently did work
+  let lastSeq=-1, lastId=null;
+  for(const k in graph){ if((graph[k].seq||0)>lastSeq){ lastSeq=graph[k].seq||0; lastId=k; } }
+
+  EDGES.forEach(([a,b,kind])=>{
+    const na=NMAP[a], nb=NMAP[b];
+    const ga=graph[a], gb=graph[b];
+    let cls='pipe';
+    if(!ga && !gb) cls+=' dim';
+    else if(gb && lastId===b && running) cls+=' flow';
+    else if(ga && gb) cls+=' on';
+    const p = el('path',{class:cls,d:pipePath(na,nb,kind)});
+    svg.appendChild(p);
+    if(gb && gb.count>1){
+      const mid = kind ? null : {x:(na.x+NW+nb.x)/2, y:(na.y+nb.y)/2+NH/2-6};
+      if(mid){ const t=el('text',{class:'plab',x:mid.x,y:mid.y,'text-anchor':'middle'});
+        t.textContent='×'+gb.count; svg.appendChild(t); }
+    }
+  });
+
+  NODES.forEach(n=>{
+    const g = graph[n.id];
+    let cls='nd';
+    if(!g) cls+=' skip';                 // never fired -- say so, before and after
+    else if(running && lastId===n.id) cls+=' active';
+    else cls+=' done';
+    const grp = el('g',{class:cls});
+    grp.appendChild(el('rect',{class:'body',x:n.x,y:n.y,width:NW,height:NH}));
+    grp.appendChild(el('rect',{class:'accent',x:n.x,y:n.y+10,width:4,height:NH-20,fill:n.c}));
+    const ic=el('text',{class:'ic',x:n.x+16,y:n.y+26}); ic.textContent=n.ic; grp.appendChild(ic);
+    const t=el('text',{class:'t',x:n.x+38,y:n.y+25}); t.textContent=n.t; grp.appendChild(t);
+    const s=el('text',{class:'s',x:n.x+38,y:n.y+42});
+    s.textContent = (n.id==='verdict' && graph.verdict_pass!==undefined)
+      ? `${(graph.verdict_pass||{}).count||0} ok · ${(graph.verdict_review||{}).count||0} rev · ${(graph.verdict_block||{}).count||0} blk`
+      : n.s;
+    grp.appendChild(s);
+    if(g && g.count && n.id!=='verdict'){
+      const w = 20 + String(g.count).length*7;
+      grp.appendChild(el('rect',{class:'badge-c',x:n.x+NW-w-8,y:n.y+NH-24,width:w,height:16,rx:8}));
+      const b=el('text',{class:'badge-t',x:n.x+NW-8-w/2,y:n.y+NH-12.5,'text-anchor':'middle'});
+      b.textContent=g.count; grp.appendChild(b);
+    }
+    svg.appendChild(grp);
+  });
+}
+let running = false;
+
+
+async function init(){
+  const r = await (await fetch('/api/init')).json();
+  const bs = $('#brief'), ps = $('#provider');
+  bs.innerHTML = r.briefs.map(b=>`<option value="${b}">${b}</option>`).join('');
+  ps.innerHTML = r.providers.map(p=>`<option value="${p}"${p==='mock'?' selected':''}>${p}${p==='mock'?' — offline, no key':''}</option>`).join('');
+  await loadBrief();
+}
+
+async function loadBrief(){
+  const p = $('#brief').value;
+  const r = await (await fetch('/api/brief?path='+encodeURIComponent(p))).json();
+  $('#text').value = r.text || '';
+  $('#briefname').textContent = p;
+}
+
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+async function doPlan(){
+  const r = await (await fetch('/api/plan',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({path:$('#brief').value})})).json();
+  if(r.error){ $('#planout').innerHTML = `<div class="note err"><b>Brief error.</b> ${esc(r.error)}</div>`; return; }
+  const reuse = r.products.filter(p=>p.reuse).length;
+  let html = `<div class="kpis">
+    <div class="kpi"><div class="n">${r.deliverables}</div><div class="l">Deliverables</div></div>
+    <div class="kpi"><div class="n">${r.generative}</div><div class="l">Generative calls</div></div>
+    <div class="kpi"><div class="n">${r.products.length}</div><div class="l">Products</div></div>
+    <div class="kpi"><div class="n">${r.markets.length}</div><div class="l">Markets</div></div>
+    <div class="kpi"><div class="n">${r.ratios.length}</div><div class="l">Aspect ratios</div></div>
+  </div>
+  <div class="note"><b>Nothing has been spent yet.</b> ${r.deliverables} deliverables would cost
+  <b>${r.generative}</b> generative call(s): ${reuse} product(s) already have an asset on disk and are reused;
+  each remaining product is generated once at master resolution and every market and ratio is composed from it.</div>`;
+  if(r.preflight.length){
+    html += `<div class="note"><b>Pre-flight.</b><br>` + r.preflight.map(f=>
+      `<code>${esc(f.rule)}</code> [${esc(f.severity)}] ${esc(f.message)}`).join('<br>') + `</div>`;
+  }
+  $('#planout').innerHTML = html;
+}
+
+async function doSave(){
+  await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({path:$('#brief').value, text:$('#text').value})});
+  $('#planout').innerHTML = `<div class="note">Brief saved. Press <b>Plan</b> to re-cost it.</div>`;
+}
+
+async function doRun(){
+  await doSave();
+  $('#results').innerHTML=''; $('#log').textContent='';
+  $('#run').disabled = true; $('#dot').classList.add('live');
+  running = true; drawFlow({});
+  const r = await (await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({path:$('#brief').value, provider:$('#provider').value})})).json();
+  if(r.error){ $('#log').textContent = r.error; $('#run').disabled=false; $('#dot').classList.remove('live'); return; }
+  poll = setInterval(tick, 400); tick();
+}
+
+function colour(line){
+  if(/^ *PASS/.test(line.trim()) || line.startsWith('done')) return `<span class="ok">${esc(line)}</span>`;
+  if(/REVIEW/.test(line)) return `<span class="warn">${esc(line)}</span>`;
+  if(/BLOCK|ERROR/.test(line)) return `<span class="bad">${esc(line)}</span>`;
+  return esc(line);
+}
+
+async function tick(){
+  const s = await (await fetch('/api/progress')).json();
+  const el = $('#log');
+  el.innerHTML = s.lines.map(colour).join('\n');
+  el.scrollTop = el.scrollHeight;
+  drawFlow(s.graph);
+  if(!s.running){
+    clearInterval(poll); poll=null;
+    $('#run').disabled=false; $('#dot').classList.remove('live');
+    running = false; drawFlow(s.graph);
+    if(s.summary) render(s.summary, s.report);
+  }
+}
+
+function render(sum, report){
+  const c = sum.counts || {};
+  let html = `<div class="kpis">
+    <div class="kpi"><div class="n">${sum.variants_planned}</div><div class="l">Creatives</div></div>
+    <div class="kpi"><div class="n">${sum.generative_calls}</div><div class="l">Generative calls</div></div>
+    <div class="kpi"><div class="n" style="color:var(--pass)">${c.pass||0}</div><div class="l">Clean</div></div>
+    <div class="kpi"><div class="n" style="color:var(--review)">${c.review||0}</div><div class="l">Needs review</div></div>
+    <div class="kpi"><div class="n" style="color:var(--block)">${c.block||0}</div><div class="l">Blocked</div></div>
+  </div>`;
+  if(report) html += `<div class="note">Full run report: <a class="rep" href="/out/${report}" target="_blank">${esc(report)}</a>
+   &nbsp;·&nbsp; nothing here is auto-approved &mdash; every finding routes to a named desk.</div>`;
+  const base = '/out/' + sum.output_dir.replace(/\\/g,'/') + '/';
+  html += `<div class="grid">` + sum.results.map(r=>{
+    const cls = {pass:'b-pass',review:'b-review',block:'b-block'}[r.verdict];
+    const f = (r.findings||[]).map(x=>`<div><code>${esc(x.rule)}</code> → ${esc(x.routes_to)}</div>`).join('');
+    return `<div class="card">
+      <div class="ph"><img loading="lazy" src="${base}${r.path.replace(/\\/g,'/')}" alt=""></div>
+      <div class="m"><span class="badge ${cls}">${esc(r.verdict)}</span>
+      <div class="t">${esc(r.ratio)} · ${esc(r.locale)}</div>
+      <div>${esc(r.message)}</div>
+      <div style="color:var(--muted);margin-top:3px">${esc(r.font_family)} · master: ${esc(r.master_origin)}</div>
+      ${f}</div></div>`;
+  }).join('') + `</div>`;
+  $('#results').innerHTML = html;
+}
+
+drawFlow({});
+$('#brief').addEventListener('change', loadBrief);
+$('#plan').addEventListener('click', doPlan);
+$('#save').addEventListener('click', doSave);
+$('#run').addEventListener('click', doRun);
+init();
+</script>
+</body></html>

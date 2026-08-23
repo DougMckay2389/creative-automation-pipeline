@@ -1,0 +1,86 @@
+
+# ---------------------------------------------------------------------------
+# Campaign brief.
+#
+# This is the ONLY file a campaign manager should have to touch. Everything
+# downstream -- how many images get generated, what gets composed, which
+# checks run -- is derived from what is written here.
+#
+# The shape is deliberate: a campaign has products, and it has markets.
+# Variants are the cross product of the two, times the requested aspect
+# ratios. Writing it this way means adding a market is one block, not a
+# code change.
+# ---------------------------------------------------------------------------
+
+campaign:
+  id: aurora-spring-2026
+  name: Aurora Spring Refresh
+  brand: Aurora
+
+# The message the campaign is built around. Markets may override it with a
+# localized line; anything that does not override falls back to this.
+default_message: "Your skin, wide awake."
+
+# At least two products is a requirement of the brief.
+products:
+  - id: hydra-glow-serum
+    name: HydraGlow Serum
+    # If this file exists it is REUSED and no generative credit is spent.
+    # If it is missing or unreadable, the pipeline generates a hero image.
+    asset: campaigns/assets/hydra-glow-serum.png
+    # Used to build the generation prompt when the asset is missing.
+    subject: "a frosted glass serum dropper bottle with a matte white cap"
+    surface: "wet stone with soft water droplets"
+
+  - id: velvet-matte-lip
+    name: Velvet Matte Lip
+    # Deliberately absent from campaigns/assets/ so the demo shows BOTH paths:
+    # one product reused from disk, one generated.
+    asset: campaigns/assets/velvet-matte-lip.png
+    subject: "a slim matte lipstick bullet, cap off, angled upright"
+    surface: "brushed terracotta stone"
+
+markets:
+  - locale: en-US
+    region: North America
+    audience: "Women 25-40, skincare-led routine, shops DTC and Sephora"
+    message: "Your skin, wide awake."
+
+  - locale: ja-JP
+    region: Japan
+    audience: "Women 20-35, Tokyo metro, layered skincare routine, value texture and subtlety"
+    # Localized copy. The Japanese market lead in any real engagement will
+    # care that this is a written line, not a machine translation of the
+    # English one.
+    message: "肌が、目を覚ます。"
+
+  - locale: de-DE
+    region: DACH
+    audience: "Women 28-45, ingredient-literate, price-aware, pharmacy channel"
+    message: "Wach für deine Haut."
+
+# Social specs. Named, not hardcoded, because the spec list is the thing that
+# changes most often in a real campaign.
+aspect_ratios:
+  - id: "1:1"
+    width: 1080
+    height: 1080
+    channel: "Instagram feed"
+  - id: "9:16"
+    width: 1080
+    height: 1920
+    channel: "Stories / Reels"
+  - id: "16:9"
+    width: 1920
+    height: 1080
+    channel: "YouTube / display"
+
+# Legal review inputs. Real programs keep this per-market and ratified by
+# that market's regulatory lead -- see the limitations section of the README.
+prohibited_terms:
+  - clinically proven
+  - guaranteed
+  - miracle
+  - cures
+  - anti-aging
+  - "100%"
