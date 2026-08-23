@@ -57,6 +57,26 @@ class Product:
     # "reuse", and putting an approved product somewhere it has never been
     # photographed is a decision somebody should make on purpose.
     regenerate_surface: bool = False
+    # Invent the product itself, ignoring the asset on disk.
+    #
+    # Deliberately separate from `regenerate_surface`, and deliberately not
+    # implemented by blanking `asset`. The path is configuration somebody
+    # typed; throwing it away to express "not this time" means they have to
+    # type it again to come back, and a UI that destroys your input to toggle
+    # a mode is a UI you stop trusting. This keeps the path and ignores it.
+    #
+    # It is also the per-product form of --regen, which was previously
+    # all-or-nothing for the whole run.
+    regenerate_product: bool = False
+
+    def uses_source_photo(self) -> bool:
+        """Will the PRODUCT in the output come from the approved photograph?
+
+        The one question three call sites were each answering slightly
+        differently. True for both "as shot" and "new surface"; false only
+        when the product itself is invented.
+        """
+        return self.has_asset() and not self.regenerate_product
 
     def has_asset(self) -> bool:
         """True only if the file is actually there AND is non-empty.
@@ -155,8 +175,16 @@ class Brief:
         This is the number worth arguing about. It is NOT variant_count: we
         generate one master per product that lacks an asset, and compose every
         market and every ratio from it. See runner.py.
+
+        A product that keeps its approved photo but regenerates the surface
+        costs a call too. It is a real, paid, rate-limited round trip to the
+        model -- the only thing it saves is inventing the product, not the
+        request. Counting it as free would make the Plan view under-quote the
+        run it exists to quote, which is the one thing that view must never
+        do: its whole purpose is to tell you the price before you pay it.
         """
-        return sum(1 for p in self.products if not p.has_asset())
+        return sum(1 for p in self.products
+                   if not p.uses_source_photo() or p.regenerate_surface)
 
 
 # --------------------------------------------------------------------------
@@ -201,6 +229,7 @@ def load_brief(path: str) -> Brief:
             subject=str(p.get("subject") or p.get("name")),
             surface=str(p.get("surface") or "a clean neutral surface"),
             regenerate_surface=bool(p.get("regenerate_surface", False)),
+            regenerate_product=bool(p.get("regenerate_product", False)),
         ))
 
     markets_raw = raw.get("markets") or []

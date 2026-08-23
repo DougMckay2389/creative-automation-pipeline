@@ -120,7 +120,12 @@ class AssetResolver:
         # needs it on volcanic rock this month and marble the next; the
         # product is never regenerated -- a model does not get to reinvent a
         # bottle legal signed off -- only the scene around it is.
-        if product.has_asset() and product.regenerate_surface and not self.force:
+        # `uses_source_photo()` is has_asset() AND not regenerate_product, so
+        # a product switched to "generate the product too" falls past both
+        # photo branches to step 3 without its asset path being destroyed.
+        use_photo = product.uses_source_photo() and not self.force
+
+        if use_photo and product.regenerate_surface:
             if not getattr(self.provider, "supports_edit", False):
                 # Refuse at the point of choice, not three calls deep. The
                 # alternative -- quietly falling back to plain generation --
@@ -165,7 +170,7 @@ class AssetResolver:
         # Skipped under force: an asset on disk short-circuits everything, so
         # while it is there the product's `subject` and `surface` are never
         # even read -- which is baffling if you have just edited them.
-        if product.has_asset() and not self.force:
+        if use_photo:
             self.log("reuse", product=product.id, source=product.asset)
             return MasterAsset(product.id, product.asset, origin="brief")
 

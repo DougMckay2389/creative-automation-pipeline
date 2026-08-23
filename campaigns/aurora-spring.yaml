@@ -25,12 +25,20 @@ default_message: "Your skin, wide awake."
 products:
   - id: hydra-glow-serum
     name: HydraGlow Serum
-    # If this file exists it is REUSED and no generative credit is spent.
-    # If it is missing or unreadable, the pipeline generates a hero image.
+    # The approved product photograph. It is never regenerated -- a model does
+    # not get to reinvent a bottle legal has signed off on.
     asset: campaigns/assets/hydra-glow-serum.png
-    # Used to build the generation prompt when the asset is missing.
+    # `subject` names the object the model must PRESERVE; `surface` describes
+    # the scene it is allowed to rebuild around it.
     subject: "a frosted glass serum dropper bottle with a matte white cap"
-    surface: "wet stone with soft water droplets"
+    surface: "volcanic black rock with soft water droplets and warm light"
+    # Send the approved photo to the model as a reference image and change
+    # only the ground and background. Needs a provider that accepts a
+    # reference image (cloudflare / gemini); the run stops and says so if the
+    # selected one cannot.
+    #
+    # Delete this line to go back to using the photograph exactly as shot.
+    regenerate_surface: true
 
   - id: velvet-matte-lip
     name: Velvet Matte Lip

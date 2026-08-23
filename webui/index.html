@@ -45,6 +45,44 @@ button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
 button.primary:hover{filter:brightness(1.25)}
 button[disabled]{opacity:.45;cursor:not-allowed}
 .spacer{flex:1}
+
+/* ---- surface prompts, sitting directly above Run ----
+   `flex:1 1 100%` inside the wrapping .bar gives this its own full-width row,
+   so two stacked inputs sit immediately above the Run button instead of
+   fighting the horizontal control row for space.
+
+   It is up here rather than only in the Form tab because the surface is the
+   one field somebody actually iterates on between runs -- change the words,
+   press Run, look at the picture -- and making that a three-click round trip
+   through a tab is how a demo loses its rhythm. Both places edit the same
+   BRIEF object, so they can never disagree. */
+#surfacebox{flex:1 1 100%;display:flex;flex-direction:column;gap:7px;
+  border-top:1px solid var(--line);margin-top:4px;padding-top:12px}
+.sfhead{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--muted);font-weight:700;display:flex;align-items:baseline;gap:9px}
+.sfhead .sfhint{text-transform:none;letter-spacing:0;font-weight:400;
+  font-size:11px;color:var(--muted)}
+.sfrow{display:flex;align-items:center;gap:9px}
+.sfrow .sfname{flex:0 0 148px;text-align:right;font-size:11.5px;font-weight:600;
+  color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sfrow input{flex:1 1 auto;min-width:0;padding:8px 10px;border:1px solid var(--line);
+  border-radius:8px;background:#fff;color:var(--ink);
+  font:12px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.sfrow input:focus{outline:none;border-color:var(--accent)}
+/* The same words mean different things depending on the product's state, and
+   a bare text box would hide that: for a resurfaced product this IS the whole
+   scene brief, for a generated one it is one clause of a longer prompt, and
+   for a product reused as shot it is not read at all. Say which. */
+.sfmode{flex:0 0 auto;font:9.5px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  padding:3px 8px;border-radius:99px;white-space:nowrap}
+.sfmode.resurf{background:#e6ecf4;color:#3c5578}
+.sfmode.gen{background:#f6e9df;color:#9a5b2c}
+.sfmode.off{background:#f2f0ea;color:var(--muted)}
+.sfrow.inert input{opacity:.5;background:#f4f2ed}
+@media(max-width:700px){
+  .sfrow{flex-wrap:wrap}
+  .sfrow .sfname{flex:1 1 100%;text-align:left}
+}
 .cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
 @media(max-width:900px){.cols{grid-template-columns:1fr}}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
@@ -64,8 +102,66 @@ button[disabled]{opacity:.45;cursor:not-allowed}
      cursor:pointer}
 .tab+.tab{border-left:1px solid var(--line)}
 .tab.on{background:var(--ink);color:#fff}
-.formpane{height:340px;overflow-y:auto;padding:13px 15px}
+.formpane{max-height:620px;overflow-y:auto;padding:15px 17px}
 .fsec{margin-bottom:16px}
+
+/* ---- product cards ----
+   Full width bought room for a real layout, so a product is now a card with
+   three parts side by side: the source image, what to do with it, and the
+   words that drive it. Reading left to right is reading the decision. */
+.pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:12px}
+@media(max-width:900px){.pgrid{grid-template-columns:1fr}}
+.pcard{border:1px solid var(--line);border-radius:11px;background:#fcfcfb;
+  position:relative;overflow:hidden}
+.pcard.is-resurf{border-color:#c3d0e2;box-shadow:inset 3px 0 0 #3c5578}
+.pcard.is-gen{border-color:#e8d3bd;box-shadow:inset 3px 0 0 #c08040}
+.pcard.is-asis{box-shadow:inset 3px 0 0 #7d9070}
+.pchead{display:flex;align-items:center;gap:8px;padding:9px 12px;
+  border-bottom:1px solid var(--line);background:#fff}
+.pchead .pcname{font:700 12.5px var(--sans);color:var(--ink);flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pchead .pcid{font:10px var(--mono);color:var(--muted)}
+.pchead .rm{border:0;background:transparent;cursor:pointer;color:var(--muted);
+  font-size:16px;line-height:1;padding:2px 6px;border-radius:5px}
+.pchead .rm:hover{background:#f0dedb;color:#a33}
+.pcbody{display:grid;grid-template-columns:126px 1fr;gap:12px;padding:12px}
+@media(max-width:520px){.pcbody{grid-template-columns:1fr}}
+
+/* the source image */
+.pcimg{display:flex;flex-direction:column;gap:5px}
+.pcimg .shot{width:126px;height:126px;border-radius:9px;border:1px solid var(--line);
+  background:#f2f0ea center/cover no-repeat;display:flex;align-items:center;
+  justify-content:center;text-align:center;font:10px var(--mono);color:var(--muted);
+  padding:8px;overflow:hidden}
+.pcimg .shot img{width:100%;height:100%;object-fit:cover;border-radius:8px}
+.pcimg .shotcap{font:9.5px var(--mono);color:var(--muted);text-align:center;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pcard.is-gen .pcimg .shot{opacity:.35;filter:grayscale(1)}
+
+/* the three-way mode switch */
+.pcmode{display:flex;gap:0;border:1px solid var(--line);border-radius:8px;
+  overflow:hidden;background:#fff}
+.pcmode button{flex:1;border:0;border-radius:0;background:#fff;color:var(--muted);
+  font:600 11px var(--sans);padding:7px 6px;cursor:pointer;line-height:1.25;
+  border-right:1px solid var(--line);white-space:normal}
+.pcmode button:last-child{border-right:0}
+.pcmode button:hover:not(.on):not([disabled]){background:#f4f2ed;color:var(--ink)}
+.pcmode button.on{background:var(--ink);color:#fff}
+.pcmode button[disabled]{opacity:.35;cursor:not-allowed}
+.pcwhy{font:10.5px var(--mono);color:var(--muted);line-height:1.5;margin-top:2px}
+.pcwhy b{color:#9a5b2c}
+
+.pcfield{margin-top:9px}
+.pcfield>label{display:block;font:700 9.5px var(--mono);letter-spacing:.09em;
+  text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+.pcfield input,.pcfield textarea{width:100%;padding:6px 9px;border:1px solid var(--line);
+  border-radius:7px;background:#fff;color:var(--ink);
+  font:11.5px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.pcfield textarea{height:42px;resize:vertical}
+.pcfield input:focus,.pcfield textarea:focus{outline:none;border-color:var(--accent)}
+.pcfield.live input,.pcfield.live textarea{border-color:#3c5578;background:#fbfcfe}
+.pcfield.inert input,.pcfield.inert textarea{opacity:.45;background:#f4f2ed}
+.pcfield .sub{font:9.5px var(--mono);color:var(--muted);margin-top:3px}
 .fsec>h3{margin:0 0 8px;font:700 10.5px var(--mono);letter-spacing:.1em;
          text-transform:uppercase;color:var(--muted)}
 .frow{display:grid;grid-template-columns:118px 1fr;gap:9px;align-items:center;margin-bottom:6px}
@@ -107,10 +203,15 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .pstate-b.on{border-color:#3c5578;color:#3c5578;background:#eef2f8}
 .pstate-b[disabled]{opacity:.4;cursor:not-allowed}
 
-textarea{width:100%;height:340px;border:0;padding:14px 15px;resize:vertical;
+.panel+.panel{margin-top:16px}
+/* The YAML editor gets the full width of the page now, so it can be short and
+   wide rather than tall and narrow -- which is the shape YAML actually is. */
+textarea{width:100%;height:300px;border:0;padding:14px 15px;resize:vertical;
  font:12.5px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
  color:var(--ink);background:#fcfbf8;outline:none}
-pre.console{margin:0;padding:14px 15px;height:340px;overflow:auto;background:#14161a;color:#d6dae0;
+/* Half height. It is a thing you glance at, not a thing you read: the
+   interesting lines are the last few, and it autoscrolls to them. */
+pre.console{margin:0;padding:14px 15px;height:170px;overflow:auto;background:#14161a;color:#d6dae0;
  font:12px/1.62 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap}
 pre.console .ok{color:#7ee787}.console .warn{color:#ffc866}.console .bad{color:#ff8a8a}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:16px 0 0}
@@ -316,6 +417,8 @@ svg.flow{display:block}
     <label class="chk" title="Ignore the asset on disk and the cache. Every product is
 generated fresh from its current subject and surface, with a seed salted by the run id.">
       <input type="checkbox" id="regen"><span>Regenerate every run</span></label></div>
+  <div id="surfacebox"></div>
+
   <button id="plan">Plan &mdash; what would this cost?</button>
   <button id="run" class="primary">Run pipeline</button>
   <div class="spacer"></div>
@@ -336,24 +439,27 @@ generated fresh from its current subject and surface, with a seed salted by the 
 </div>
 
 
-<div class="cols">
-  <div class="panel">
-    <h2>Brief <span id="briefname" class="tag"></span>
-      <span class="tabs">
-        <button class="tab on" data-tab="form">Form</button
-        ><button class="tab" data-tab="yaml">YAML</button>
-      </span>
-    </h2>
-    <div id="formpane" class="formpane"></div>
-    <textarea id="text" spellcheck="false" hidden></textarea>
-  </div>
-  <div class="panel">
-    <h2><span id="dot" class="dot"></span> Run log</h2>
-    <pre class="console" id="log">Pick a brief and press Plan, or go straight to Run.
+<!-- Brief on its own full-width row, run log beneath it at half height.
+     They were side by side, which gave the brief half the screen to lay out
+     product cards in and gave the log a tall narrow column it never filled.
+     The brief is the thing you edit; the log is the thing you glance at. -->
+<div class="panel">
+  <h2>Brief <span id="briefname" class="tag"></span>
+    <span class="tabs">
+      <button class="tab on" data-tab="form">Form</button
+      ><button class="tab" data-tab="yaml">YAML</button>
+    </span>
+  </h2>
+  <div id="formpane" class="formpane"></div>
+  <textarea id="text" spellcheck="false" hidden></textarea>
+</div>
+
+<div class="panel logpanel">
+  <h2><span id="dot" class="dot"></span> Run log</h2>
+  <pre class="console" id="log">Pick a brief and press Plan, or go straight to Run.
 
 The default provider is offline and deterministic, so this needs no API key
 and produces the same pixels every time.</pre>
-  </div>
 </div>
 
 <!-- Under the brief and the run log, and filled in DURING the run: each
@@ -494,6 +600,10 @@ async function init(){
   const r = await (await fetch('/api/init')).json();
   const bs = $('#brief'), ps = $('#provider');
   bs.innerHTML = r.briefs.map(b=>`<option value="${b}">${b}</option>`).join('');
+  // The server names the default rather than letting the first option win by
+  // sort order. A scratch brief dropped into campaigns/ should not quietly
+  // become the thing "press Run" runs.
+  if (r.default_brief && r.briefs.includes(r.default_brief)) bs.value = r.default_brief;
   paintProviders(r);
   paintStale(r.stale);
   await loadBrief();
@@ -580,21 +690,48 @@ function renderForm(){
 
     <div class="fsec">
       <h3>Products <span class="fhint" style="text-transform:none;letter-spacing:0">
-        — an asset that exists is reused; a missing one is generated</span></h3>
+        — choose what happens to each one: keep the photo, keep it and rebuild
+        the scene around it, or generate the product outright</span></h3>
+      <div class="pgrid">
       ${products.map((p,i)=>`
-        <div class="fcard" data-pcard="${i}">
-          <button class="rm" data-rm="products" data-i="${i}" title="remove">×</button>
-          ${field('ID', `<input data-p="products.${i}.id" value="${val(p.id)}">`)}
-          ${field('Name', `<input data-p="products.${i}.name" value="${val(p.name)}">`)}
-          ${field('Asset path', `<input data-p="products.${i}.asset" value="${val(p.asset)}"
-            placeholder="campaigns/assets/thing.png">`)}
-          <div class="pstate" data-state-for="${i}"></div>
-          ${field('Subject', `<textarea data-p="products.${i}.subject"
-            placeholder="what the image should show">${val(p.subject)}</textarea>`)}
-          ${field('Surface', `<input data-p="products.${i}.surface" value="${val(p.surface)}">`)}
-          <div class="fhint">Subject and surface build the generation prompt.</div>
+        <div class="pcard" data-pcard="${i}">
+          <div class="pchead">
+            <span class="pcname">${val(p.name) || '(unnamed product)'}</span>
+            <span class="pcid">${val(p.id)}</span>
+            <button class="rm" data-rm="products" data-i="${i}" title="remove">×</button>
+          </div>
+          <div class="pcbody">
+            <div class="pcimg">
+              <div class="shot" data-shot-for="${i}">checking&hellip;</div>
+              <div class="shotcap" data-shotcap-for="${i}"></div>
+            </div>
+            <div class="pcctl">
+              <div class="pcmode" data-mode-for="${i}"></div>
+              <div class="pcwhy" data-why-for="${i}"></div>
+
+              <div class="pcfield" data-field="surface" data-field-for="${i}">
+                <label>Surface prompt &mdash; what it sits on</label>
+                <input data-p="products.${i}.surface" value="${val(p.surface)}"
+                  placeholder="volcanic black rock with soft water droplets and warm light">
+              </div>
+
+              <div class="pcfield" data-field="subject" data-field-for="${i}">
+                <label>Product prompt &mdash; the object itself</label>
+                <textarea data-p="products.${i}.subject"
+                  placeholder="a frosted glass serum dropper bottle with a matte white cap"
+                  >${val(p.subject)}</textarea>
+              </div>
+
+              <div class="pcfield">
+                <label>Source image</label>
+                <input data-p="products.${i}.asset" value="${val(p.asset)}"
+                  placeholder="campaigns/assets/thing.png">
+              </div>
+            </div>
+          </div>
         </div>`).join('')}
-      <button class="fadd" data-add="products">+ product</button>
+      </div>
+      <button class="fadd" data-add="products" style="margin-top:10px">+ product</button>
     </div>
 
     <div class="fsec">
@@ -645,20 +782,37 @@ function renderForm(){
   paintProductStates();
 }
 
-/* Say plainly whether each product will be REUSED or GENERATED.
+/* What will actually happen to each product, said plainly and shown.
  *
- * An asset that really exists short-circuits the resolver before the prompt is
- * ever built, which makes Subject and Surface inert -- and a field that does
- * nothing silently is worse than one that is obviously disabled. Only the
- * server can stat the path, so it is asked, once per product, whenever the
- * form is drawn or an asset path is edited.
+ * There are exactly THREE things the resolver can do with a product, and the
+ * card offers exactly three buttons. That is deliberate: the switch has the
+ * same number of positions as the engine has behaviours, so there is no state
+ * the UI can express that the pipeline cannot do, and none it can do that the
+ * UI cannot reach.
+ *
+ *   as shot      asset on disk, used byte for byte     -> master_origin "brief"
+ *   new surface  asset kept, scene regenerated around  -> master_origin "resurfaced"
+ *   generate     asset ignored, product invented       -> master_origin "generated"
+ *
+ * Only the server can stat a path, so it is asked once per product whenever
+ * the form is drawn or an asset path is edited.
  */
+const MODES = [
+  {key:'asis',   label:'Photo as shot',  needsAsset:true,  needsEdit:false},
+  {key:'resurf', label:'Photo + new surface', needsAsset:true, needsEdit:true},
+  {key:'gen',    label:'Generate product', needsAsset:false, needsEdit:false},
+];
+
+function modeOf(p, exists){
+  if (!exists || p.regenerate_product) return 'gen';
+  return p.regenerate_surface ? 'resurf' : 'asis';
+}
+
 async function paintProductStates(){
   const products = (BRIEF && BRIEF.products) || [];
   await Promise.all(products.map(async (p, i) => {
-    const host = $(`.pstate[data-state-for="${i}"]`);
-    const card = $(`.fcard[data-pcard="${i}"]`);
-    if (!host || !card) return;
+    const card = document.querySelector(`.pcard[data-pcard="${i}"]`);
+    if (!card) return;
     const path = (p.asset || '').trim();
 
     let exists = false;
@@ -668,41 +822,161 @@ async function paintProductStates(){
         exists = !!r.exists;
       } catch { exists = false; }
     }
-    // Three states, not two. The middle one is the whole point: an approved
-    // photograph does not have to be an all-or-nothing choice between "use it
-    // exactly as shot" and "throw it away and invent a new product".
-    const resurf = !!p.regenerate_surface && exists;
-    card.classList.toggle('reusing', exists && !resurf);
-    card.classList.toggle('resurfacing', resurf);
+    // Remembered so the surface box above Run can label each row without
+    // asking the server a second time for the same answer.
+    ASSET_EXISTS[i] = exists;
 
-    // Resurfacing needs a provider that accepts a reference image. Say so on
-    // the control itself rather than letting someone tick it and discover at
-    // run time that their provider cannot do it.
+    const mode = modeOf(p, exists);
+    card.classList.toggle('is-asis',   mode === 'asis');
+    card.classList.toggle('is-resurf', mode === 'resurf');
+    card.classList.toggle('is-gen',    mode === 'gen');
+
+    // ---- the source image -------------------------------------------------
+    // Shown, not described. "campaigns/assets/hydra-glow-serum.png" tells you
+    // a file is configured; the thumbnail tells you WHICH bottle, which is the
+    // thing you actually need to know before asking a model to preserve it.
+    const shot = card.querySelector(`[data-shot-for="${i}"]`);
+    const cap  = card.querySelector(`[data-shotcap-for="${i}"]`);
+    if (shot) {
+      shot.innerHTML = exists
+        ? `<img src="/out/${encodeURI(path)}" alt="source image for ${esc(p.name||p.id)}">`
+        : (path ? 'no file at<br>that path' : 'no source<br>image');
+    }
+    if (cap) {
+      cap.textContent = exists ? (path.split('/').pop() || path)
+                               : (path ? 'missing' : '—');
+      cap.title = path || '';
+    }
+
+    // ---- the mode switch --------------------------------------------------
+    // A mode that cannot work is disabled WITH a reason, rather than offered
+    // and then failing several seconds into a run.
     const canEdit = EDIT_CAPABLE.has(currentProvider());
-    const why = canEdit ? ''
-      : ` disabled title="the ${currentProvider()} provider cannot take a reference image`
-        + ` — switch to cloudflare or gemini"`;
+    const modebox = card.querySelector(`[data-mode-for="${i}"]`);
+    if (modebox) {
+      modebox.innerHTML = MODES.map(m => {
+        let dis = '', why = '';
+        if (m.needsAsset && !exists) {
+          dis = ' disabled';
+          why = path ? 'there is no file at that path' : 'no source image is set';
+        } else if (m.needsEdit && !canEdit) {
+          dis = ' disabled';
+          why = `the ${currentProvider()} provider cannot take a reference image`
+              + ' — switch to cloudflare or gemini';
+        }
+        return `<button type="button" data-mode="${m.key}" data-i="${i}"
+                  class="${mode === m.key ? 'on' : ''}"${dis}
+                  title="${esc(why)}">${m.label}</button>`;
+      }).join('');
+    }
 
-    host.innerHTML = !exists
-      ? (path
-          ? `<span class="fbadge gen">will generate</span>
-             <span class="pstate-t">nothing at that path yet, so the prompt below is used.</span>`
-          : `<span class="fbadge gen">will generate</span>
-             <span class="pstate-t">no asset path, so the prompt below is used.</span>`)
-      : resurf
-        ? `<span class="fbadge resurf">new surface</span>
-           <span class="pstate-t">the approved photo is kept and
-             <b>only the surface is regenerated</b> — Surface describes the new
-             scene, Subject names what must not change.</span>
-           <button class="pstate-b on" data-resurf="${i}">Reuse as shot</button>
-           <button class="pstate-b" data-clear="${i}">Generate from the prompt instead</button>`
-        : `<span class="fbadge reuse">reused</span>
-           <span class="pstate-t">that file exists, so it is used as-is —
-             <b>subject and surface below are ignored</b> for this product.</span>
-           <button class="pstate-b" data-resurf="${i}"${why}>Generate a new surface</button>
-           <button class="pstate-b" data-clear="${i}">Generate from the prompt instead</button>`;
+    const why = card.querySelector(`[data-why-for="${i}"]`);
+    if (why) {
+      why.innerHTML = {
+        asis:   'The approved photograph is used byte for byte. '
+              + '<b>Neither prompt below is read</b> for this product, and no model is called.',
+        resurf: 'The approved photograph goes to the model as a reference. '
+              + 'The <b>surface prompt</b> describes the new scene; the product prompt '
+              + 'names what must not change. One paid call.',
+        gen:    exists
+              ? 'The source image is <b>ignored</b> (kept, not deleted) and the product '
+              + 'is invented from both prompts. One paid call.'
+              : 'No source image, so the product is generated from both prompts. One paid call.',
+      }[mode];
+    }
+
+    // ---- which fields are live -------------------------------------------
+    // A field that does nothing silently is worse than one that is obviously
+    // disabled, so the two prompts are greyed out exactly when the resolver
+    // will not read them.
+    const setField = (name, state) => {
+      const f = card.querySelector(`.pcfield[data-field="${name}"][data-field-for="${i}"]`);
+      if (!f) return;
+      f.classList.toggle('live',  state === 'live');
+      f.classList.toggle('inert', state === 'inert');
+      const c = f.querySelector('input,textarea');
+      if (c) c.disabled = (state === 'inert');
+    };
+    setField('surface', mode === 'asis' ? 'inert' : 'live');
+    // In "new surface" the product prompt is still read -- it tells the model
+    // what to preserve -- so it stays enabled, just not highlighted.
+    setField('subject', mode === 'asis' ? 'inert' : (mode === 'gen' ? 'live' : ''));
   }));
+  // Painted after the loop, not inside it, so the box is drawn once from a
+  // complete picture rather than flickering through partial states as each
+  // product's asset check resolves.
+  paintSurfaces();
 }
+
+/* Does this product's asset really exist on disk? Filled by
+   paintProductStates so nothing asks the server twice for one answer. */
+const ASSET_EXISTS = {};
+
+/* The surface prompts that sit directly above Run.
+ *
+ * One row per product, stacked, editing the SAME `BRIEF.products[i].surface`
+ * the Form tab edits -- there is no second copy of the value and therefore no
+ * way for the two to disagree.
+ *
+ * The chip on the right is the part that earns its place. "Surface" means
+ * three different things depending on the product's state, and a row of
+ * identical text boxes would flatten that into one:
+ *
+ *   new surface   the product is resurfaced -- this text IS the scene, and
+ *                 it is the only thing that changes about the image
+ *   in prompt     the product is generated whole -- this is one clause of a
+ *                 longer prompt built from subject + surface
+ *   not used      the product is reused exactly as shot, so nothing here is
+ *                 read at all, and the input says so by going inert
+ */
+function paintSurfaces(){
+  const box = document.getElementById('surfacebox');
+  if (!box) return;
+  const products = (BRIEF && BRIEF.products) || [];
+  if (!products.length){ box.innerHTML = ''; return; }
+
+  box.innerHTML =
+    `<div class="sfhead">Surface prompt
+       <span class="sfhint">what each product sits on &mdash; edit, then press Run</span>
+     </div>` +
+    products.map((p, i) => {
+      const m = modeOf(p, !!ASSET_EXISTS[i]);
+      const resurf = m === 'resurf';
+      const inert  = m === 'asis';               // reused exactly as shot
+      const chip = resurf
+        ? '<span class="sfmode resurf">new surface</span>'
+        : inert
+          ? '<span class="sfmode off" title="this product is reused exactly as shot,'
+            + ' so its surface text is never read">not used</span>'
+          : '<span class="sfmode gen" title="used as one clause of the full'
+            + ' generation prompt">in prompt</span>';
+      return `<div class="sfrow${inert ? ' inert' : ''}">
+          <span class="sfname" title="${esc(p.name || p.id || '')}"
+            >${esc(p.name || p.id || ('product ' + (i + 1)))}</span>
+          <input data-surface="${i}" value="${esc(p.surface || '')}"
+            ${inert ? 'disabled' : ''}
+            placeholder="e.g. volcanic black rock with soft water droplets and warm light">
+          ${chip}
+        </div>`;
+    }).join('');
+}
+
+/* Typing here writes straight through to BRIEF and the YAML.
+ *
+ * It deliberately does NOT re-render anything: this box lives in the control
+ * bar, and rebuilding it on every keystroke would throw away focus and the
+ * caret mid-word. The Form tab's matching Surface input is updated in place
+ * for the same reason. */
+document.getElementById('surfacebox').addEventListener('input', (e) => {
+  const el = e.target;
+  if (el.dataset.surface === undefined) return;
+  const i = +el.dataset.surface;
+  if (!BRIEF || !BRIEF.products || !BRIEF.products[i]) return;
+  BRIEF.products[i].surface = el.value;
+  syncYaml();
+  const twin = document.querySelector(`#formpane input[data-p="products.${i}.surface"]`);
+  if (twin && twin.value !== el.value) twin.value = el.value;
+});
 
 /* Which providers can take a reference image, and which one is selected.
  *
@@ -738,6 +1012,13 @@ $('#formpane').addEventListener('input', (e) => {
     // Typing in an asset path changes whether this product is reused, and the
     // answer has to keep up with the typing.
     if (/^products\.\d+\.asset$/.test(el.dataset.p)) paintProductStates();
+    // Surface appears twice on screen -- here and in the box above Run. Mirror
+    // the value across rather than re-rendering, which would drop the caret.
+    const sm = /^products\.(\d+)\.surface$/.exec(el.dataset.p);
+    if (sm) {
+      const twin = document.querySelector(`#surfacebox input[data-surface="${sm[1]}"]`);
+      if (twin && twin.value !== el.value) twin.value = el.value;
+    }
   }
 });
 
@@ -764,27 +1045,23 @@ $('#formpane').addEventListener('change', (e) => {
 });
 
 $('#formpane').addEventListener('click', (e) => {
-  const clear = e.target.closest('[data-clear]');
-  if (clear) {
-    // Emptying the asset path IS the mechanism -- no hidden per-product flag,
-    // and the change is visible in the YAML tab like every other edit.
-    const p = BRIEF.products[+clear.dataset.clear];
-    p.asset = '';
-    // Drop the flag with the asset. Leaving it set would put the brief in a
-    // state the resolver reads as "resurface a photograph that is not there",
-    // which is only reachable through the UI and would be baffling to debug.
+  const mode = e.target.closest('[data-mode]');
+  if (mode) {
+    const p = BRIEF.products[+mode.dataset.i];
+    if (!p) return;
+    // Two independent flags, set from one three-position switch. Both are
+    // DELETED rather than written as `false`: an absent key and `false` mean
+    // the same thing to the loader, and emitting `regenerate_surface: false`
+    // onto every product that never touched the feature is noise in a file a
+    // person has to read.
+    //
+    // Note what is NOT done here: the asset path is never blanked. "Generate
+    // the product" is expressed by ignoring the path, not by destroying it,
+    // so switching back to the photo does not mean typing it in again.
     delete p.regenerate_surface;
-    return renderForm();
-  }
-  const resurf = e.target.closest('[data-resurf]');
-  if (resurf) {
-    const p = BRIEF.products[+resurf.dataset.resurf];
-    // Toggle, and store the flag ONLY when it is on -- an absent key and
-    // `false` mean the same thing to the loader, and emitting `false` into
-    // the YAML for every product that never used the feature is noise in a
-    // file somebody has to read.
-    if (p.regenerate_surface) delete p.regenerate_surface;
-    else p.regenerate_surface = true;
+    delete p.regenerate_product;
+    if (mode.dataset.mode === 'resurf') p.regenerate_surface = true;
+    if (mode.dataset.mode === 'gen')    p.regenerate_product = true;
     return renderForm();
   }
   const rm = e.target.closest('[data-rm]'), add = e.target.closest('[data-add]');
@@ -830,6 +1107,7 @@ function toYaml(b){
     // boolean -- the loader coerces with bool(), and bool("false") is True,
     // so a quoted flag would be impossible to turn off.
     if (p.regenerate_surface) L.push('    regenerate_surface: true');
+    if (p.regenerate_product) L.push('    regenerate_product: true');
   }
   L.push('');
   L.push('markets:');
@@ -900,14 +1178,28 @@ async function doSave(){
 }
 
 async function doRun(){
-  await doSave();
+  // Deliberately does NOT save first.
+  //
+  // It used to. That made "edit a prompt, press Run" work, and it also
+  // rewrote the brief file through the YAML emitter every single time, which
+  // strips every comment in it. The sample brief's comments are documentation
+  // somebody reads; they were destroyed once already and had to come back
+  // from git.
+  //
+  // The YAML on screen is sent WITH the run instead, and the server stages it
+  // to a scratch file. The edit still takes effect on this run; the file on
+  // disk only changes when Save is pressed.
   $('#results').innerHTML=''; $('#log').textContent=''; SEEN.clear();
   $('#run').disabled = true; $('#dot').classList.add('live');
   running = true; drawFlow({});
   const r = await (await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({path:$('#brief').value, provider:$('#provider').value,
+    body:JSON.stringify({path:$('#brief').value, text:$('#text').value,
+                        provider:$('#provider').value,
                         regen:$('#regen').checked,
-                        storage:$('#storage') ? $('#storage').value : 'local',
+                        // '' means "decide from the environment" -- mirror to S3 when
+                        // there are credentials. Hard-coding 'local' here would have
+                        // silently switched the mirror off for every run from the app.
+                        storage:$('#storage') ? $('#storage').value : '',
                         model:($('#modelwrap').hidden ? '' : $('#model').value)})})).json();
   if(r.error){ $('#log').textContent = r.error; $('#run').disabled=false; $('#dot').classList.remove('live'); return; }
   poll = setInterval(tick, 400); tick();

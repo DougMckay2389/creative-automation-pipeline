@@ -321,8 +321,25 @@ products:
     regenerate_surface: true
 ```
 
-or press **Generate a new surface** on that product in the app. The approved
+or pick **Photo + new surface** on that product's card in the app. The approved
 photograph goes to the model as a *reference image*; only the scene changes.
+
+Each product card carries a three-position switch, and it has three positions
+because the resolver has exactly three behaviours — no state the UI can express
+that the pipeline cannot do, and none it can do that the UI cannot reach:
+
+| Switch | Brief | `master_origin` | Model calls |
+|---|---|---|---|
+| Photo as shot | *(nothing)* | `brief` | 0 |
+| Photo + new surface | `regenerate_surface: true` | `resurfaced` | 1 |
+| Generate product | `regenerate_product: true` | `generated` | 1 |
+
+`regenerate_product` is the per-product form of `--regen`, and it is expressed
+by *ignoring* the asset path rather than blanking it — switching back to the
+photograph must not mean typing the path in again. A mode that cannot work
+(no file on disk; a provider that cannot take a reference image) is disabled
+with the reason on the control, rather than offered and then failing several
+seconds into a run.
 The bottle is never described to a model and rebuilt from words, which is the
 point — a model does not get to reinvent a bottle legal signed off on.
 `master_origin` records it as `resurfaced`, distinct from `brief` and

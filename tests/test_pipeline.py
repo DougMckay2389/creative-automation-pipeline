@@ -217,10 +217,20 @@ def test_seeds_are_stable_ACROSS_processes():
 # --- the cost claim --------------------------------------------------------
 
 def test_generation_count_is_per_product_not_per_variant():
-    """The headline claim: 18 deliverables, 1 generative call."""
+    """The headline claim: 18 deliverables, a handful of generative calls.
+
+    A call is owed for a product with no asset (generate it) AND for one that
+    keeps its photo but regenerates the surface (a real, paid round trip that
+    only skips inventing the product). The quote must cover both, because the
+    Plan view's whole job is to state the price before it is paid, and a quote
+    that flatters is worse than no quote.
+    """
     b = load_brief(BRIEF)
     assert b.generation_count < b.variant_count
-    assert b.generation_count == sum(1 for p in b.products if not p.has_asset())
+    assert b.generation_count == sum(
+        1 for p in b.products if not p.has_asset() or p.regenerate_surface)
+    # And it is genuinely per-product, not per-variant.
+    assert b.generation_count <= len(b.products)
 
 
 def test_existing_asset_is_never_generated():
@@ -235,7 +245,14 @@ def test_existing_asset_is_never_generated():
             raise AssertionError("provider must not be called for an existing asset")
 
     b = load_brief(BRIEF)
-    have = next(p for p in b.products if p.has_asset())
+    # State the precondition instead of inheriting it from the shipped brief.
+    # The sample brief now resurfaces its first product by default, which is a
+    # different path with a different (correct) answer -- and a test that
+    # silently changes meaning when someone edits a YAML file is not a test.
+    # `Product` is frozen, so this is a copy, not a mutation.
+    import dataclasses
+    have = dataclasses.replace(
+        next(p for p in b.products if p.has_asset()), regenerate_surface=False)
     with tempfile.TemporaryDirectory() as tmp:
         r = AssetResolver(Spy(), cache_dir=tmp)
         m = r.resolve(have, seed=1)
@@ -265,6 +282,11 @@ def test_regen_ignores_the_asset_on_disk_and_the_cache():
     Image.new("RGB", (64, 64), (200, 120, 90)).save(shot)
     for prod in raw["products"]:
         prod["asset"] = shot
+        # This test is about --regen versus a plain reuse. Resurfacing is a
+        # third path and would answer "resurfaced" where it expects "brief",
+        # so it is turned off explicitly rather than left to whatever the
+        # sample brief happens to say today.
+        prod.pop("regenerate_surface", None)
     path = os.path.join(tmp, "brief.yaml")
     with open(path, "w", encoding="utf-8") as fh:
         yaml.safe_dump(raw, fh, allow_unicode=True)
@@ -761,7 +783,17 @@ def test_full_run_produces_every_deliverable():
                          quiet=True, cache_dir=os.path.join(tmp, "cache"),
                          storage_name="local")
         assert s.variants_planned == 18
-        assert s.generative_calls == 1, "must not generate per variant"
+        # Two, and the number is the point of the test.
+        #
+        # 18 deliverables from 2 model calls: one product keeps its approved
+        # photograph and regenerates only the surface, the other has no asset
+        # and is generated whole. Every market and every ratio is then composed
+        # locally from those two masters. If this ever equals 18, the pipeline
+        # has started generating per variant and its entire cost argument is
+        # gone -- that is the regression this line exists to catch.
+        assert s.generative_calls == 2, "must not generate per variant"
+        assert sorted({r.master_origin for r in s.results}) == \
+            ["generated", "resurfaced"], "the sample brief should show both paths"
         jpgs = [f for _r, _d, fs in os.walk(tmp) for f in fs if f.endswith(".jpg")]
         assert len(jpgs) == 18, f"expected 18 creatives, found {len(jpgs)}"
         assert sum(s.counts.values()) == 18

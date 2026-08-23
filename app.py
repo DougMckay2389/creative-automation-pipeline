@@ -282,7 +282,19 @@ class Handler(SimpleHTTPRequestHandler):
         if route == "/api/init":
             briefs = sorted(os.path.relpath(p, ROOT).replace("\\", "/")
                             for p in glob.glob(os.path.join(ROOT, "campaigns", "*.yaml")))
+            # Which brief opens by default.
+            #
+            # It used to be "whichever sorts first", which is not a decision --
+            # it just happened to be alphabetical, so dropping a scratch file
+            # called `aurora-experiment.yaml` into campaigns/ silently made
+            # THAT the thing the app loads, and "press Run" stopped meaning
+            # what the README says it means. The shipped sample brief is named
+            # explicitly and everything else is a fallback.
+            default_brief = ("campaigns/aurora-spring.yaml"
+                             if "campaigns/aurora-spring.yaml" in briefs
+                             else (briefs[0] if briefs else ""))
             return self._json({"briefs": briefs,
+                               "default_brief": default_brief,
                                "providers": provider_status(),
                                "default_provider": default_provider(),
                                "storages": storage_status(),
@@ -486,10 +498,46 @@ class Handler(SimpleHTTPRequestHandler):
                 with LOCK:
                     STATE["running"] = False
                 return self._json({"error": "bad path"}, 400)
+
+            # Run what is ON SCREEN, without writing to the user's brief.
+            #
+            # Run used to call Save first, so pressing Run rewrote the brief
+            # file from the form's YAML emitter. That works, and it also
+            # silently destroys every comment in the file -- and the sample
+            # brief's comments are documentation a reviewer reads. It happened:
+            # aurora-spring.yaml lost all 30 lines of them and had to be
+            # restored from git.
+            #
+            # Editing a prompt and pressing Run must still use the edit, so the
+            # text comes with the request and is written to a scratch file
+            # instead. Save stays what it always was: an explicit choice to
+            # change the file on disk.
+            #
+            # Relative asset paths keep working because they resolve against
+            # the process CWD, which is ROOT, not against the brief's own
+            # location -- so it does not matter where the scratch file lives.
+            text = body.get("text")
+            if isinstance(text, str) and text.strip():
+                try:
+                    scratch_dir = os.path.join(ROOT, ".cache")
+                    os.makedirs(scratch_dir, exist_ok=True)
+                    scratch = os.path.join(
+                        scratch_dir, "run-" + os.path.basename(p))
+                    tmp = scratch + ".part"
+                    with open(tmp, "w", encoding="utf-8") as fh:
+                        fh.write(text)
+                    os.replace(tmp, scratch)
+                    p = scratch
+                except OSError as exc:
+                    with LOCK:
+                        STATE["running"] = False
+                    return self._json(
+                        {"error": f"could not stage the brief for this run: {exc}"}, 500)
+
             threading.Thread(
                 target=_do_run,
                 args=(p, body.get("provider", "mock"), bool(body.get("regen")),
-                      str(body.get("storage", "local")), str(body.get("model", ""))),
+                      str(body.get("storage", "")), str(body.get("model", ""))),
                 daemon=True).start()
             return self._json({"ok": True})
 
