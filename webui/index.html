@@ -3,6 +3,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>FDE Social Content Agentic Automation &amp; Analytics</title>
+<!-- Served by its own route rather than picked up as a static file: the
+     favicon is requested before anything else and must not depend on the
+     server's working directory. It is what makes the app window read as an
+     application in the taskbar instead of an anonymous browser window. -->
+<link rel="icon" type="image/png" href="/appicon.png">
 <style>
 /* ==========================================================================
    Adobe Spectrum (dark), with a macOS type stack.
@@ -111,7 +116,10 @@ header.topbar{
 }
 .brandmark{display:flex;align-items:center;gap:10px;padding:8px 0;
   min-width:0;flex:0 1 auto}
-.brandmark .glyph{width:24px;height:24px;flex:none;display:block}
+/* border-radius matches the icon's own rounded square so it does not sit on
+   a slightly different corner radius to everything else in the bar. */
+.brandmark .glyph{width:24px;height:24px;flex:none;display:block;
+  border-radius:5px}
 .brandmark .txt{min-width:0}
 .brandmark b{display:block;font:600 13.5px var(--sans);letter-spacing:-.012em;
   color:var(--g900);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -892,19 +900,21 @@ header.topbar .ghlink{margin-left:0;align-self:center;flex:none}
 
 .splcard{
   width:min(540px,calc(100% - 40px));
-  background:linear-gradient(160deg,#2b2b2e 0%,var(--g75) 46%,#241f2b 100%);
+  background:linear-gradient(160deg,#2e2b2a 0%,var(--g75) 48%,#2a1f1e 100%);
   border:1px solid var(--g300);border-radius:10px;box-shadow:var(--shadow-lg);
   padding:34px 34px 26px;position:relative;overflow:hidden;
 }
-/* The wash behind the mark. Static -- a pulsing gradient on a splash that is
-   usually up for under a second reads as a rendering glitch. */
+/* The wash behind the mark, warm to sit with the red icon rather than fight
+   it. Static -- a pulsing gradient on a panel that is usually up for under a
+   second reads as a rendering glitch, not as polish. */
 .splcard::before{
   content:'';position:absolute;top:-90px;right:-70px;width:280px;height:280px;
-  background:radial-gradient(circle,rgba(177,76,255,.20),transparent 68%);
+  background:radial-gradient(circle,rgba(232,60,40,.18),transparent 68%);
   pointer-events:none;
 }
-.splmark{display:flex;align-items:center;gap:13px;margin-bottom:22px}
-.splmark svg{width:42px;height:42px;flex:none}
+.splmark{display:flex;align-items:center;gap:14px;margin-bottom:22px}
+.splmark img{width:46px;height:46px;flex:none;border-radius:10px;
+  box-shadow:0 3px 12px rgba(0,0,0,.45)}
 .spltitle{font:600 19px/1.25 var(--sans);letter-spacing:-.02em;color:var(--g900)}
 .splby{font:11.5px var(--sans);color:var(--g600);margin-top:3px}
 .splby a{color:var(--g600);text-decoration:none}
@@ -965,17 +975,7 @@ header.topbar .ghlink{margin-left:0;align-self:center;flex:none}
 <div id="splash">
   <div class="splcard">
     <div class="splmark">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <defs><linearGradient id="ffgs" x1="0" y1="1" x2="1" y2="0">
-          <stop offset="0%"  stop-color="#ff3f7f"/>
-          <stop offset="48%" stop-color="#ff7a29"/>
-          <stop offset="100%" stop-color="#b14cff"/>
-        </linearGradient></defs>
-        <path fill="url(#ffgs)" d="M12 .8c.35 4.2 1.5 6.9 3.3 8.6 1.7 1.6 4.3 2.4 7.9 2.6
-          -3.6.2-6.2 1-7.9 2.6-1.8 1.7-2.95 4.4-3.3 8.6-.35-4.2-1.5-6.9-3.3-8.6C7 13 4.4 12.2.8
-          12c3.6-.2 6.2-1 7.9-2.6C10.5 7.7 11.65 5 12 .8z"/>
-        <circle cx="19.4" cy="4.6" r="2.1" fill="url(#ffgs)" opacity=".85"/>
-      </svg>
+      <img src="/appicon.png" alt="" width="46" height="46">
       <div>
         <div class="spltitle">FDE Social Content<br>Agentic Automation &amp; Analytics</div>
         <div class="splby">Douglas McKay ·
@@ -998,20 +998,11 @@ header.topbar .ghlink{margin-left:0;align-self:center;flex:none}
 <div class="topinner">
 
   <div class="brandmark" title="campaign brief in &rarr; on-spec, checked creatives out">
-    <!-- A four-point spark in Firefly's gradient. Drawn here rather than
-         embedding Adobe's actual mark: the trademark is not mine to ship in
-         a public repo, and a hand-drawn nod is honest about being a nod. -->
-    <svg class="glyph" viewBox="0 0 24 24" aria-hidden="true">
-      <defs><linearGradient id="ffg" x1="0" y1="1" x2="1" y2="0">
-        <stop offset="0%"  stop-color="#ff3f7f"/>
-        <stop offset="48%" stop-color="#ff7a29"/>
-        <stop offset="100%" stop-color="#b14cff"/>
-      </linearGradient></defs>
-      <path fill="url(#ffg)" d="M12 .8c.35 4.2 1.5 6.9 3.3 8.6 1.7 1.6 4.3 2.4 7.9 2.6
-        -3.6.2-6.2 1-7.9 2.6-1.8 1.7-2.95 4.4-3.3 8.6-.35-4.2-1.5-6.9-3.3-8.6C7 13 4.4 12.2.8
-        12c3.6-.2 6.2-1 7.9-2.6C10.5 7.7 11.65 5 12 .8z"/>
-      <circle cx="19.4" cy="4.6" r="2.1" fill="url(#ffg)" opacity=".85"/>
-    </svg>
+    <!-- Adobe Firefly's mark, used because this is a take-home exercise being
+         submitted TO Adobe for a Firefly Services role. It is Adobe's
+         trademark, not this project's, and its presence is not a claim of
+         affiliation or endorsement -- see the note in the README. -->
+    <img class="glyph" src="/appicon.png" alt="" width="24" height="24">
     <div class="txt">
       <b>FDE Social Content Agentic Automation &amp; Analytics</b>
       <span>Author, Douglas McKay,
@@ -1340,6 +1331,36 @@ function splashFailed(msg){
   $('#splfootnote').after(b);
 }
 
+/* Tell the server the window is still on screen.
+ *
+ * Only in app-window mode. When the server launched the window it owns that
+ * window's lifetime, and the page answering is the only reliable evidence
+ * anybody is still looking at it -- watching the browser PROCESS is not, which
+ * is what the first version got wrong: a Chrome already running on this
+ * profile takes the URL, the launched process exits at once, and the server
+ * shut itself down a second after opening.
+ *
+ * In an ordinary browser tab none of this runs. Nobody asked the app to
+ * manage a tab it did not open, and a tool that quits because you closed one
+ * of your tabs would be obnoxious.
+ */
+function startHeartbeat(seconds){
+  const ping = () => { fetch('/api/ping', {cache: 'no-store'}).catch(() => {}); };
+  ping();
+  setInterval(ping, seconds * 1000);
+  // A laptop that slept stops pinging. These make the page check in the
+  // instant it is looked at again, so waking up does not race the timeout.
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) ping(); });
+  addEventListener('focus', ping);
+  addEventListener('pageshow', ping);
+  // Closing beats waiting twenty seconds for the timeout. This only expires
+  // the heartbeat early -- pagehide also fires on a reload, and the reloaded
+  // page checks in again long before the shortened deadline.
+  addEventListener('pagehide', () => {
+    try { navigator.sendBeacon('/api/bye', ''); } catch {}
+  });
+}
+
 async function init(){
   paintSteps();
   step('server', 'on');
@@ -1379,6 +1400,7 @@ async function init(){
 
   paintProviders(r);
   paintStale(r.stale);
+  if (r.app_window) startHeartbeat(r.ping_every || 4);
 
   step('brief', 'on');
   try {

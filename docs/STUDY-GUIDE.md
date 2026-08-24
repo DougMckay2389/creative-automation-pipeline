@@ -684,8 +684,9 @@ it.
 
 **Technically.** Chromium's `--app=<url>` mode, launched with `subprocess.Popen`
 against whichever of Chrome, Edge, Brave or Chromium is installed, with a
-throwaway `--user-data-dir` under `.cache/`. A daemon thread waits on that
-process and shuts the server down when it exits.
+throwaway `--user-data-dir` under `.cache/`. The page then checks in on
+`/api/ping` every four seconds, and a daemon thread shuts the server down
+after twenty seconds of silence.
 
 **The three decisions worth defending:**
 
@@ -713,6 +714,34 @@ process and shuts the server down when it exits.
    port handshake follows, and stating it as a rule — *a run in progress is
    never interrupted by a convenience* — is better than defending two
    coincidentally similar behaviours.
+
+**The bug in that third decision, which is the one to actually tell them
+about.** The first version waited on the launched Chrome process and treated
+its exit as "the window closed". It shipped, and it broke on the second
+launch: a Chrome already running on that profile takes the URL, the launched
+process exits immediately, and the watcher shut the server down about a second
+after opening. The window that had just appeared showed
+`ERR_CONNECTION_REFUSED`.
+
+Two things worth saying about it:
+
+* **The test was wrong before the code was.** My launch-mode test killed the
+  browser between trials, so every trial got a clean profile — the one thing a
+  real user never does. It verified the happy path into existence. The
+  replacement test launches twice in a row with the window left open, which is
+  the actual user behaviour, and it fails against the old code.
+* **The fix was to change the signal, not to patch the symptom.** I could have
+  added "ignore an exit within N seconds" and it would have mostly worked.
+  Process lifetime was never sound evidence for *is anyone looking at this*;
+  the page answering is. So the page checks in, and the server watches for
+  silence. Nothing about how Chrome manages its processes can break that.
+
+`pagehide` also sends a `sendBeacon` to `/api/bye`, which does **not** shut
+anything down — it only expires the heartbeat early, so a genuine close takes
+about three seconds instead of twenty. It cannot kill a reload, because
+`pagehide` fires on reloads too and the reloaded page checks in well inside
+that window. A close signal that hard-stopped the server would have been a
+second, worse version of the same bug.
 
 **The splash, and why the list is real.**
 

@@ -417,6 +417,12 @@ class Handler(SimpleHTTPRequestHandler):
                              if "campaigns/aurora-spring.yaml" in briefs
                              else (briefs[0] if briefs else ""))
             return self._json({"version": APP_VERSION,
+                               # The page only sends heartbeats when the
+                               # server owns the window. In a browser tab
+                               # nobody asked us to manage the lifetime, so
+                               # closing the tab must not stop the server.
+                               "app_window": APP_MODE["on"],
+                               "ping_every": PING_EVERY,
                                "briefs": briefs,
                                "default_brief": default_brief,
                                "providers": provider_status(),
@@ -532,6 +538,37 @@ class Handler(SimpleHTTPRequestHandler):
                     item["broken"] = True
                 out.append(item)
             return self._json({"assets": out, "dir": ASSET_DIR})
+
+        if route == "/appicon.png":
+            """The app icon, for the tab and the window.
+
+            Its own route rather than relying on static serving, because the
+            favicon is requested before anything else on the page and must not
+            depend on what the server's working directory happens to be.
+            """
+            p = os.path.join(ROOT, "webui", "appicon.png")
+            if not os.path.isfile(p):
+                self.send_error(404)
+                return
+            data = open(p, "rb").read()
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "max-age=86400")
+            self.end_headers()
+            self.wfile.write(data)
+            return
+
+        if route == "/api/ping":
+            """The page saying it is still on screen.
+
+            Only meaningful in app-window mode, where the server owns the
+            window's lifetime. Cheap on purpose -- it runs every few seconds
+            and must never be the reason anything is slow.
+            """
+            HEARTBEAT["seen"] = True
+            HEARTBEAT["last"] = time.time()
+            return self._json({"ok": True})
 
         if route == "/api/whoami":
             """Who is answering on this port?
@@ -660,6 +697,23 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):                                             # noqa: N802
         route = urlparse(self.path).path
+
+        if route == "/api/bye":
+            """The window is going away -- sent by navigator.sendBeacon.
+
+            Handled before the JSON body parse because a beacon is not JSON.
+
+            It does NOT shut anything down. `pagehide` fires on an ordinary
+            reload too, and a reload that kills the server it is reloading
+            from is a spectacular way to break the app. All this does is
+            expire the heartbeat, so the watchdog's normal timeout arrives in
+            a couple of seconds instead of twenty -- and a reload's new page
+            checks in well inside that and cancels it.
+            """
+            HEARTBEAT["last"] = min(HEARTBEAT["last"],
+                                    time.time() - CLOSE_AFTER + 3)
+            return self._json({"ok": True})
+
         try:
             body = self._body()
         except Exception:
@@ -1101,6 +1155,15 @@ def _ask_previous_copy_to_stand_down(port: int) -> str:
 APP_WINDOW = (1500, 960)
 APP_PROFILE = os.path.join(ROOT, ".cache", "appwindow")
 
+# Is the page still there? Set by /api/ping, which the page calls every
+# few seconds when it was opened as an app window.
+APP_MODE = {"on": False}
+HEARTBEAT = {"seen": False, "last": 0.0}
+PING_EVERY = 4      # seconds; the page's interval
+CLOSE_AFTER = 20    # seconds of silence before the window is presumed shut
+ARM_WITHIN = 120    # if nothing ever checks in, stop watching entirely
+
+
 
 def _chromium_binaries() -> list[str]:
     """Every Chromium-family browser this machine might have, best first.
@@ -1152,40 +1215,62 @@ def _open_app_window(url: str) -> bool:
            "--no-default-browser-check",
            "--disable-features=Translate,MediaRouter"]
     try:
-        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL)
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
     except OSError:
         return False
 
+    APP_MODE["on"] = True
     print(f"  opened as an app window ({os.path.basename(exes[0])})")
     print("  closing the window stops the server\n")
-    threading.Thread(target=_quit_when_window_closes, args=(proc, url),
-                     daemon=True).start()
+    threading.Thread(target=_quit_when_the_page_stops_answering,
+                     args=(url,), daemon=True).start()
     return True
 
 
-def _quit_when_window_closes(proc, url: str) -> None:
+def _quit_when_the_page_stops_answering(url: str) -> None:
     """Closing the window quits the app -- unless a run is in flight.
 
-    An application you have to go and Ctrl-C in a terminal after closing its
-    window is not an application, it is a server with a nice front end. But
-    the guard matters more than the convenience: shutting down mid-run would
-    abandon a half-written output folder and waste generative calls that have
-    already been paid for. Same rule the port handshake follows -- a run in
-    progress is never interrupted by a convenience.
+    This watches the PAGE, not the process it was launched from. The first
+    version waited on the Popen'd Chrome and treated its exit as "the window
+    closed", which is wrong in the most ordinary case there is: if a Chrome is
+    already running on this profile, the new one hands it the URL and exits
+    immediately. The watcher then shut the server down about a second after
+    start, and the window that had just opened showed ERR_CONNECTION_REFUSED.
+
+    That bug survived testing because the test killed the browser between
+    launches, so every launch got a clean profile -- which is the one thing a
+    real user never does. Process lifetime was never a sound signal for "is
+    anyone looking at this"; the page answering is.
+
+    Not shutting down while a run is going is the important half. Abandoning a
+    run half-written wastes generative calls that have already been paid for,
+    and leaves an output folder that looks complete and is not. Same rule the
+    port handshake follows: a run in progress is never interrupted by a
+    convenience.
     """
-    try:
-        proc.wait()
-    except Exception:                                             # noqa: BLE001
-        return
-    if STATE.get("running"):
-        print("\n  Window closed, but a run is still going -- left running so it")
-        print("  can finish. Press Ctrl-C once it is done, or reopen:")
-        print(f"    {url}\n")
-        return
+    started = time.time()
+    while True:
+        time.sleep(2)
+        if SERVER is None:
+            return
+        # A run outranks everything. The window may well be shut -- the
+        # timeout below will fire once the run is finished and nothing has
+        # checked in since.
+        if STATE.get("running"):
+            continue
+        # Nothing has ever checked in. Either no window opened, or the browser
+        # cannot reach us. Either way, never shut down on an assumption:
+        # give up watching and stay up.
+        if not HEARTBEAT["seen"]:
+            if time.time() - started > ARM_WITHIN:
+                return
+            continue
+        if time.time() - HEARTBEAT["last"] > CLOSE_AFTER:
+            break
+
     print("\n  window closed - stopping\n")
-    if SERVER is not None:
-        threading.Thread(target=SERVER.shutdown, daemon=True).start()
+    threading.Thread(target=SERVER.shutdown, daemon=True).start()
 
 
 def _open_in_browser(url: str) -> None:

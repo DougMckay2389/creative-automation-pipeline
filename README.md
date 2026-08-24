@@ -3,6 +3,11 @@
 **Douglas McKay** · <doug@dougmckay.info> · take-home exercise for Adobe
 Firefly Services, Forward Deployed Engineer (Creative AI)
 
+> The Adobe Firefly icon appears in this app's window and splash because this
+> is an exercise submitted to Adobe for a Firefly Services role. Adobe Firefly
+> and the Firefly mark are trademarks of Adobe Inc.; this project is not
+> affiliated with, sponsored by or endorsed by Adobe.
+
 A campaign brief goes in. An organized folder of on-spec, checked social
 creatives comes out — every product, every market, every aspect ratio — from
 as few generative calls as the brief actually requires. Then performance goes
@@ -55,6 +60,13 @@ checks the three dependencies, starts a local server on
 strip, no address bar, no eleven other tabs around a tool whose job is judging
 images. Closing the window stops the server, unless a run is still going, in
 which case it is left alone to finish.
+
+"Closing the window" is detected by the *page* going quiet, not by the browser
+process exiting. That distinction is load-bearing: if a Chrome is already
+running on this profile, the newly launched one hands it the URL and exits
+immediately — so watching the process meant the server shut itself down about
+a second after opening, every second launch. The page checks in every few
+seconds instead; twenty seconds of silence, and nobody is looking.
 
 That is Chromium's `--app` mode, not Electron and not pywebview. Both were
 rejected for the reason the rest of this repo has three dependencies: the
