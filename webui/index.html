@@ -1126,6 +1126,31 @@ header.topbar .ghlink{margin-left:0;align-self:center;flex:none}
 .ebadge.live{background:var(--pass-soft);color:var(--pass)}
 .ebadge.syn{background:var(--review);color:#1b1004}
 .ebadge.off{background:var(--g200);color:var(--muted)}
+
+/* The detail modal shows video as well as stills now, so the media slot has
+   to size both the same way -- otherwise a 9:16 clip opens taller than the
+   dialog and the download links end up below the fold. */
+.ambody video{max-width:100%;max-height:62vh;display:block;
+  background:var(--g50);border-radius:var(--r)}
+.slot{cursor:pointer}
+.slot:hover{border-color:var(--accent)}
+
+/* ---------- generate a product image, once ---------- */
+.genrow{display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap}
+.genbtn{background:var(--accent);border:0;color:#fff;border-radius:var(--r);
+  padding:6px 14px;font:500 12px var(--sans);cursor:pointer;white-space:nowrap}
+.genbtn:hover:not([disabled]){background:var(--accent-hi)}
+.genbtn[disabled]{opacity:.6;cursor:progress}
+.gennote{font:10.5px/1.55 var(--sans);color:var(--muted);flex:1;min-width:150px}
+.gennote b{color:var(--g800)}
+.genout:empty{display:none}
+.genok{margin-top:9px;background:var(--pass-soft);
+  border:1px solid rgba(51,171,132,.35);border-left:3px solid var(--pass);
+  border-radius:var(--r);padding:9px 11px;font:11px/1.6 var(--sans);
+  color:var(--ink2)}
+.genok b{color:var(--pass)}
+.genok code{font:10px var(--mono);background:var(--g200);color:var(--g700);
+  border-radius:3px;padding:1px 5px;word-break:break-all}
 </style>
 </head><body>
 <!-- Four panes, one visible at a time, switched by the tabs in the top bar.
@@ -1702,6 +1727,19 @@ function renderForm(){
                 <textarea data-p="products.${i}.subject"
                   placeholder="a frosted glass serum dropper bottle with a matte white cap"
                   >${val(p.subject)}</textarea>
+                <!-- Generate the product ONCE and keep it, rather than
+                     re-inventing it on every run. A product invented fresh
+                     each time is a paid call each time and a slightly
+                     different bottle each time, which is the opposite of what
+                     a brand wants. The result lands in the asset library and
+                     this product switches to using it. -->
+                <div class="genrow" data-gen-for="${i}">
+                  <button type="button" class="genbtn" data-generate="${i}"
+                    >Generate now</button>
+                  <span class="gennote">makes one image, saves it to your
+                    assets, and points this product at it</span>
+                </div>
+                <div class="genout" data-genout="${i}"></div>
               </div>
 
               <div class="pcfield">
@@ -1917,6 +1955,72 @@ const ASSET_EXISTS = {};
  * All three end at the same place: `products[i].asset` gets a path, and the
  * card repaints so the mode switch and the prompts reflect the new reality.
  * ------------------------------------------------------------------ */
+
+/* Generate one product image, keep it, and switch this product to using it.
+ *
+ * The interesting part is the last step. Generating a product and then leaving
+ * the card in "Generate product" mode would mean the next run generates it
+ * AGAIN -- a second charge for a second, slightly different bottle. So on
+ * success the asset path is set and the mode flips to reuse, which is the
+ * whole point: this turns a recurring cost into a one-off one. */
+async function generateProduct(i){
+  const card = document.querySelector(`.pcard[data-pcard="${i}"]`);
+  const out = document.querySelector(`[data-genout="${i}"]`);
+  const btn = document.querySelector(`[data-generate="${i}"]`);
+  const p = (BRIEF && BRIEF.products && BRIEF.products[i]) || null;
+  if (!p || !out || !btn) return;
+
+  const subject = (p.subject || '').trim();
+  if (!subject) {
+    out.innerHTML = `<div class="note err" style="margin:8px 0 0">Write a
+      product prompt first — that is what gets generated.</div>`;
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>Generating…';
+  out.innerHTML = '';
+
+  let r;
+  try {
+    r = await (await fetch('/api/generate-product', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({product: p.id || `product-${i}`, subject,
+                            surface: '', provider: currentProvider()})})).json();
+  } catch { r = {error: 'the request failed'}; }
+
+  btn.disabled = false;
+  btn.textContent = 'Generate now';
+
+  if (!r || r.error) {
+    out.innerHTML = `<div class="note err" style="margin:8px 0 0">${
+      esc((r && r.error) || 'generation failed')}</div>`;
+    return;
+  }
+
+  setAsset(i, r.path);
+  // Reuse, not regenerate. Both flags off is the "photo as shot" state.
+  p.regenerate_product = false;
+  p.regenerate_surface = false;
+  syncYaml();
+  renderForm();
+
+  const o = document.querySelector(`[data-genout="${i}"]`);
+  if (o) o.innerHTML = `<div class="genok">
+    <b>Saved</b> to <code>${esc(r.path)}</code>
+    &nbsp;·&nbsp; ${r.width}×${r.height} &nbsp;·&nbsp;
+    ${Math.round((r.bytes || 0) / 1024)} KB &nbsp;·&nbsp;
+    ${esc(r.provider || '')}${r.model ? ' · ' + esc(r.model) : ''}
+    <div class="gennote">This product now <b>reuses</b> that file, so it costs
+      nothing on the next run. The prompt it was made from:
+      <code>${esc((r.prompt || '').slice(0, 180))}</code></div>
+  </div>`;
+}
+
+$('#formpane').addEventListener('click', (e) => {
+  const g = e.target.closest('[data-generate]');
+  if (g) generateProduct(parseInt(g.dataset.generate, 10));
+});
 
 function setAsset(i, path){
   const p = BRIEF && BRIEF.products && BRIEF.products[i];
@@ -2706,7 +2810,8 @@ function engChannel(p, loc, ch){
 
 function engSlot(s){
   const badge = {pass: 'b-pass', review: 'b-review', block: 'b-block'}[s.verdict] || '';
-  return `<div class="slot">
+  return `<div class="slot" data-slot="${esc(s.id)}"
+               title="open — locations and downloads">
     <div class="sh"><span>${esc(s.date)}</span><span>${esc(s.ratio)}</span>
       <span class="kind ${s.kind === 'video' ? 'video' : ''}">${esc(s.kind)}</span></div>
     <div class="shot">${
@@ -2982,6 +3087,10 @@ function cardHtml(r, base){
        data-src="${base}${rel}" data-rel="${esc(rel)}"
        data-dir="${esc(String(r.out_dir || '').replace(/\\/g,'/'))}"
        data-s3="${esc(s3)}" data-url="${esc(url)}"
+       data-layered="${r.layered ? base + esc(r.layered) : ''}"
+       data-layered-path="${esc(r.layered || '')}"
+       data-layered-uri="${esc(r.layered_uri || '')}"
+       data-layered-url="${esc(r.layered_share || '')}"
        title="click to see where this file lives">
     <div class="ph"><img loading="lazy" src="${base}${rel}" alt=""></div>
     <div class="m"><span class="badge ${cls}">${esc(r.verdict)}</span>
@@ -3252,6 +3361,16 @@ $('#results').addEventListener('click', (e) => {
       t => t.classList.toggle('on', chosen && t.dataset.ratio === chosen.ratio));
   }
   if (!chosen) return;
+  // Clicking a deliverable does both: it re-points the stage strip behind the
+  // dialog, and it opens the dialog. The strip is what you want when you
+  // close it, and asking for two different gestures to inspect one file is
+  // the kind of thing only the person who wrote it would remember.
+  if (tile && LAST_RUN) {
+    const want = tile.dataset.variant;
+    const r = LAST_RUN.sum.results.find(
+      x => (x.variant_id || x.variant) === want);
+    if (r) openAsset(assetFromResult(r, LAST_RUN.base));
+  }
   panel.querySelectorAll('.deltile').forEach(d => d.classList.toggle(
     'on', d.dataset.variant === (chosen.variant_id || chosen.variant)));
   panel.querySelector('.mpstage').innerHTML = stageStrip(chosen, LAST_RUN.base);
@@ -3286,30 +3405,101 @@ $('#run').addEventListener('click', doRun);
  * Both are shown truthfully rather than described as one thing, because the
  * difference is exactly what somebody needs to know before they share it.
  * ------------------------------------------------------------------ */
-function openAsset(card){
+/* One modal, two callers.
+ *
+ * The pipeline's Results tab and the engine's schedule grid both produce a
+ * thing somebody wants to look at properly and then take away, and two
+ * separate dialogs were never going to stay in sync. `openAsset` takes a
+ * plain descriptor now; `assetFromCard` builds one from a result card's
+ * dataset, `assetFromSlot` from an engine slot. */
+function assetFromCard(card){
+  return {src: card.dataset.src || '', rel: card.dataset.rel || '',
+          dir: card.dataset.dir || '',
+          s3: card.dataset.s3 || '', url: card.dataset.url || '',
+          // `layered` is a ready-to-use URL in BOTH builders; `layeredPath` is
+          // the text to show. The two callers measure their paths from
+          // different roots -- the run folder and the repo root -- and letting
+          // that difference reach the modal is how you get a download link
+          // that 404s for one of them.
+          layered: card.dataset.layered || '',
+          layeredPath: card.dataset.layeredPath || '',
+          layeredUri: card.dataset.layeredUri || '',
+          layeredUrl: card.dataset.layeredUrl || '', video: ''};
+}
+
+/* From a finished run's VariantResult. Its paths are relative to the RUN
+   folder, so `base` turns them into URLs -- the third root in play, which is
+   exactly why every builder here hands the modal ready-made URLs. */
+function assetFromResult(r, base){
+  const rel = String(r.path).replace(/\\/g, '/');
+  const lay = String(r.layered || '').replace(/\\/g, '/');
+  return {src: base + rel, rel, dir: String(r.out_dir || '').replace(/\\/g, '/'),
+          s3: r.stored_uri || '', url: r.share_url || '',
+          layered: lay ? base + lay : '', layeredPath: lay,
+          layeredUri: r.layered_uri || '', layeredUrl: r.layered_share || '',
+          video: '', verdict: r.verdict || '', score: r.score || 0};
+}
+
+function assetFromSlot(s){
+  return {src: s.produced ? '/out/' + s.produced : '',
+          rel: (s.produced || '').split('/').pop(),
+          local: s.produced || '', s3: '', url: '',
+          layered: s.layered ? '/out/' + s.layered : '',
+          layeredPath: s.layered || '', layeredUri: '', layeredUrl: '',
+          video: s.video ? '/out/' + s.video : '', caption: s.caption || '',
+          verdict: s.verdict || '', score: s.score || 0};
+}
+
+/* Every file this creative produced, as something you can actually take.
+   `download` on a same-origin link is enough -- no extra route, and the saved
+   filename is the one on disk rather than a query string. */
+function downloadRow(a){
+  const items = [];
+  if (a.video) items.push(['Video (.mp4)', a.video]);
+  if (a.src) items.push([a.video ? 'Still frame (.jpg)' : 'Flattened (.jpg)', a.src]);
+  if (a.layered) items.push(['Layered (.psd)', a.layered]);
+  if (!items.length) return '';
+  return `<div class="amrow"><h4>Download</h4>
+    <div class="amact">${items.map(([label, href]) =>
+      `<a class="go" href="${esc(href)}" download>${esc(label)}</a>`).join('')}</div>
+    ${a.layered ? `<div class="amnote">The .psd carries the product, the scrim,
+      the message and the logo as separate layers, so the copy can be re-set
+      without rebuilding the creative. Its flattened composite is the same
+      image as the JPEG.</div>` : ''}</div>`;
+}
+
+function openAsset(a){
   const m = $('#assetmodal');
-  const s3 = card.dataset.s3 || '';
-  const url = card.dataset.url || '';
+  const s3 = a.s3 || '';
+  const url = a.url || '';
   const isPublic = /\/public\//.test(s3);
-  const dir = card.dataset.dir || '';
-  const rel = card.dataset.rel || '';
-  const localPath = (dir ? dir.replace(/\/$/,'') + '/' : '') + rel;
+  const dir = a.dir || '';
+  const rel = a.rel || '';
+  const localPath = a.local || ((dir ? dir.replace(/\/$/,'') + '/' : '') + rel);
 
   m.innerHTML = `
     <div class="amcard" role="dialog" aria-modal="true">
       <div class="amhead">
         <b>${esc(rel.split('/').pop())}</b>
+        ${a.verdict ? `<span class="badge b-${esc(a.verdict)}">${esc(a.verdict)}</span>` : ''}
+        ${a.score ? `<span class="tag">${a.score}/100</span>` : ''}
         <button class="x" aria-label="close">&times;</button>
       </div>
       <div class="ambody">
-        <img src="${esc(card.dataset.src)}" alt="">
+        ${a.video
+          ? `<video src="${esc(a.video)}#t=2" controls loop muted
+                    playsinline preload="metadata"></video>`
+          : `<img src="${esc(a.src)}" alt="">`}
         <div>
           <div class="amrow">
             <h4>Local file</h4>
             <code>${esc(localPath)}</code>
             <div class="amact"><button data-copy="${esc(localPath)}">Copy path</button>
-              <a href="${esc(card.dataset.src)}" target="_blank" rel="noopener">Open</a></div>
+              <a href="${esc(a.video || a.src)}"
+                 target="_blank" rel="noopener">Open</a></div>
+            ${a.layeredPath ? `<code>${esc(a.layeredPath)}</code>` : ''}
           </div>
+          ${downloadRow(a)}
           <div class="amrow">
             <h4>Object storage</h4>
             ${!s3
@@ -3326,6 +3516,12 @@ function openAsset(card){
                          : `<button class="go" data-sign="${esc(s3)}">Get live link</button>`}
                  </div>
                  ${url ? `<code class="amurl">${esc(url)}</code>` : ''}
+                 ${a.layeredUri ? `<code>${esc(a.layeredUri)}</code>
+                   ${a.layeredUrl ? `<div class="amact">
+                     <a class="go" href="${esc(a.layeredUrl)}" target="_blank"
+                        rel="noopener">Open .psd ↗</a>
+                     <button data-copy="${esc(a.layeredUrl)}">Copy .psd link</button>
+                   </div>` : ''}` : ''}
                  <div class="amnote">${isPublic
                    ? `Anyone with this link can open it, and it does not expire.
                       The bucket still cannot be listed, so the link cannot be
@@ -3344,7 +3540,25 @@ function openAsset(card){
 
 $('#results').addEventListener('click', (e) => {
   const card = e.target.closest('.card');
-  if (card) openAsset(card);
+  if (card) openAsset(assetFromCard(card));
+});
+
+/* The engine's schedule grid opens the same modal. Its slots carry their paths
+   in ENG's data rather than in the DOM, so the tile only needs to say which
+   slot it is. */
+$('#anpane').addEventListener('click', (e) => {
+  const tile = e.target.closest('[data-slot]');
+  if (!tile || !ENG.data) return;
+  const want = tile.dataset.slot;
+  for (const pid of (ENG.data.order || [])) {
+    const plan = (ENG.data.products[pid] || {}).plan;
+    for (const doc of Object.values(plan ? plan.markets : {})) {
+      for (const c of Object.values(doc.channels)) {
+        const s = (c.slots || []).find(x => x.id === want);
+        if (s) return openAsset(assetFromSlot(s));
+      }
+    }
+  }
 });
 
 $('#assetmodal').addEventListener('click', async (e) => {

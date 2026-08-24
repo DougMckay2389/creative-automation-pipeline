@@ -323,7 +323,7 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
             variant_id=v.id, product_id=v.product.id, locale=v.market.locale,
             ratio=v.ratio.id, path=os.path.relpath(path, out_dir),
             stored_uri=stored_uri, share_url=share_url,
-            layered=(os.path.relpath(comp.layered, out_dir)
+            layered=(os.path.relpath(comp.layered, out_dir).replace(os.sep, "/")
                      if comp.layered else ""),
             layered_uri=layered_uri, layered_share=layered_share,
             verdict=res.verdict.value, score=compliance_score(res.findings),

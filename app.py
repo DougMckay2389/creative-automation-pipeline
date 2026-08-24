@@ -1140,6 +1140,80 @@ class Handler(SimpleHTTPRequestHandler):
                 "preflight": [f.as_dict() for f in preflight_brief(b)],
             })
 
+        if route == "/api/generate-product":
+            """Generate ONE product image and put it in the asset library.
+
+            The point is to turn "generate this product every run" into "here
+            is the product, reuse it". A product invented fresh on every run is
+            a paid call every run AND a slightly different bottle every run,
+            which is the opposite of what a brand wants. Generating it once,
+            keeping it, and then reusing or resurfacing it is the whole cost
+            argument of this repo applied one step earlier.
+
+            It uses the SAME `build_prompt` and the same provider a run uses,
+            so what lands here is exactly what a run would have produced.
+            """
+            from dataclasses import replace as _replace
+
+            from pipeline.assets import NEGATIVE, build_prompt
+            from pipeline.brief import Product, stable_seed
+            from pipeline.providers import GenerationRequest, get_provider
+
+            subject = (body.get("subject") or "").strip()
+            if not subject:
+                return self._json({"error": "no product prompt given"}, 400)
+            pid = (body.get("product") or "product").strip() or "product"
+
+            with LOCK:
+                if STATE["running"] or ENGINE["running"]:
+                    return self._json({"error": "a run is in progress"}, 409)
+
+            try:
+                prov = get_provider(body.get("provider") or default_provider())
+                # A neutral surface on purpose. This is the SOURCE photograph,
+                # the thing every later scene is built from -- baking a
+                # dramatic set into it would mean every market inherits a
+                # backdrop nobody chose.
+                stand_in = Product(
+                    id=pid, name=pid, asset=None, subject=subject,
+                    surface=(body.get("surface")
+                             or "a plain seamless neutral studio backdrop"))
+                prompt = build_prompt(stand_in)
+                seed = int(body.get("seed") or 0) or stable_seed(
+                    pid, subject, str(time.time()))
+                # Square, and the same edge the resolver uses for a master --
+                # this IS a master, it is just being kept rather than consumed.
+                res = prov.generate(GenerationRequest(
+                    prompt=prompt, seed=seed, size=(1024, 1024),
+                    negative=NEGATIVE))
+            except Exception as exc:                          # noqa: BLE001
+                traceback.print_exc()
+                return self._json({"error": f"{type(exc).__name__}: {exc}"}, 200)
+
+            # Saved ALONGSIDE whatever is already there, never over it. A
+            # generation you dislike must not have destroyed an approved
+            # photograph, and there is no undo for an overwrite.
+            os.makedirs(ASSET_DIR, exist_ok=True)
+            stamp = time.strftime("%Y%m%d-%H%M%S")
+            safe = re.sub(r"[^a-zA-Z0-9._-]", "-", pid)[:48] or "product"
+            name = f"{safe}-{stamp}.png"
+            dest = os.path.join(ASSET_DIR, name)
+            try:
+                with open(dest, "wb") as fh:
+                    fh.write(res.png_bytes)
+                with Image.open(dest) as im:
+                    w, h = im.size
+            except Exception as exc:                          # noqa: BLE001
+                return self._json({"error": f"could not save: {exc}"}, 200)
+
+            rel = os.path.relpath(dest, ROOT).replace("\\", "/")
+            return self._json({"ok": True, "path": rel, "name": name,
+                               "width": w, "height": h,
+                               "prompt": prompt, "seed": seed,
+                               "provider": getattr(prov, "name", ""),
+                               "model": getattr(prov, "model", ""),
+                               "bytes": os.path.getsize(dest)})
+
         if route == "/api/engine/validate":
             """Does this pasted YAML parse, and what is in it?
 
