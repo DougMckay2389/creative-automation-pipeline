@@ -46,6 +46,7 @@ class Composition:
     logo_clearspace_ratio: float = 0.0
     dominant_hex: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    layered: str = ""                     # .psd beside it, when one was asked for
 
 
 # --------------------------------------------------------------------------
@@ -246,7 +247,7 @@ class Composer:
 
     def compose(self, master_path: str, variant: Variant, out_path: str,
                 on_stage=None, stage_dir: str = "",
-                stage_key: str = "") -> Composition:
+                stage_key: str = "", layered_path: str = "") -> Composition:
         """Compose one deliverable.
 
         `on_stage(name, params, ms, preview)` is an optional callback fired as
@@ -289,6 +290,11 @@ class Composer:
 
         base = Image.open(master_path).convert("RGB")
         canvas = crop_to_ratio(base, r.width, r.height).convert("RGBA")
+        # Kept for the layered export. Copied rather than referenced because
+        # everything below composites onto `canvas` in place, and a layered
+        # file whose bottom layer already had the type burned into it would be
+        # a layered file in name only.
+        layer_product = canvas.copy() if layered_path else None
         tick("crop", {"Vertical subject bias": SUBJECT_BIAS_V,
                       "Safe margin": SAFE_MARGIN,
                       "Target": f"{r.width}x{r.height}"}, canvas)
@@ -309,6 +315,12 @@ class Composer:
             a = int(SCRIM_ALPHA * (i / scrim_h) ** SCRIM_FALLOFF)
             sd.line([(0, i), (r.width, i)], fill=(10, 12, 16, a))
         canvas.alpha_composite(scrim, (0, r.height - scrim_h))
+        layer_scrim = None
+        if layered_path:
+            # Full-canvas, so every layer in the PSD shares one origin. Layers
+            # at their own offsets are legal and are a nuisance to work with.
+            layer_scrim = Image.new("RGBA", (r.width, r.height), (0, 0, 0, 0))
+            layer_scrim.alpha_composite(scrim, (0, r.height - scrim_h))
         tick("scrim", {"Scrim height": SCRIM_HEIGHT,
                        "Scrim strength": round(SCRIM_ALPHA / 255, 3),
                        "Scrim falloff": SCRIM_FALLOFF}, canvas)
@@ -328,10 +340,17 @@ class Composer:
         block_h = line_h * len(lines)
         y = r.height - margin - block_h
         widest = 0.0
+        # Drawn once, onto its own transparent layer, then composited. The
+        # deliverable is byte-identical either way -- but this is what makes
+        # the copy separable afterwards, and drawing it twice (once burned in,
+        # once for the layer) would risk the two disagreeing.
+        layer_message = Image.new("RGBA", (r.width, r.height), (0, 0, 0, 0))
+        md = ImageDraw.Draw(layer_message)
         for ln in lines:
-            draw.text((margin, y), ln, font=font, fill=(255, 255, 255, 255))
+            md.text((margin, y), ln, font=font, fill=(255, 255, 255, 255))
             widest = max(widest, draw.textlength(ln, font=font))
             y += line_h
+        canvas.alpha_composite(layer_message)
 
         # Measure the type we actually drew, not the size we asked for.
         probe = font.getbbox("Hxg")
@@ -346,6 +365,7 @@ class Composer:
         # --- logo ----------------------------------------------------------
         logo_box = None
         clear_ratio = 0.0
+        layer_logo = None
         logo = self._logo_image()
         if logo is not None:
             lw = int(short_edge * float(self.logo_cfg.get("scale", 0.16)))
@@ -356,6 +376,9 @@ class Composer:
             white.putalpha(lg.split()[3])
             lx, ly = margin, margin
             canvas.alpha_composite(white, (lx, ly))
+            if layered_path:
+                layer_logo = Image.new("RGBA", (r.width, r.height), (0, 0, 0, 0))
+                layer_logo.alpha_composite(white, (lx, ly))
             logo_box = (lx, ly, lx + lw, ly + lh)
             # Clearspace actually available on the tightest side, in logo heights.
             clear_ratio = min(lx, ly, r.width - (lx + lw), r.height - (ly + lh)) / max(1, lh)
@@ -370,6 +393,28 @@ class Composer:
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         out.save(out_path, quality=92, optimize=True)
 
+        # --- layered export --------------------------------------------------
+        # Written from the SAME layers that produced the JPEG a line above, so
+        # the two cannot disagree. A layered file assembled separately would
+        # eventually drift from the deliverable it claims to be the source of,
+        # and nobody would notice until a market shipped the wrong headline.
+        layered_out = ""
+        if layered_path:
+            from .layered import Layer, write_psd
+            stack = [Layer("product", layer_product),
+                     Layer("scrim", layer_scrim),
+                     Layer("message", layer_message)]
+            if layer_logo is not None:
+                stack.append(Layer("logo", layer_logo))
+            try:
+                layered_out = write_psd(layered_path,
+                                        [l for l in stack if l.image is not None],
+                                        out)
+            except Exception as exc:                         # noqa: BLE001
+                # An export is an extra, never the deliverable. Losing it must
+                # not lose the creative -- same rule as the stage previews.
+                warnings.append(f"layered export failed: {exc}")
+
         dom = dominant_colors(out)
         tick("measure", {"Dominant colours": " ".join(dom[:3]),
                          "Type cap height": f"{cap_px:.0f}px",
@@ -383,4 +428,5 @@ class Composer:
             logo_box=logo_box, logo_clearspace_ratio=clear_ratio,
             dominant_hex=dom,
             warnings=warnings,
+            layered=layered_out,
         )

@@ -260,7 +260,8 @@ def _on_event(rec: dict) -> None:
                 k: rec.get(k) for k in
                 ("variant", "verdict", "score", "product", "locale", "ratio",
                  "message", "path", "out_dir", "findings",
-                 "stored_uri", "share_url")})
+                 "stored_uri", "share_url",
+                 "layered", "layered_uri", "layered_share")})
 
 
 def _render_sample(brief, product, market, ratio, surface: str,

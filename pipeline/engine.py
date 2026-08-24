@@ -177,9 +177,13 @@ def run(brief: Brief, planned: dict, out_root: str, root: str = ".",
                 os.makedirs(os.path.dirname(still), exist_ok=True)
 
                 try:
-                    comp = composer.compose(master.path, variant, still)
+                    comp = composer.compose(master.path, variant, still,
+                                            layered_path=still[:-4] + ".psd")
                     res = evaluate(comp, variant, brand, brief.prohibited_terms)
                     slot["produced"] = os.path.relpath(still, root).replace("\\", "/")
+                    if comp.layered:
+                        slot["layered"] = os.path.relpath(
+                            comp.layered, root).replace("\\", "/")
                     slot["verdict"] = res.verdict.value
                     slot["score"] = compliance_score(res.findings)
                     slot["findings"] = [f.as_dict() for f in res.findings]

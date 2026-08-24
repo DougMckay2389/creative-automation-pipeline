@@ -1024,6 +1024,57 @@ def test_video_is_rendered_from_the_checked_still():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_layered_export_keeps_the_copy_on_its_own_layer():
+    """The .psd must be the deliverable, taken apart -- not a lookalike.
+
+    Two things are asserted because exactly one of them failed in testing and
+    the other looked fine while it did: the layer names and order, AND that
+    the flattened composite inside the file matches the JPEG that actually
+    ships. The first version wrote four correctly-named layers and a composite
+    Pillow refused to decode, because the composite section stores its row
+    -length table for all channels at once and the per-layer sections do not.
+    Everything that is not Photoshop reads only that composite.
+    """
+    from PIL import ImageChops
+    from pipeline.compose import Composer
+    from pipeline.layered import verify
+    from pipeline.runner import load_brand
+
+    tmp = tempfile.mkdtemp()
+    try:
+        brief = load_brief("campaigns/aurora-spring.yaml")
+        brand = load_brand("brandkit/brand.yaml")
+        v = next(iter(brief.variants()))
+        master = os.path.join(tmp, "master.png")
+        Image.new("RGB", (1600, 1600), (120, 130, 140)).save(master)
+
+        jpg = os.path.join(tmp, "c.jpg")
+        psd = os.path.join(tmp, "c.psd")
+        comp = Composer(brand).compose(master, v, jpg, layered_path=psd)
+
+        assert comp.layered == psd and os.path.isfile(psd)
+        info = verify(psd)
+        assert info["format"] == "PSD"
+        assert info["layers"][:3] == ["product", "scrim", "message"], info["layers"]
+
+        with Image.open(psd) as p, Image.open(jpg) as j:
+            a, c = p.convert("RGB"), j.convert("RGB")
+            assert a.size == c.size
+            worst = max(ImageChops.difference(a, c).getextrema(),
+                        key=lambda t: t[1])[1]
+            # JPEG is lossy, so a small delta is expected; a large one means
+            # the layers do not add up to the thing being shipped.
+            assert worst <= 32, f"composite differs from the JPEG by {worst}"
+
+        # And the message layer must actually be separable -- a "layer" that
+        # is empty would pass every check above.
+        with Image.open(psd) as p:
+            names = [l[0] for l in p.layers]
+            assert "message" in names
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def test_motion_says_why_rather_than_failing_silently():
     """Without ffmpeg, a video slot is planned and honestly unrendered."""
     from pipeline import motion

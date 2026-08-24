@@ -45,6 +45,10 @@ class VariantResult:
     # because `s3://bucket/key` is an identifier and not a URL -- the two look
     # interchangeable in a manifest and exactly one of them works in a browser.
     share_url: str = ""
+    # The layered source beside the deliverable, and where it landed.
+    layered: str = ""
+    layered_uri: str = ""
+    layered_share: str = ""
     # 0-100 conformance to the rules in checks.py. Recorded next to the
     # verdict, never instead of it -- the verdict decides shipping, the score
     # only orders a review queue.
@@ -269,7 +273,12 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
                       log("stage", stage=name, variant=_v.id,
                           params=params or {}, ms=round(ms, 1),
                           preview=preview)),
-            stage_dir=stage_dir, stage_key=v.id)
+            stage_dir=stage_dir, stage_key=v.id,
+            # A .psd beside every JPEG, with the copy on its own layer. The
+            # flat file is the deliverable; this is what makes the last mile
+            # -- a market that wants its own headline -- somebody else's to
+            # drive without coming back through the tool.
+            layered_path=path[:-4] + ".psd")
         res = evaluate(comp, v, brand, brief.prohibited_terms)
         log("stage", stage="checks", variant=v.id,
             rules=[f["rule"] for f in [x.as_dict() for x in res.findings]])
@@ -277,6 +286,8 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
         rel = os.path.relpath(path, out_dir).replace(os.sep, "/")
         stored_uri = ""
         share_url = ""
+        layered_uri = ""
+        layered_share = ""
         if store is not None:
             # An upload failure must not lose the run. The creative already
             # exists on disk and has already been checked; a network blip is
@@ -292,6 +303,18 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
                 # somebody who has to know the sharing rules.
                 share_url = store.share_url(obj.key)
                 uploaded.append(obj)
+                # The layered file goes up too. A share link that only ever
+                # points at a flattened JPEG makes the PSD a thing you have to
+                # know to ask for, and the person who needs it most is the one
+                # who was sent a link rather than given the folder.
+                if comp.layered and os.path.isfile(comp.layered):
+                    lrel = os.path.relpath(comp.layered, out_dir).replace(os.sep, "/")
+                    with open(comp.layered, "rb") as fh:
+                        lobj = store.put(f"{key_prefix}/{lrel}", fh.read(),
+                                         "image/vnd.adobe.photoshop")
+                    layered_uri = lobj.uri
+                    layered_share = store.share_url(lobj.key)
+                    uploaded.append(lobj)
             except StorageError as exc:
                 storage_errors.append(f"{rel}: {exc}")
                 log("storage-error", variant=v.id, error=str(exc)[:200])
@@ -300,6 +323,9 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
             variant_id=v.id, product_id=v.product.id, locale=v.market.locale,
             ratio=v.ratio.id, path=os.path.relpath(path, out_dir),
             stored_uri=stored_uri, share_url=share_url,
+            layered=(os.path.relpath(comp.layered, out_dir)
+                     if comp.layered else ""),
+            layered_uri=layered_uri, layered_share=layered_share,
             verdict=res.verdict.value, score=compliance_score(res.findings),
             findings=[f.as_dict() for f in res.findings],
             font_family=comp.font_family, message=comp.message,
@@ -316,6 +342,9 @@ def run_campaign(brief_path: str, brand_path: str = "brandkit/brand.yaml",
             message=v.market.message, out_dir=out_dir,
             path=os.path.relpath(path, out_dir).replace(os.sep, "/"),
             stored_uri=stored_uri, share_url=share_url,
+            layered=(os.path.relpath(comp.layered, out_dir).replace(os.sep, "/")
+                     if comp.layered else ""),
+            layered_uri=layered_uri, layered_share=layered_share,
             findings=[f.as_dict() for f in res.findings])
 
     summary = RunSummary(
