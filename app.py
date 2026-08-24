@@ -399,9 +399,15 @@ def _engine_history(brief) -> dict:
     out: dict[str, dict] = {}
     for m in brief.markets:
         per_channel: dict[str, dict] = {}
-        for ch in ("tiktok", "instagram", "youtube", "facebook"):
-            # insights knows GA/facebook/tiktok/youtube; instagram rides with
-            # facebook, which is how Meta reports them anyway.
+        for ch in CHANNELS:
+            # Derived from CHANNELS, never a second hand-written list -- two
+            # lists of channels drift, and the one that drifts is always the
+            # one nobody is looking at.
+            #
+            # insights reports GA/facebook/tiktok/youtube, so Instagram's
+            # history rides on the facebook feed. That is not a fudge: Meta
+            # reports the two together, which is exactly why the mapping is
+            # needed and why it is written down here rather than assumed.
             key = "facebook" if ch == "instagram" else ch
             if key not in insights.CHANNEL_IDS:
                 continue

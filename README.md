@@ -11,8 +11,9 @@ Firefly Services, Forward Deployed Engineer (Creative AI)
 A campaign brief goes in. An organized folder of on-spec, checked social
 creatives comes out — every product, every market, every aspect ratio — from
 as few generative calls as the brief actually requires. Then performance goes
-back in: the Analytics tab turns channel history and market trends into the
-next brief's prompt.
+back in: the Engine tab crawls what comparable products are doing in each
+market, turns that plus our own channel history into a strategy, and produces
+the scheduled campaign from it.
 
 ```
 brief.yaml
@@ -98,7 +99,7 @@ From there: pick a brief, press **Plan** to see what a run would cost before
 spending anything, edit the brief, then **Run pipeline** and watch it move
 through the flow canvas.
 
-The app is four tabs — **Brief**, **Analytics**, **Pipeline**, **Results** —
+The app is four tabs — **Brief**, **Engine**, **Pipeline**, **Results** —
 with Run and the status light in the top bar rather than in any one of them,
 because starting a run is the one thing you want to do from wherever you are.
 The tabs follow the work: pressing Run switches to Pipeline, and finishing
@@ -241,7 +242,7 @@ one a model produced.
 Run the tests:
 
 ```bash
-python tests/test_pipeline.py        # 38 tests, no pytest needed
+python tests/test_pipeline.py        # 47 tests, no pytest needed
 ```
 
 ### Storage
@@ -404,73 +405,132 @@ conformance to the rules in `checks.py` and **is not a quality judgement** — a
 perfectly on-brand, on-spec, entirely boring creative scores 100 — so it never
 appears without the verdict next to it.
 
-### Analytics — and the loop back into the brief
+### The engine — a brief in, a scheduled channel campaign out
 
 The exercise lists five business goals. Four are about producing creative
 faster and more consistently; the fifth is *"learn what content, creative and
 localization drives the best business outcomes"*. That one is a loop, not a
-report: performance should decide what you make **next**.
+report, and the **Engine** tab is where it closes.
 
-> **Every figure on the Analytics tab is synthetic.** Nothing connects to
-> Google, Meta, TikTok or YouTube. It is generated from a fixed seed so it is
-> identical on every machine, and it is labelled as sample data in four
-> places — the module docstring, the API payload, a standing banner, and a
-> chip in the toolbar and in every post detail.
+Three numbered steps, then a master tab per product:
 
-The tab is organised by **social channel**, because the four do not behave
-alike and averaging them together throws away the only thing worth knowing.
-Each channel names the API a real integration would call:
+1. **A brief** — pick one from the repo, paste YAML, or drop a file.
+2. **A schedule** — duration, images per day, videos per day. The cost
+   arithmetic updates as you type, *before* the button that spends it.
+3. **Products** — each card shows every market it will target, with that
+   market's region and audience, because those are what discovery searches on.
 
-| Channel | Headline metric | Real endpoint |
+Then, per product, per channel:
+
+```
+region + audience + product  ->  discover look-alikes
+look-alikes + our history    ->  one strategy JSON
+strategy                     ->  one master per channel   (the only paid step)
+master                       ->  every slot composed locally, then checked
+approved still               ->  the video slots rendered from it
+```
+
+#### Discovery — `pipeline/discovery/`
+
+A third adapter layer, the same shape as `providers/` and `storage/`, because
+the thing that varies is *where the evidence came from* and nothing downstream
+should have to care.
+
+| Backend | Needs | Picked automatically? |
 |---|---|---|
-| Google Analytics | Sessions | GA4 Data API · `runReport` |
-| Facebook / IG | Reach | Graph API · `insights` edge |
-| TikTok | Views | Business API · integrated report |
-| YouTube | Views | YouTube Analytics API |
+| `apify` | `APIFY_TOKEN` | **yes**, when the token is set |
+| `playwright` | the `playwright` package | no — ask for it by name |
+| `synthetic` | nothing | the floor, always available |
 
-Four vendors returning four shapes for the same idea, all per-market, all
-rate-limited — which is exactly the argument for an adapter layer like
-`providers/` and `storage/`. `pipeline/insights.py` is deliberately shaped
-like one.
+Playwright is deliberately never the automatic choice. It declares no
+credentials, so an "is it configured" check says yes the moment the package is
+importable — which silently handed the slow, fragile, bot-detectable browser
+path to anyone who happened to have it installed, including reviewers with no
+keys who were promised the instant offline one. It is a real backend you can
+select; it is not one you should get by accident.
 
-**Two sources feed each channel.**
+A live backend that fails **falls back to synthetic and records why**, and the
+reason is on screen. The alternative — failing the run because one scraper
+broke — makes the tool useless exactly when a site ships new markup.
 
-*Internal — what we posted.* A 28-day **calendar**, one thumbnail and one
-number per post, click any post for the full detail. A calendar rather than a
-table because posting is periodic and so are the questions: a sortable table
-answers *which post won*, a calendar answers *what were we doing*. It is
-padded to start on a Monday, or weekday-versus-weekend is invisible and you
-have built a table with extra steps. Engagement and CTR are
-impression-weighted — a 6% rate on 900 views must not outrank 2% on 900,000,
-and un-weighted averages are how dashboards end up celebrating the smallest
-sample they have.
+Results cache to `.cache/discovery/` for six hours. Live discovery is slow and
+metered; re-planning the same product must not re-run the scrapers. Same
+argument as the master-image cache.
 
-*External — what the market is doing.* Trending terms per market with a
-week-over-week velocity, a **virality meter**, where the audience is and who
-they are. The virality score is normalised velocity, not volume: a term
-everyone already uses is not a trend.
+**Channels: TikTok, Instagram, YouTube.** Facebook is not offered. Its Apify
+actor scrapes *named pages*, and Facebook has no public keyword post search —
+so "find look-alikes for a face serum" is not a question it can be asked, and
+every live run fell back to synthetic for that channel alone. A tab of
+invented evidence sitting beside three tabs of real posts invites exactly the
+mistake this repo keeps guarding against. Re-enabling it means feeding
+discovery a list of competitor **pages** rather than a category: a different
+input shape, and a real feature rather than a config change.
 
-**They meet in one suggested surface prompt**, with the evidence listed and
-labelled by source. When the two agree, confidence is `high`. When they
-disagree the tab says `CONFLICT` out loud and the external signal wins —
-our own history can only rank treatments we have already tried, so a
-disagreement is usually a gap in our sample rather than a finding.
+#### What the evidence can and cannot tell us
 
-From there the loop closes in two clicks:
+This distinction is the one that keeps the feature honest:
 
-| Button | What it does |
-|---|---|
-| **Render one sample** | One creative — one product × one market × one ratio — through the *same* resolver, composer and checks a real run uses. Written to `.cache/samples/`, never `output/`. |
-| **Adopt into brief** | Writes the surface prompt into every product, turns on `regenerate_surface` so the prompt actually reaches the model, and reorders the placements. |
+> A scraped post gives us its **format**, its **ratio**, its **cadence**, its
+> reach and engagement, and the words of its **hook**. It does not tell us
+> what the image looked like — captions do not describe their own art
+> direction, and this repo does not run vision models over other people's
+> creative.
 
-One sample, not eighteen: "act on a suggestion" has to mean *see it* first,
-and a full run is eighteen deliverables and two paid calls. Trying a
-suggestion should cost about what looking at it is worth.
+So look-alikes decide format, ratio priority, cadence and hook style. The
+**surface treatment** comes from our own measured history, and from a
+look-alike only when its caption *literally names a material*. Every line in
+the strategy's `why` says which of the two it came from, and whether that
+evidence was `OBSERVED` or `SYNTHETIC`.
 
-Placements **reorder, never drop** — removing a placement because four weeks
-of data disliked it is the kind of over-fitting a media team would rightly
-refuse. Nothing is written to disk until you press Save, so an adoption you
-dislike costs one brief reload.
+Competitor hooks are shown beside the strategy, attributed and linked, as
+reference for whoever writes the real copy. **They are never used as our
+caption.** The first version did exactly that, and it looked fine on screen:
+a rival's hashtags and @-mentions composited onto our creative and shipped as
+ours, text no brand or legal reviewer ever approved. A hook tells you the
+shape that works on a channel; it is not licensed copy. There is a test.
+
+#### Cost, which is the same argument as everywhere else
+
+The per-day counts are the publishing rate **across** all channels, not per
+channel — four channels × two images a day for a fortnight is a hundred and
+twelve posts per product, which is not a campaign, it is a denial of service
+on a social team.
+
+One generative call per channel that has work. The surface is what a call
+buys, and the surface is per channel; every date, crop and caption is composed
+from that one master locally. In a real run, two channels that pick the same
+surface produce **one** call, because the master cache hits.
+
+#### Video
+
+`pipeline/motion.py` renders an mp4 per video slot from the still that already
+passed its checks: a slow push, a fade, per-channel duration.
+
+Cloudflare Workers AI — the default provider here — has **no video model at
+all**. That was measured against the account, not assumed: 64 models, and the
+task taxonomy has no video category in it.
+
+But availability is the smaller reason. The bigger one:
+
+> The video contains no pixel the still did not, so it inherits the still's
+> verdict. A generated clip would have to be re-checked frame by frame, and no
+> rule in this repo can do that.
+
+ffmpeg is optional and not in `requirements.txt`. Without it, video slots are
+planned, captioned and honestly left unrendered — the run says so rather than
+quietly downgrading them to stills.
+
+#### Our own history, folded in
+
+The per-channel calendar, virality meter and market trends that used to be the
+Analytics tab still exist. They are not a destination any more — they are one
+of the two inputs the strategy cites. On its own, our own history can only
+rank treatments we have already tried, which is precisely why it needed a
+second source next to it.
+
+> **Our own channel history is synthetic in every case, and says so.** Nothing
+> connects to Google, Meta, TikTok or YouTube's reporting APIs. `insights.py`
+> names the endpoint a real integration would call for each one.
 
 ### Uploading and reusing product images
 
@@ -868,10 +928,18 @@ pipeline/
   localize.py                cross-platform font resolution + glyph coverage
   compose.py                 crop, scrim, message, logo — returns measurements
   checks.py                  brand / legal / spec rules + pre-flight
-  insights.py                synthetic channel history → a suggested prompt
+  insights.py                synthetic channel history, as engine evidence
+  discovery/
+    base.py                  Discovery protocol + the live channel list
+    apify.py                 hosted actors — TikTok, Instagram, YouTube
+    playwright_crawl.py      local browser; opt-in, never automatic
+    synthetic.py             deterministic fallback, always labelled
+  strategy.py                evidence → a versioned strategy JSON
+  engine.py                  schedule → discover → strategy → produce
+  motion.py                  mp4 from the approved still (ffmpeg)
   report.py                  self-contained HTML run report
   runner.py                  orchestration, structured logging, manifest
-tests/test_pipeline.py       38 tests, runnable without pytest
+tests/test_pipeline.py       47 tests, runnable without pytest
 tools/make_placeholders.py   regenerates the committed logo and input asset
 tools/make_public.py         scopes the S3 bucket policy to public/ (dry-run)
 ```

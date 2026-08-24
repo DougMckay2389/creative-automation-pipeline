@@ -30,12 +30,22 @@ __all__ = ["Discovery", "DiscoveryError", "DiscoveryRequest", "Lookalike",
            "DISCOVERY_CREDENTIALS", "get_discovery", "available_discoveries",
            "discovery_status", "default_discovery", "discover"]
 
-# Tried in order. Apify first because someone else maintains those scrapers;
-# playwright second because it keeps everything on this machine but breaks
-# more often; synthetic is the floor and never a candidate here, since
-# choosing it explicitly would mean "invent the evidence" was a decision
-# rather than a fallback.
-DISCOVERY_PREFERENCE = ("apify", "playwright")
+# What `default_discovery()` will pick ON ITS OWN. Apify only.
+#
+# Playwright is deliberately NOT here, and the reason is a bug this list
+# already had. It declares no required credentials -- there is nothing to
+# configure, it just needs the package -- so `all(...)` over an empty list is
+# True and it was ALWAYS "configured". Anyone who happened to have playwright
+# installed silently got the slow, fragile, bot-detectable browser path as
+# their default, including a reviewer with no keys who should have got the
+# instant offline one. The README promised synthetic in that case and the code
+# did something else.
+#
+# So it stays a real backend you can ask for by name, and never one you get by
+# accident. Synthetic is the floor for the same reason `local` is in the
+# storage registry: choosing it explicitly would mean "invent the evidence"
+# was a decision rather than a fallback.
+DISCOVERY_PREFERENCE = ("apify",)
 
 _REGISTRY: dict[str, type] = {"synthetic": SyntheticDiscovery}
 _REGISTERED = False
@@ -80,6 +90,9 @@ def discovery_status() -> list[dict]:
         missing = [k for k in needs if not (os.environ.get(k) or "").strip()]
         out.append({"name": name, "requires": needs, "missing": missing,
                     "configured": not missing,
+                    # Reported, so the UI can show that playwright is usable
+                    # without implying it is what a run will actually use.
+                    "auto": name in DISCOVERY_PREFERENCE,
                     "synthetic": name == "synthetic"})
     return out
 

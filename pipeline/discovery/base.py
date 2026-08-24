@@ -87,7 +87,22 @@ DISCOVERY_CREDENTIALS: dict[str, list[str]] = {
     "playwright": [],
 }
 
-CHANNELS = ("tiktok", "instagram", "youtube", "facebook")
+# The channels the engine actually runs. THIS is the source of truth -- the
+# schedule, the UI, the history lookup and the cost arithmetic all derive from
+# it, so adding or removing one is a change here and nowhere else.
+#
+# Facebook is deliberately absent. Its actor scrapes NAMED PAGES; Facebook has
+# no public keyword post search, so "find look-alikes for a face serum" is not
+# a question it can be asked. Every live run fell back to synthetic for this
+# channel alone, which is a worse outcome than not offering it: a channel tab
+# full of invented evidence sitting next to three tabs of real posts invites
+# exactly the mistake this repo keeps guarding against.
+#
+# Re-enabling it means giving discovery a LIST OF COMPETITOR PAGES to crawl
+# rather than a category, which is a different input shape and a real feature,
+# not a config change. The maps below keep their Facebook entries so that day
+# is a one-word edit here.
+CHANNELS = ("tiktok", "instagram", "youtube")
 
 CHANNEL_NAMES = {
     "tiktok": "TikTok",

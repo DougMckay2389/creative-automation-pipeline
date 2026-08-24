@@ -2409,6 +2409,13 @@ async function engineParsePasted(){
 const engProducts = () => (ENG.brief?.data?.products) || [];
 const engMarkets  = () => (ENG.brief?.data?.markets)  || [];
 
+/* From the server, which gets it from CHANNELS. The cost arithmetic on screen
+   has to agree with what the run will actually do, and a 4 typed into the
+   template stops agreeing the moment a channel is added or dropped -- which
+   is exactly what just happened to Facebook. */
+const engChannels  = () => (ENG.status?.channels) || [];
+const engChanCount = () => engChannels().length || 1;
+
 function engSchedule(){
   const n = (id, d) => {
     const v = parseInt(($('#' + id) || {}).value, 10);
@@ -2439,7 +2446,7 @@ function paintEngine(){
         >${ENG.running ? '<span class="spin"></span>Running…' : 'Run engine'}</button>
       <span class="sampfacts" style="align-self:center">${
         ENG.products.length
-          ? `${ENG.products.length} product${ENG.products.length > 1 ? 's' : ''} × ${mkts.length} market${mkts.length > 1 ? 's' : ''} × 4 channels`
+          ? `${ENG.products.length} product${ENG.products.length > 1 ? 's' : ''} × ${mkts.length} market${mkts.length > 1 ? 's' : ''} × ${engChanCount()} channels`
           : 'select at least one product'}</span>
     </div>
     ${ENG.data ? engLog() : ''}
@@ -2452,6 +2459,10 @@ function engHead(s, live, backend){
   const syn = backend === 'synthetic';
   return `<div class="anwarn"><div>
     <b>Where the evidence comes from.</b>
+    Channels: <b>${engChannels().map(c => esc(c.name)).join(', ')}</b>.
+    Facebook is not offered — its scraper needs named pages and Facebook has
+    no public keyword post search, so it could only ever have returned
+    invented data beside three channels of real posts.
     Discovery is currently <b>${esc(backend)}</b>${syn
       ? ' — every look-alike below is generated from a fixed seed, not observed. Set <code>APIFY_TOKEN</code> to crawl for real.'
       : ' — look-alikes are real public posts, each carrying the link you can open and check.'}
@@ -2513,9 +2524,9 @@ function engStep2(sc, perMarket, mkts, total, s){
       <div class="emath">
         <div><b>${perMarket}</b> posts per market per product
           &nbsp;·&nbsp; <b>${total}</b> in total</div>
-        <div>Counts are the publishing rate <b>across</b> all four channels,
-          not per channel.</div>
-        <div>Generative calls: <b>${Math.max(ENG.products.length, 1) * mkts.length * 4}</b>
+        <div>Counts are the publishing rate <b>across</b> all
+          ${engChanCount()} channels, not per channel.</div>
+        <div>Generative calls: <b>${Math.max(ENG.products.length, 1) * mkts.length * engChanCount()}</b>
           at most — one master per channel, every date and crop composed from it.</div>
         ${heavy ? `<div class="warn">That is a lot of files. Consider a shorter window first.</div>` : ''}
       </div>

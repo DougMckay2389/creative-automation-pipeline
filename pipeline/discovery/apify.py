@@ -38,7 +38,9 @@ ACTORS = {
     "tiktok":    "clockworks~tiktok-scraper",
     "instagram": "apify~instagram-scraper",
     "youtube":   "streamers~youtube-scraper",
-    "facebook":  "apify~facebook-posts-scraper",
+    # No Facebook. `apify~facebook-posts-scraper` scrapes named pages and
+    # Facebook has no public keyword post search, so a category term cannot
+    # be turned into a query here. See the note on CHANNELS in base.py.
 }
 
 RUN_TIMEOUT_S = 180
@@ -142,14 +144,12 @@ class ApifyDiscovery:
         if req.channel == "youtube":
             return {"searchKeywords": terms[0], "maxResults": n,
                     "sortingOrder": "views"}
-        # Facebook: this actor scrapes named pages, it does not keyword-search
-        # the network -- Facebook has no public post search worth crawling.
-        # Given a page it works; given a category it cannot, so it raises and
-        # discovery falls back with the reason on screen rather than
-        # pretending the channel had nothing to say.
+        # Unreachable for any channel in CHANNELS, and kept anyway: a new
+        # channel added to the tuple without an input shape here should say so
+        # loudly rather than send an empty payload to an actor and get back a
+        # confusing zero rows.
         raise DiscoveryError(
-            "Facebook has no public keyword post search; that actor needs "
-            "specific page URLs. Add competitor pages to crawl it for real.")
+            f"no Apify input shape defined for '{req.channel}'")
 
     def _row(self, req: DiscoveryRequest, it: dict) -> Lookalike | None:
         """Normalise one actor's row into a Lookalike.

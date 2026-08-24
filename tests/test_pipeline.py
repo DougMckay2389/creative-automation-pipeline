@@ -826,6 +826,215 @@ def test_full_run_produces_every_deliverable():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+# --------------------------------------------------------------------------
+# The social content engine
+#
+# Same rule as everything above: each test pins a claim the engine makes on
+# screen or in the README, so that if the code changes the claim either stays
+# true or the test goes red.
+# --------------------------------------------------------------------------
+
+def test_discovery_falls_back_to_synthetic_with_no_credentials():
+    """A reviewer with no APIFY_TOKEN must still get a working engine.
+
+    And it must be OBVIOUS that the evidence is invented -- the payload says
+    so, not just the UI, because the UI is not the only thing that reads it.
+    """
+    from pipeline.discovery import (DiscoveryRequest, default_discovery,
+                                    discover)
+    before = os.environ.pop("APIFY_TOKEN", None)
+    try:
+        assert default_discovery() == "synthetic", \
+            "with no credentials the default backend must be synthetic"
+        tmp = tempfile.mkdtemp()
+        try:
+            req = DiscoveryRequest(
+                product_id="p", product_name="P", category="serum",
+                locale="en-US", region="NA", audience="women 25-40",
+                channel="tiktok", limit=5)
+            out = discover(req, root=tmp)
+            assert out["synthetic"] is True
+            assert out["backend"] == "synthetic"
+            assert len(out["lookalikes"]) == 5
+            # No evidence URL on invented rows: a link that goes nowhere is
+            # worse than an honest absence of one.
+            assert all(not r["evidence_url"] for r in out["lookalikes"])
+            assert all(r["synthetic"] for r in out["lookalikes"])
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+    finally:
+        if before is not None:
+            os.environ["APIFY_TOKEN"] = before
+
+
+def test_synthetic_discovery_is_deterministic_across_processes():
+    """Same request, same look-alikes -- including in a fresh interpreter.
+
+    Seeded through sha256 rather than `random.seed(tuple)`, because Python
+    salts string hashing per process and the tuple form would give different
+    evidence on every restart. The pipeline's seed generation had this exact
+    bug once already.
+    """
+    import subprocess
+    code = (
+        "import sys;sys.path.insert(0,%r);"
+        "from pipeline.discovery.synthetic import SyntheticDiscovery;"
+        "from pipeline.discovery.base import DiscoveryRequest;"
+        "r=DiscoveryRequest('p','P','serum','en-US','NA','a','tiktok',4);"
+        "print([round(x.velocity,2) for x in SyntheticDiscovery().find(r)])"
+    ) % os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    runs = {subprocess.run([sys.executable, "-c", code], capture_output=True,
+                           text=True).stdout.strip() for _ in range(2)}
+    assert len(runs) == 1, f"synthetic discovery drifted between processes: {runs}"
+
+
+def test_every_live_channel_has_an_actor_and_a_plan():
+    """CHANNELS is the source of truth; nothing may be listed without support.
+
+    Facebook was removed because its actor scrapes named pages and Facebook
+    has no public keyword post search, so it could only ever fall back to
+    invented data. This stops a channel being re-added to the tuple without
+    the three things it needs to actually work.
+    """
+    from pipeline.discovery import CHANNELS, CHANNEL_NAMES
+    from pipeline.discovery.apify import ACTORS
+    from pipeline.strategy import CHANNEL_PLAN, RATIO_ORDER
+
+    assert "facebook" not in CHANNELS
+    for ch in CHANNELS:
+        assert ch in ACTORS, f"{ch} is live but has no Apify actor"
+        assert ch in CHANNEL_PLAN, f"{ch} is live but has no cadence plan"
+        assert ch in RATIO_ORDER, f"{ch} is live but has no ratio order"
+        assert ch in CHANNEL_NAMES, f"{ch} is live but has no display name"
+
+
+def test_schedule_produces_exactly_what_was_asked_for():
+    """duration x per-day is the contract the cost line on screen makes."""
+    from pipeline.discovery import CHANNELS
+    from pipeline.strategy import schedule
+
+    for days, ipd, vpd in ((14, 2, 1), (7, 3, 0), (1, 0, 1), (30, 1, 1)):
+        plan = schedule(days, ipd, vpd, list(CHANNELS), start="2026-09-01")
+        total = sum(len(v) for v in plan.values())
+        assert total == days * (ipd + vpd), \
+            f"{days}d x {ipd}i+{vpd}v gave {total}, expected {days*(ipd+vpd)}"
+        images = sum(1 for v in plan.values() for s in v if s["kind"] == "image")
+        assert images == days * ipd
+
+
+def test_schedule_matches_its_own_stated_bias():
+    """The plan must not disagree with how it describes itself.
+
+    Drawing a channel per slot was the first implementation and it produced a
+    5/10/4/2 split against a stated 34/28/20/18 -- so the UI said one thing and
+    the output did another. Largest-remainder apportionment fixes that, and
+    this pins it.
+    """
+    from pipeline.discovery import CHANNELS
+    from pipeline.strategy import CHANNEL_PLAN, schedule
+
+    plan = schedule(30, 2, 1, list(CHANNELS), start="2026-09-01")
+    total = sum(len(v) for v in plan.values()) or 1
+    raw = {c: CHANNEL_PLAN[c]["slot_bias"] for c in CHANNELS}
+    scale = sum(raw.values())
+    for c in CHANNELS:
+        got = len(plan[c]) / total * 100
+        want = raw[c] / scale * 100
+        assert abs(got - want) < 3.0, \
+            f"{c} got {got:.1f}% of slots against a stated {want:.1f}%"
+
+
+def test_strategy_never_puts_a_competitors_words_on_our_creative():
+    """The caption is OUR copy. This one is not a style preference.
+
+    The first version pasted the winning look-alike's caption into the slot,
+    so a competitor's hashtags and @-mentions were composited onto our image
+    and shipped as ours -- text no brand or legal reviewer ever approved.
+    """
+    from pipeline import strategy
+
+    hook = "@rival #theirbrand buy theirs now"
+    product = {"id": "p", "name": "P", "subject": "a serum", "surface": "x"}
+    market = {"locale": "en-US", "region": "NA", "audience": "a",
+              "message": "Your skin, wide awake."}
+    disc = {"tiktok": {"backend": "synthetic", "synthetic": True,
+                       "lookalikes": [{"handle": "@rival", "title": hook,
+                                       "hook": hook, "views": 999_999,
+                                       "engagement_rate": 9.9, "velocity": 9.9,
+                                       "format": "video", "synthetic": True,
+                                       "evidence_url": "", "surface_cues": []}]}}
+    doc = strategy.build(product, market, disc, {}, days=3, images_per_day=1,
+                         videos_per_day=0, ratios_available=["9:16", "1:1"],
+                         channels=["tiktok"], start="2026-09-01")
+    slots = doc["channels"]["tiktok"]["slots"]
+    assert slots, "expected slots"
+    for s in slots:
+        assert "@rival" not in s["caption"] and "#theirbrand" not in s["caption"], \
+            f"a competitor's copy reached our creative: {s['caption']!r}"
+        assert s["caption"].startswith("Your skin"), s["caption"]
+    # The hook is still kept, attributed, as reference for a copywriter.
+    assert doc["channels"]["tiktok"]["hooks"][0]["from"] == "@rival"
+
+
+def test_strategy_cites_evidence_and_flags_synthetic():
+    """Every recommendation carries the reason it exists.
+
+    A strategy you cannot interrogate is one you should not run, and one that
+    hides that its evidence was invented is worse than no strategy at all.
+    """
+    from pipeline import strategy
+
+    product = {"id": "p", "name": "P", "subject": "a serum", "surface": "x"}
+    market = {"locale": "en-US", "region": "NA", "audience": "a", "message": "m"}
+    disc = {"tiktok": {"backend": "synthetic", "synthetic": True,
+                       "fell_back_because": "", "lookalikes": []}}
+    doc = strategy.build(product, market, disc, {}, days=2, images_per_day=1,
+                         videos_per_day=0, ratios_available=["9:16"],
+                         channels=["tiktok"], start="2026-09-01")
+    ch = doc["channels"]["tiktok"]
+    assert ch["why"], "a channel with no rationale is not a strategy"
+    assert doc["synthetic_evidence"] is True
+    assert any(w["source"] == "warning" for w in ch["why"]), \
+        "synthetic discovery must be called out in the rationale, not just in a flag"
+
+
+def test_video_is_rendered_from_the_checked_still():
+    """A video may not contain a pixel the checks have not already seen.
+
+    That is the whole reason motion is a transform of the approved still
+    rather than a second generative call: a generated clip would need
+    re-checking frame by frame and no rule in this repo can do that.
+    """
+    from pipeline import motion
+    if not motion.available():
+        return                                    # ffmpeg is optional
+    tmp = tempfile.mkdtemp()
+    try:
+        still = os.path.join(tmp, "still.jpg")
+        Image.new("RGB", (400, 400), (200, 120, 60)).save(still)
+        out = os.path.join(tmp, "clip.mp4")
+        info = motion.render(still, out, channel="tiktok", seconds=2.0)
+        assert os.path.getsize(out) > 1000
+        assert info["from_still"] == still
+        assert info["inherits_verdict_from_still"] is True
+        assert info["seconds"] == 2.0
+        # Even dimensions, or H.264 cannot encode it at all.
+        assert info["width"] % 2 == 0 and info["height"] % 2 == 0
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_motion_says_why_rather_than_failing_silently():
+    """Without ffmpeg, a video slot is planned and honestly unrendered."""
+    from pipeline import motion
+    note = motion.why_unavailable()
+    if motion.available():
+        assert note == ""
+    else:
+        assert "ffmpeg" in note.lower() and len(note) > 30, \
+            "an unavailable renderer must explain itself"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items())
            if k.startswith("test_") and callable(v)]
