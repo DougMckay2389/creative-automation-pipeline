@@ -114,12 +114,10 @@ header.topbar{
   max-width:1560px;margin:0 auto;padding:0 20px;
   display:flex;align-items:stretch;gap:18px;min-height:54px;
 }
-.brandmark{display:flex;align-items:center;gap:10px;padding:8px 0;
+/* No mark in here -- the logo is the window's icon (tab, taskbar, splash) and
+   repeating it beside itself only costs width. */
+.brandmark{display:flex;align-items:center;padding:8px 0;
   min-width:0;flex:0 1 auto}
-/* border-radius matches the icon's own rounded square so it does not sit on
-   a slightly different corner radius to everything else in the bar. */
-.brandmark .glyph{width:24px;height:24px;flex:none;display:block;
-  border-radius:5px}
 .brandmark .txt{min-width:0}
 .brandmark b{display:block;font:600 13.5px var(--sans);letter-spacing:-.012em;
   color:var(--g900);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -548,6 +546,7 @@ a.loc1.link:hover{background:var(--accent);color:#fff}
 
 [hidden]{display:none !important}
 
+
 /* ==========================================================================
    Carried over from the previous sheet, re-themed.
 
@@ -956,6 +955,7 @@ header.topbar .ghlink{margin-left:0;align-self:center;flex:none}
   padding:5px 13px;font:500 11.5px var(--sans);cursor:pointer}
 .splretry:hover{background:var(--accent-hi)}
 
+
 /* ==========================================================================
    The engine
 
@@ -1168,16 +1168,14 @@ header.topbar .ghlink{margin-left:0;align-self:center;flex:none}
      horizontal scrollbar on the page. -->
 <div class="topinner">
 
+  <!-- Text only. The mark is the window's icon -- in the tab, the taskbar and
+       on the splash -- and repeating it two centimetres away from itself in
+       the header adds nothing but width. The title bar of an application
+       names the application and its version; that is the whole job. -->
   <div class="brandmark" title="campaign brief in &rarr; on-spec, checked creatives out">
-    <!-- Adobe Firefly's mark, used because this is a take-home exercise being
-         submitted TO Adobe for a Firefly Services role. It is Adobe's
-         trademark, not this project's, and its presence is not a claim of
-         affiliation or endorsement -- see the note in the README. -->
-    <img class="glyph" src="/appicon.png" alt="" width="24" height="24">
     <div class="txt">
       <b>FDE Social Content Agentic Automation &amp; Analytics</b>
-      <span>Author, Douglas McKay,
-        <a href="mailto:doug@dougmckay.info">doug@dougmckay.info</a></span>
+      <span id="appver">Version 1.0</span>
     </div>
   </div>
 
@@ -1544,7 +1542,11 @@ async function init(){
     step('server', 'err', 'no answer on this port');
     return splashFailed('The app could not reach its own server.');
   }
+  // Both from the server's APP_VERSION, so the header and the splash cannot
+  // drift apart or from the code that is actually running. The markup carries
+  // "Version 1.0" as a static fallback for the moment before this resolves.
   $('#splver').textContent = 'v' + (r.version || '1.0');
+  $('#appver').textContent = 'Version ' + (r.version || '1.0');
   step('server', 'ok', r.briefs.length + ' brief'
        + (r.briefs.length === 1 ? '' : 's') + ' found');
 

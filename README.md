@@ -3,10 +3,10 @@
 **Douglas McKay** · <doug@dougmckay.info> · take-home exercise for Adobe
 Firefly Services, Forward Deployed Engineer (Creative AI)
 
-> The Adobe Firefly icon appears in this app's window and splash because this
-> is an exercise submitted to Adobe for a Firefly Services role. Adobe Firefly
-> and the Firefly mark are trademarks of Adobe Inc.; this project is not
-> affiliated with, sponsored by or endorsed by Adobe.
+> The Adobe Firefly icon is used as this app's window and splash icon because
+> this is an exercise submitted to Adobe for a Firefly Services role. Adobe
+> Firefly and the Firefly mark are trademarks of Adobe Inc.; this project is
+> not affiliated with, sponsored by or endorsed by Adobe.
 
 A campaign brief goes in. An organized folder of on-spec, checked social
 creatives comes out — every product, every market, every aspect ratio — from
