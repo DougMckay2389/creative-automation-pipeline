@@ -20,6 +20,7 @@ Two things make it more useful than a placeholder:
 from __future__ import annotations
 
 import hashlib
+import os
 import random
 
 from .base import CHANNEL_RATIO, Discovery, DiscoveryRequest, Lookalike
@@ -104,14 +105,39 @@ def _weighted(r: random.Random, pairs: list[tuple[str, int]]) -> str:
     return r.choices([p[0] for p in pairs], weights=[p[1] for p in pairs])[0]
 
 
+def _stand_in_covers(root: str = ".") -> list[str]:
+    """Images to stand in for a competitor's cover.
+
+    Reuses creatives this pipeline has already made. It is a better lie than a
+    grey rectangle -- the tile shows the KIND of thing the tool produces, so
+    the layout is exercised against real images -- and it is still a lie, which
+    is why every synthetic row is flagged and the tile says SYNTHETIC over it.
+    """
+    import glob as _glob
+    pool: list[str] = []
+    for run in sorted(_glob.glob(os.path.join(root, "output", "*", "*")),
+                      reverse=True)[:3]:
+        for p in sorted(_glob.glob(os.path.join(run, "*", "*", "*.jpg")))[:16]:
+            pool.append(os.path.relpath(p, root).replace("\\", "/"))
+    if not pool:
+        for p in sorted(_glob.glob(os.path.join(root, "campaigns", "assets", "*"))):
+            if os.path.splitext(p)[1].lower() in (".png", ".jpg", ".jpeg", ".webp"):
+                pool.append(os.path.relpath(p, root).replace("\\", "/"))
+    return pool
+
+
 class SyntheticDiscovery:
     """Always available. Always labelled."""
 
     name = "synthetic"
     synthetic = True
 
+    def __init__(self, root: str = "."):
+        self.root = root
+
     def find(self, req: DiscoveryRequest) -> list[Lookalike]:
         shape = CHANNEL_SHAPE.get(req.channel, CHANNEL_SHAPE["instagram"])
+        covers = _stand_in_covers(self.root)
         out: list[Lookalike] = []
 
         for i in range(req.limit):
@@ -149,6 +175,7 @@ class SyntheticDiscovery:
                 surface_cues=r.sample(SURFACE_CUES, 2),
                 palette=r.choice(PALETTES),
                 evidence_url="",
+                thumb=(covers[r.randrange(len(covers))] if covers else ""),
                 synthetic=True,
             ))
 

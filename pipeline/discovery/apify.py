@@ -131,7 +131,17 @@ class ApifyDiscovery:
         if req.channel == "tiktok":
             return {"searchQueries": terms, "resultsPerPage": n,
                     "shouldDownloadVideos": False,
-                    "shouldDownloadCovers": False}
+                    # True, not False. This flag is not "should we bother
+                    # returning a cover URL" -- with it off, the actor left
+                    # `videoMeta` (and every cover field) out of the item
+                    # entirely, which is why the look-alike panel showed real
+                    # posts with no thumbnail at all: _thumb() had nothing to
+                    # find. Turning it on costs a little more compute per run
+                    # because Apify downloads and re-hosts the cover, but that
+                    # re-hosted URL is also more reliable to hot-link than
+                    # TikTok's own CDN, which routinely 403s without TikTok's
+                    # own request headers.
+                    "shouldDownloadCovers": True}
         if req.channel == "instagram":
             # A hashtag is one token. Passing "face serum" through as a
             # hashtag search returned zero rows on every market -- not an
@@ -203,8 +213,74 @@ class ApifyDiscovery:
             palette=[],
             evidence_url=str(pick("webVideoUrl", "url", "postUrl", "link",
                                   default="")),
+            thumb_url=self._thumb(it),
             synthetic=False,
         )
+
+    @staticmethod
+    def _thumb(it: dict) -> str:
+        """The post's cover image, wherever this actor decided to put it.
+
+        Three actors, three shapes, and two of them nest it. The named keys
+        below are the documented field names as of this writing; the
+        catch-all pass beneath them is the actual safety net, because an
+        actor renaming a field is exactly the kind of thing that happens
+        between when this was written and when it runs, and a look-alike with
+        real engagement numbers and a blank thumbnail slot is a worse failure
+        than one that found a cover through a slightly wrong key.
+        """
+        for key in ("displayUrl", "thumbnailUrl", "coverUrl", "videoUrl",
+                    "thumbnail", "imageUrl", "previewImage", "cover"):
+            v = it.get(key)
+            if isinstance(v, str) and v.startswith("http"):
+                return v
+        meta = it.get("videoMeta")
+        if isinstance(meta, dict):
+            for key in ("coverUrl", "originalCoverUrl", "dynamicCoverUrl",
+                        "downloadAddr"):
+                v = meta.get(key)
+                if isinstance(v, str) and v.startswith("http"):
+                    return v
+        # A list of images/thumbnails, either bare URLs or {url|src: ...}.
+        imgs = it.get("images") or it.get("thumbnails")
+        if isinstance(imgs, list) and imgs:
+            first = imgs[0]
+            if isinstance(first, str) and first.startswith("http"):
+                return first
+            if isinstance(first, dict):
+                for key in ("url", "src"):
+                    v = first.get(key)
+                    if isinstance(v, str) and v.startswith("http"):
+                        return v
+        # YouTube's actor nests resolutions under a dict rather than a list --
+        # {"thumbnails": {"high": {"url": ...}, "default": {...}}} -- so the
+        # list branch above never fires for it. Any resolution will do; the
+        # UI displays this small.
+        if isinstance(imgs, dict):
+            for res in imgs.values():
+                if isinstance(res, dict):
+                    v = res.get("url")
+                    if isinstance(v, str) and v.startswith("http"):
+                        return v
+                if isinstance(res, str) and res.startswith("http"):
+                    return res
+        # Catch-all: any top-level or one-level-nested key that reads as a
+        # cover/thumbnail and holds an http(s) string. This is deliberately
+        # last -- the named lookups above are the readable, intentional path,
+        # and this is only what runs when an actor used a name nobody
+        # anticipated.
+        def scan(d: dict, depth: int = 0):
+            for k, v in d.items():
+                lk = k.lower()
+                if isinstance(v, str) and v.startswith("http") and (
+                        "cover" in lk or "thumb" in lk or "image" in lk):
+                    return v
+                if depth == 0 and isinstance(v, dict):
+                    found = scan(v, depth + 1)
+                    if found:
+                        return found
+            return ""
+        return scan(it)
 
     @staticmethod
     def _age_days(stamp) -> int:

@@ -49,9 +49,15 @@ CREDENTIALS: dict[str, list[str]] = {
     "firefly": ["FIREFLY_CLIENT_ID", "FIREFLY_CLIENT_SECRET"],
 }
 
-# Preferred when more than one is usable. Cloudflare first: it is the one
-# this repo is set up against, it is cheap, and it honours a seed.
-PREFERENCE = ("cloudflare", "firefly", "gemini")
+# Preferred when more than one is usable. Gemini first, on Doug's explicit
+# preference for the "nano banana" family (gemini-2.5-flash-image) -- it does
+# not carry Cloudflare Workers AI's NSFW classifier, which false-positived on
+# ordinary beauty-photography language ("dewy", "sheen") and 400'd a real
+# campaign run. Cloudflare stays next: it is the one this repo is set up
+# against by default, it is cheap, and it honours a seed. Firefly, the actual
+# target product for this exercise, is deliberately still in the running --
+# whichever of the three actually has a key wins, in this order.
+PREFERENCE = ("gemini", "cloudflare", "firefly")
 
 _REGISTRY = {}
 

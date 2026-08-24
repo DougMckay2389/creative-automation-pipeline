@@ -62,6 +62,34 @@ class EditRequest:
     size: tuple[int, int] = (1024, 1024)
 
 
+@dataclass(frozen=True)
+class VideoRequest:
+    """Animate an approved, already-checked still -- not "make a video from
+    this text". `reference_png` is required, not optional: the whole reason
+    a video request exists as its own type (rather than a flag on
+    GenerationRequest) is to make it impossible to reach a video model
+    without a still that has already been through `evaluate()`. A model that
+    can also do free-form text-to-video does not get an escape hatch here --
+    if the pipeline ever wants that, it needs its own request type and its
+    own conversation about what "checked" means for footage nothing composed.
+    """
+    prompt: str
+    reference_png: bytes
+    seconds: int = 6
+    aspect_ratio: str = "9:16"
+
+
+@dataclass
+class VideoResult:
+    video_bytes: bytes
+    provider: str
+    model: str
+    prompt: str
+    seconds: int
+    latency_s: float
+    cost_units: float | None = None
+
+
 class Provider(Protocol):
     """Every adapter implements exactly this."""
 

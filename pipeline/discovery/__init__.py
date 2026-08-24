@@ -108,14 +108,20 @@ def default_discovery() -> str:
     return "synthetic"
 
 
-def get_discovery(name: str = "") -> Discovery:
+def get_discovery(name: str = "", root: str = ".") -> Discovery:
     _register()
     name = name or default_discovery()
     if name not in _REGISTRY:
         raise DiscoveryError(
             f"unknown discovery backend '{name}'. "
             f"available: {', '.join(available_discoveries())}")
-    return _REGISTRY[name]()
+    cls = _REGISTRY[name]
+    # Only the synthetic backend needs to know where the repo is -- it borrows
+    # real creatives from output/ to stand in for competitor covers.
+    try:
+        return cls(root=root)
+    except TypeError:
+        return cls()
 
 
 # --------------------------------------------------------------------------
@@ -127,6 +133,62 @@ def _cache_path(root: str, req: DiscoveryRequest, backend: str) -> str:
                     req.category, req.audience, str(req.limit)])
     h = hashlib.sha256(key.encode()).hexdigest()[:20]
     return os.path.join(root, ".cache", "discovery", f"{h}.json")
+
+
+THUMB_TIMEOUT_S = 12
+THUMB_MAX_BYTES = 4 * 1024 * 1024
+
+
+def _cache_thumbs(rows: list, root: str) -> None:
+    """Pull each look-alike's cover image down once, and serve it from here.
+
+    Hotlinking a social CDN from a local tool fails in three ways that all
+    look like "the images are broken": referer checks, signed URLs that expire
+    within the hour, and no network at all. Caching also means the evidence
+    behind a strategy is still there when somebody opens the run next month,
+    which is the whole point of recording evidence.
+
+    Best-effort by design. A cover that will not download costs one thumbnail,
+    never the discovery result -- the numbers and the link are the substance
+    and they are already in hand.
+    """
+    import urllib.request
+
+    out = os.path.join(root, ".cache", "discovery", "thumbs")
+    os.makedirs(out, exist_ok=True)
+    for r in rows:
+        url = getattr(r, "thumb_url", "") or ""
+        if not url:
+            continue
+        name = hashlib.sha256(url.encode()).hexdigest()[:20] + ".jpg"
+        dest = os.path.join(out, name)
+        rel = os.path.relpath(dest, root).replace("\\", "/")
+        if os.path.isfile(dest):
+            object.__setattr__(r, "thumb", rel)
+            continue
+        try:
+            # A user agent, because several of these CDNs return 403 to the
+            # default urllib one -- which reads as "the image is broken"
+            # rather than as "you were refused".
+            rq = urllib.request.Request(url, headers={
+                "User-Agent": "Mozilla/5.0 (compatible; creative-automation/1.0)"})
+            with urllib.request.urlopen(rq, timeout=THUMB_TIMEOUT_S) as resp:  # noqa: S310
+                data = resp.read(THUMB_MAX_BYTES + 1)
+            if not data or len(data) > THUMB_MAX_BYTES:
+                continue
+            from PIL import Image
+            import io as _io
+            with Image.open(_io.BytesIO(data)) as im:
+                # One image, resized then saved. `thumbnail()` mutates in
+                # place and returns None, so converting twice would have
+                # saved the FULL-SIZE original -- a working-looking bug that
+                # quietly stores megabytes per row.
+                small = im.convert("RGB")
+                small.thumbnail((480, 480), Image.LANCZOS)
+                small.save(dest, "JPEG", quality=82, optimize=True)
+            object.__setattr__(r, "thumb", rel)
+        except Exception:                                    # noqa: BLE001
+            continue
 
 
 def discover(req: DiscoveryRequest, root: str = ".", backend: str = "",
@@ -159,14 +221,19 @@ def discover(req: DiscoveryRequest, root: str = ".", backend: str = "",
 
     fell_back = ""
     try:
-        rows = get_discovery(name).find(req)
+        rows = get_discovery(name, root).find(req)
         used = name
     except Exception as exc:                                 # noqa: BLE001
         if name == "synthetic":
             raise
         fell_back = f"{type(exc).__name__}: {exc}"
-        rows = get_discovery("synthetic").find(req)
+        rows = get_discovery("synthetic", root).find(req)
         used = "synthetic"
+
+    # Covers come down once, here, so every backend's rows reach the UI the
+    # same way and the cache file records the local path rather than a signed
+    # URL that will be dead by the time anyone re-opens the run.
+    _cache_thumbs(rows, root)
 
     out = {
         "backend": used,

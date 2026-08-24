@@ -51,6 +51,14 @@ class Lookalike:
     surface_cues: list[str] = field(default_factory=list)
     palette: list[str] = field(default_factory=list)
     evidence_url: str = ""
+    # The post's own cover image. `thumb_url` is where the network serves it;
+    # `thumb` is our cached copy, because hotlinking somebody's CDN from a
+    # local tool is fragile (referer checks, expiring signatures) and means the
+    # evidence disappears the moment you are offline. A look-alike you cannot
+    # SEE is a row of numbers, and the whole argument for looking at competitor
+    # creative is that you look at it.
+    thumb_url: str = ""
+    thumb: str = ""
     synthetic: bool = False
 
     def as_dict(self) -> dict:

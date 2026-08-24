@@ -47,11 +47,55 @@ SCHEMA = "social-strategy/1"
 # Materials a caption might actually name. Mined from hook text rather than
 # guessed at: if a competitor's caption says "wet stone", that IS observed
 # evidence about their art direction and can be cited as such.
-SURFACE_VOCAB = [
-    "wet stone", "volcanic rock", "black rock", "marble", "frosted glass",
-    "glass", "water", "sand", "concrete", "linen", "moss", "granite",
-    "wood", "clay", "silk", "mirror", "ice", "steam", "gradient",
-]
+# What we LOOK FOR in a competitor's caption, and what we turn it into.
+#
+# The two halves matter separately. The key is the word we are willing to
+# claim they said -- it has to be a plain noun a person actually types, or the
+# match never fires. The value is the scene that word implies to a
+# photographer, and it is the half that reaches the image model.
+#
+# Keeping them apart is the whole fix. An earlier version used the key for
+# both, so a competitor writing "iced coffee vibes ✨" produced the prompt
+# "ice, dewy micro-droplets..., soft diffused daylight..., tight
+# three-quarter framing" -- one bare noun carrying the entire art direction,
+# thinner than the pipeline's own hard-coded defaults and impossible to
+# defend past "somebody typed ice". The citation still says they wrote
+# "ice"; what we render is what ice actually looks like when it is lit.
+#
+# Ordered longest-first at match time, so "wet stone" wins over "stone" and
+# "frosted glass" over "glass".
+SURFACE_SCENE = {
+    "wet stone":      "rain-dark stone with standing water and soft reflections",
+    "volcanic rock":  "porous volcanic rock, matte black, warm rim light "
+                      "catching the pitted texture",
+    "black rock":     "smooth black basalt with a faint sheen along one edge",
+    "marble":         "honed white marble with grey veining, cool and even",
+    "frosted glass":  "frosted glass with a diffuse glow behind it and soft "
+                      "condensation at the base",
+    "glass":          "clear glass with clean specular edges and a shadow "
+                      "cast through it",
+    "water":          "a shallow water surface, slow ripples and broken "
+                      "reflected light",
+    "sand":           "fine pale sand in low raking light, every grain "
+                      "throwing a small shadow",
+    "concrete":       "poured concrete, flat and slightly chalky, one soft "
+                      "directional highlight",
+    "linen":          "rumpled natural linen, soft folds and warm shadow",
+    "moss":           "damp moss and forest floor, deep green, light filtered "
+                      "through leaves",
+    "granite":        "speckled granite with a cool matte finish",
+    "wood":           "warm oiled wood with visible open grain",
+    "clay":           "unglazed terracotta clay, dry matte and porous",
+    "silk":           "liquid silk in soft folds, catching a long soft "
+                      "highlight",
+    "mirror":         "a mirrored surface doubling the product against a dark "
+                      "field",
+    "ice":            "crushed ice with condensation and cold blue undertones",
+    "steam":          "drifting steam backlit against a dark ground",
+    "gradient":       "a smooth studio gradient sweeping from light to shadow",
+}
+
+SURFACE_VOCAB = sorted(SURFACE_SCENE, key=len, reverse=True)
 
 # How each channel actually behaves, used to shape the plan rather than to
 # decorate it. `slot_bias` is the share of the daily volume that goes here.
@@ -123,9 +167,10 @@ def _surface_from_lookalikes(rows: list[dict]) -> tuple[str, dict | None]:
         text = f"{row.get('title','')} {row.get('hook','')}".lower()
         for word in SURFACE_VOCAB:
             if word in text:
-                return word, row
+                return SURFACE_SCENE[word], row
         for cue in row.get("surface_cues") or []:
-            return cue, row
+            return next((SURFACE_SCENE[w] for w in SURFACE_VOCAB
+                         if w in cue.lower()), cue), row
     return "", None
 
 
@@ -157,6 +202,288 @@ def _hooks(rows: list[dict], n: int = 4) -> list[dict]:
                     "url": r.get("evidence_url") or "",
                     "synthetic": bool(r.get("synthetic"))})
     return out
+
+
+# --------------------------------------------------------------------------
+# Composing the surface prompt, so that it reads like the research
+#
+# The first version of this mined a single material word out of a competitor's
+# caption -- "ice", "water", "wood" -- and handed that to the model as the
+# whole art direction. It was traceable and it was nearly useless: one noun is
+# not a scene, the pipeline's own default surfaces were richer than the thing
+# claiming to be researched, and "why did it choose ice" had no better answer
+# than "somebody typed ice".
+#
+# A prompt is now assembled from four PARTS, and every part names the row of
+# evidence that chose it:
+#
+#   material   what the product sits on
+#   light      direction, temperature and quality
+#   framing    depth and distance, driven by the placement that performs
+#   finish     the surface quality that carries the category
+#
+# Each part is a SurfacePart carrying its own `because`, so the UI can show
+# the prompt beside the reason for every clause in it rather than beside one
+# paragraph of prose that gestures at the whole thing. That distinction is the
+# point: a strategy you cannot interrogate CLAUSE BY CLAUSE is one where the
+# weak clause hides behind the strong ones.
+# --------------------------------------------------------------------------
+
+@dataclass
+class SurfacePart:
+    """One clause of the prompt, and the evidence that put it there."""
+    slot: str                  # material | light | framing | finish
+    text: str
+    source: str                # lookalike | our-history | trend | channel | brief
+    because: str
+    evidence_url: str = ""
+    synthetic: bool = False
+    metric: str = ""           # the number that decided it, where there is one
+
+    def as_dict(self) -> dict:
+        return asdict(self)
+
+
+# Light, by what the market is actually reacting to. These are the readings a
+# photographer would take from the same brief -- a wellness trend is soft and
+# even, an ingredient story is hard and raking because that is what shows
+# texture, a beauty trend is cool and clean.
+TREND_LIGHT = {
+    "wellness":   ("soft diffused daylight from a low side angle",
+                   "wellness content reads as calm, and hard light reads as clinical"),
+    "ingredient": ("warm raking rim light from behind, picking out texture",
+                   "ingredient stories have to SHOW the material, and only "
+                   "raking light produces surface texture"),
+    "aesthetic":  ("even high-key light, almost shadowless",
+                   "aesthetic-led posts are graphic rather than photographic, "
+                   "and shadow is what makes an image read as a photograph"),
+    "beauty":     ("cool directional key with a clean specular highlight",
+                   "beauty content is judged on finish, and a specular "
+                   "highlight is how finish becomes visible"),
+}
+
+# Framing, by the placement that performs. A 9:16 that will be watched at arm
+# length wants a tighter, shallower frame than a 16:9 that will be scrubbed
+# past in a feed.
+RATIO_FRAMING = {
+    "9:16": ("tight three-quarter framing, shallow depth of field",
+             "vertical video is held at arm's length and the product has to "
+             "survive a thumb-sized crop"),
+    "4:5":  ("close product framing with a little air above",
+             "the tall feed crop rewards a product that fills the frame "
+             "without touching the edges"),
+    "1:1":  ("centred product, balanced negative space either side",
+             "a square is symmetrical and anything off-centre in it reads as "
+             "a mistake rather than a choice"),
+    "16:9": ("wider environmental framing, product held off-centre",
+             "a landscape frame has room for context, and a centred product "
+             "in one looks like a stock photo"),
+}
+
+# Finish, by category. Not decoration -- these are the differences a buyer in
+# that category is actually looking at.
+CATEGORY_FINISH = {
+    "serum":       "dewy micro-droplets and a wet specular sheen",
+    "moisturiser": "soft matte bloom with a faint sheen at the edges",
+    "moisturizer": "soft matte bloom with a faint sheen at the edges",
+    "cleanser":    "clean water beading, nothing greasy",
+    "sunscreen":   "bright clean finish, no cast",
+    "lipstick":    "rich saturated pigment with a crisp edge",
+    "mascara":     "deep matte black with fine separation",
+    "foundation":  "even skin-like matte finish",
+    "cream":       "thick soft texture catching the light",
+    "oil":         "slow viscous highlights",
+    "balm":        "soft translucent sheen",
+    "toner":       "clear liquid clarity",
+    "shampoo":     "clean fresh highlights",
+}
+
+
+def _material_from_lookalikes(rows: list[dict]) -> SurfacePart | None:
+    """A material a competitor NAMED, in a post that worked.
+
+    Conservative on purpose: only a literal mention counts. Inferring art
+    direction from adjectives would be this tool inventing evidence, which is
+    the one thing it must not do.
+    """
+    for row in rows:
+        text = f"{row.get('title','')} {row.get('hook','')}".lower()
+        for word in SURFACE_VOCAB:
+            if word in text:
+                scene = SURFACE_SCENE[word]
+                return SurfacePart(
+                    slot="material", text=scene, source="lookalike",
+                    # The citation names the WORD, the prompt carries the
+                    # SCENE, and this sentence is where the two are joined --
+                    # so nobody reading the panel can mistake our art
+                    # direction for something the competitor wrote.
+                    because=(f"{row.get('handle','a competitor')} names "
+                             f"'{word}' in a post at {row.get('views',0):,} "
+                             f"views and {row.get('engagement_rate',0)}% "
+                             f"engagement — a material stated in their own "
+                             f"caption, not inferred from their image. Their "
+                             f"word is '{word}'; the rendering of it is ours"),
+                    evidence_url=row.get("evidence_url", ""),
+                    synthetic=bool(row.get("synthetic")),
+                    metric=f"{row.get('views',0):,} views")
+        for cue in row.get("surface_cues") or []:
+            # A cue is already a phrase rather than a single noun, but it can
+            # still name something in the vocabulary, and the fuller scene is
+            # the better prompt when it does.
+            scene = next((SURFACE_SCENE[w] for w in SURFACE_VOCAB
+                          if w in cue.lower()), cue)
+            return SurfacePart(
+                slot="material", text=scene, source="lookalike",
+                because=(f"{row.get('handle','a competitor')} shot on {cue}, "
+                         f"at {row.get('views',0):,} views"),
+                evidence_url=row.get("evidence_url", ""),
+                synthetic=bool(row.get("synthetic")),
+                metric=f"{row.get('views',0):,} views")
+    return None
+
+
+def _material_from_history(hist: dict, fell_back: bool = False) -> SurfacePart | None:
+    """The treatment OUR OWN posts did best on, with the number attached.
+
+    `fell_back` distinguishes the two ways this gets used, because the reason
+    matters as much as the choice. In the Internal engine our history is the
+    intended source. In the Viral engine it is the fallback when no competitor
+    caption named a material -- and saying "no competitor named one" on the
+    Internal tab, where no competitor was ever consulted, would be a sentence
+    that is simply untrue.
+    """
+    best = (hist.get("best_treatment") or "").strip()
+    if not best:
+        return None
+    er = hist.get("best_treatment_er") or hist.get("engagement_rate")
+    ctr = hist.get("best_treatment_ctr")
+    n = hist.get("best_treatment_posts") or hist.get("posts") or 0
+    core = (f"'{best}' is our strongest treatment on this channel in this "
+            f"market: {er}% engagement"
+            + (f" and {ctr}% CTR" if ctr else "")
+            + f", impression-weighted across {n} posts")
+    tail = (". No competitor caption named a material, and guessing one would "
+            "be worse than using something we have measured." if fell_back
+            else ". This is our own measurement, not a competitor's.")
+    return SurfacePart(
+        slot="material", text=best, source="our-history",
+        because=core + tail,
+        evidence_url="", synthetic=bool(hist.get("synthetic")),
+        metric=f"{er}% engagement")
+
+
+def compose_surface(parts: list[SurfacePart]) -> str:
+    """Four clauses into one prompt.
+
+    Ordered the way a photographer would brief it -- what it sits on, how it
+    is lit, how it is framed, what the finish should read as -- because image
+    models weight earlier tokens more heavily and the material is the thing
+    that must survive.
+    """
+    order = {"material": 0, "finish": 1, "light": 2, "framing": 3}
+    live = [p for p in parts if p and p.text]
+    live.sort(key=lambda p: order.get(p.slot, 9))
+    return ", ".join(p.text for p in live)
+
+
+def surface_for(mode: str, rows: list[dict], hist: dict, trend: dict,
+                ratio: str, category: str, product: dict) -> tuple[str, list[SurfacePart]]:
+    """The whole art direction, and the evidence for every clause of it.
+
+    `mode` decides which evidence gets to choose the MATERIAL, which is the
+    clause that dominates the image:
+
+        viral      a competitor's own caption, falling back to our history
+        internal   our own measured performance, and only our own
+
+    The other three clauses come from whichever signal is actually about them
+    -- light from what the market is reacting to, framing from the placement
+    that performs, finish from the category. Sourcing all four from one place
+    would be tidier and would mean three of them were decoration.
+    """
+    parts: list[SurfacePart] = []
+
+    # ---- material ------------------------------------------------------
+    mat = None
+    if mode == "viral":
+        mat = (_material_from_lookalikes(rows)
+               or _material_from_history(hist, fell_back=True))
+    else:
+        mat = _material_from_history(hist)
+    if mat is None:
+        mat = SurfacePart(
+            slot="material", text=(product.get("surface")
+                                   or "a clean neutral studio surface"),
+            source="brief",
+            because=("Neither the market nor our own history offered a "
+                     "treatment for this channel, so the brief's surface is "
+                     "kept rather than invented."))
+    parts.append(mat)
+
+    # ---- finish --------------------------------------------------------
+    fin = CATEGORY_FINISH.get(category)
+    if fin:
+        parts.append(SurfacePart(
+            slot="finish", text=fin, source="brief",
+            because=(f"The finish a {category} is judged on. This clause is "
+                     f"category knowledge rather than a measurement, and is "
+                     f"marked as such rather than dressed up as research.")))
+
+    # ---- light ---------------------------------------------------------
+    if mode == "viral":
+        kind = (trend or {}).get("kind") or ""
+        term = (trend or {}).get("term") or ""
+        lit = TREND_LIGHT.get(kind)
+        if lit:
+            parts.append(SurfacePart(
+                slot="light", text=lit[0], source="trend",
+                because=(f"'{term}' is the fastest-moving term in this market "
+                         f"({(trend or {}).get('velocity', 0)}x week on week, "
+                         f"virality {(trend or {}).get('virality', 0)}/100) and "
+                         f"it is a {kind} trend — {lit[1]}"),
+                synthetic=bool((trend or {}).get("synthetic", True)),
+                metric=f"{(trend or {}).get('velocity', 0)}x w/w"))
+    else:
+        # Internal: the light follows the format our own audience watches to
+        # the end, because watch-through is the only metric here that is about
+        # how the image is READ rather than how it was distributed.
+        wt = hist.get("watch_through") or 0
+        if wt >= 45:
+            parts.append(SurfacePart(
+                slot="light", text="warm raking rim light, picking out texture",
+                source="our-history",
+                because=(f"Our watch-through on this channel is {wt}%, which "
+                         f"is high — the audience is staying for the product "
+                         f"itself, so the light should show its texture "
+                         f"rather than flatter the scene"),
+                synthetic=bool(hist.get("synthetic")), metric=f"{wt}% watched"))
+        else:
+            parts.append(SurfacePart(
+                slot="light", text="bright even key light, high clarity",
+                source="our-history",
+                because=(f"Watch-through here is {wt}%, so the image has to "
+                         f"land in the first moment. Even, bright light reads "
+                         f"fastest at thumbnail size; a moody key does not"),
+                synthetic=bool(hist.get("synthetic")), metric=f"{wt}% watched"))
+
+    # ---- framing -------------------------------------------------------
+    fr = RATIO_FRAMING.get(ratio)
+    if fr:
+        if mode == "internal" and hist.get("best_ratio") == ratio:
+            why = (f"{ratio} is our best-performing placement on this channel "
+                   f"at {hist.get('best_ratio_er', 0)}% engagement — {fr[1]}")
+        else:
+            why = f"{ratio} leads this channel — {fr[1]}"
+        parts.append(SurfacePart(
+            slot="framing", text=fr[0], source=(
+                "our-history" if mode == "internal" else "channel"),
+            because=why, synthetic=bool(hist.get("synthetic"))
+            if mode == "internal" else False,
+            metric=(f"{hist.get('best_ratio_er', 0)}% engagement"
+                    if mode == "internal" and hist.get("best_ratio") == ratio
+                    else "")))
+
+    return compose_surface(parts), parts
 
 
 # --------------------------------------------------------------------------
@@ -223,8 +550,19 @@ def schedule(days: int, images_per_day: int, videos_per_day: int,
 def build(product: dict, market: dict, discovery_by_channel: dict,
           history_by_channel: dict, days: int, images_per_day: int,
           videos_per_day: int, ratios_available: list[str],
-          channels: list[str] | None = None, start: str = "") -> dict:
-    """One strategy document for one product in one market."""
+          channels: list[str] | None = None, start: str = "",
+          mode: str = "viral") -> dict:
+    """One strategy document for one product in one market.
+
+    `mode` decides what gets to choose the art direction:
+
+        viral      what comparable products are doing in this market
+        internal   what OUR OWN posts have measurably done on this channel
+
+    Both produce the same document shape, so everything downstream -- the
+    engine, the UI, the saved JSON -- is identical. Only the evidence differs,
+    and every clause of the prompt says which of the two put it there.
+    """
     channels = channels or list(CHANNEL_PLAN)
     plan = schedule(days, images_per_day, videos_per_day, channels, start)
     doc = {
@@ -235,6 +573,7 @@ def build(product: dict, market: dict, discovery_by_channel: dict,
         "market": {"locale": market.get("locale"), "region": market.get("region"),
                    "audience": market.get("audience"),
                    "message": market.get("message")},
+        "mode": mode,
         "window": {"days": days, "start": (start or _dt.date.today().isoformat()),
                    "images_per_day": images_per_day,
                    "videos_per_day": videos_per_day},
@@ -249,34 +588,6 @@ def build(product: dict, market: dict, discovery_by_channel: dict,
         hist = history_by_channel.get(ch) or {}
         cfg = CHANNEL_PLAN.get(ch, {})
         why: list[dict] = []
-
-        # ---- surface -----------------------------------------------------
-        mined, mined_row = _surface_from_lookalikes(rows)
-        our_best = (hist.get("best_treatment") or "").strip()
-        if mined:
-            surface = mined
-            why.append({"source": "lookalike", "text":
-                        f"{mined_row.get('handle','a competitor')} names "
-                        f"'{mined}' in a post at {mined_row.get('views',0):,} "
-                        f"views — a material stated in their own caption, not "
-                        f"inferred from the image.",
-                        "url": mined_row.get("evidence_url", ""),
-                        "synthetic": bool(mined_row.get("synthetic"))})
-        elif our_best:
-            surface = our_best
-            why.append({"source": "our-history", "text":
-                        f"No competitor caption names a material, so the "
-                        f"surface comes from our own best-performing "
-                        f"treatment on {CHANNEL_NAMES.get(ch, ch)} in "
-                        f"{market.get('locale')}: '{our_best}'.",
-                        "url": "", "synthetic": bool(hist.get("synthetic"))})
-        else:
-            surface = product.get("surface") or "soft neutral studio surface"
-            why.append({"source": "brief", "text":
-                        "Neither the market nor our history offered a "
-                        "treatment, so the brief's own surface is kept "
-                        "unchanged rather than invented.",
-                        "url": "", "synthetic": False})
 
         # ---- format and ratio -------------------------------------------
         dom_format = _dominant(rows, "format", "video" if cfg.get("video_first") else "image")
@@ -308,6 +619,19 @@ def build(product: dict, market: dict, discovery_by_channel: dict,
                            "No live discovery backend was configured."),
                         "url": "", "synthetic": True})
 
+        # ---- the surface, composed clause by clause ----------------------
+        # Built AFTER the ratio order, because the framing clause depends on
+        # which placement actually leads this channel.
+        surface, sparts = surface_for(
+            mode=mode, rows=rows, hist=hist,
+            trend=(disc.get("top_trend") or hist.get("top_trend") or {}),
+            ratio=(order[0] if order else "1:1"),
+            category=doc["product"]["category"], product=product)
+        for p in sparts:
+            why.append({"source": p.source, "text": p.because,
+                        "url": p.evidence_url, "synthetic": p.synthetic,
+                        "clause": p.text, "slot": p.slot, "metric": p.metric})
+
         hooks = _hooks(rows)
         slots = _slots(ch, plan.get(ch, []), surface, order, hooks, product,
                        market, cfg)
@@ -323,6 +647,9 @@ def build(product: dict, market: dict, discovery_by_channel: dict,
             "lookalikes": rows[:6],
             "positioning": _positioning(product, market, dom_format, ch),
             "surface": surface,
+            # The prompt taken apart. Shown beside it in the UI so the weak
+            # clause cannot hide behind the strong ones.
+            "surface_parts": [p.as_dict() for p in sparts],
             "dominant_format": dom_format,
             "ratio_order": order,
             "hooks": hooks,

@@ -7,7 +7,13 @@
      favicon is requested before anything else and must not depend on the
      server's working directory. It is what makes the app window read as an
      application in the taskbar instead of an anonymous browser window. -->
-<link rel="icon" type="image/png" href="/appicon.png">
+<!-- Blank on purpose. Chromium's `--app` mode paints the OS window's own
+     title bar from this favicon on Windows, and that bar is a place Doug
+     asked to have nothing in -- the icon now lives inline in the tab strip
+     instead (see .topmark below). Trade-off worth knowing: the taskbar entry
+     for this window is driven by the same favicon, so it likely reads as a
+     generic window there now rather than a branded one. -->
+<link rel="icon" href="data:,">
 <style>
 /* ==========================================================================
    Adobe Spectrum (dark), with a macOS type stack.
@@ -85,6 +91,13 @@ body{
   margin:0;color:var(--ink);
   font:13px/1.5 var(--sans);
   -webkit-font-smoothing:antialiased;
+  /* min-height does not cap anything -- a tall pane could still grow the
+     page past 100vh and hand scrolling to the OS window instead of to the
+     one region that should own it. A hard height + hidden overflow makes
+     that structurally impossible: every pane below is flex:1;min-height:0,
+     so any pane taller than the window MUST scroll internally or clip,
+     never push the window itself. */
+  display:flex;flex-direction:column;height:100vh;overflow:hidden;
 }
 a{color:var(--accent-hi)}
 ::selection{background:var(--accent-soft)}
@@ -97,11 +110,11 @@ a{color:var(--accent-hi)}
   border:2px solid var(--g75)}
 *::-webkit-scrollbar-thumb:hover{background:var(--g400)}
 
-.wrap{max-width:1560px;margin:0 auto;padding:0 20px 80px}
+.wrap{max-width:1560px;margin:0 auto;padding:0 20px 80px;flex:1;display:flex;flex-direction:column;min-height:0}
 
 /* ---------- top chrome ----------
    The bar itself spans the window; its CONTENTS are constrained to the same
-   width and padding as .wrap so the brandmark lines up with the panels under
+   width and padding as .wrap so the tabs line up with the panels under
    it. This used to be one element with `margin:0 -20px` to break out of
    .wrap -- then the header moved out of .wrap and that negative margin had
    nothing left to cancel, so the bar hung 20px off both edges and gave the
@@ -114,25 +127,16 @@ header.topbar{
   max-width:1560px;margin:0 auto;padding:0 20px;
   display:flex;align-items:stretch;gap:18px;min-height:54px;
 }
-/* No mark in here -- the logo is the window's icon (tab, taskbar, splash) and
-   repeating it beside itself only costs width. */
-.brandmark{display:flex;align-items:center;padding:8px 0;
-  min-width:0;flex:0 1 auto}
-.brandmark .txt{min-width:0}
-.brandmark b{display:block;font:600 13.5px var(--sans);letter-spacing:-.012em;
-  color:var(--g900);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.brandmark span{display:block;font:10.5px var(--sans);color:var(--g500);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.brandmark a{color:inherit;text-decoration:none}
-.brandmark a:hover{color:var(--g700);text-decoration:underline}
-
-/* Below this the title, four tabs, Run and the GitHub link stop fitting on
-   one line. Rather than let them overflow, the bar wraps and the tabs take
-   the second row -- the tabs are the thing you need at every width. */
+.topmark{
+  width:22px;height:22px;border-radius:5px;
+  align-self:center;flex:0 0 auto;
+}
+/* Below this, the tabs, Run and the GitHub link stop fitting on one line.
+   Rather than let them overflow, the bar wraps and the tabs take the second
+   row -- the tabs are the thing you need at every width. */
 @media (max-width:1080px){
   .topinner{flex-wrap:wrap;padding-bottom:0}
-  nav.apptabs{order:3;width:100%;margin-top:-1px}
-  .brandmark{flex:1 1 auto}
+  nav.apptabs{order:2;width:100%;margin-top:-1px}
 }
 
 nav.apptabs{display:flex;gap:0;align-self:stretch}
@@ -156,7 +160,7 @@ nav.apptabs button.on .cnt{background:var(--accent);color:#fff}
 }
 .ghlink:hover{color:var(--g900);border-color:var(--g400)}
 
-h1{display:none}                       /* the brandmark is the title now */
+h1{display:none}                       /* the window's title bar is the title now */
 .sub{display:none}
 
 /* ---------- action bar ---------- */
@@ -241,8 +245,17 @@ button[disabled]{opacity:.4;cursor:not-allowed}
 .tab:hover{color:var(--g900);background:var(--g300)}
 .tab.on{background:var(--accent);color:#fff}
 
-/* ---------- brief form ---------- */
-.formpane{max-height:640px;overflow-y:auto;padding:15px 17px}
+/* ---------- brief form ----------
+   The Brief pane used to cap #formpane at a fixed 640px, which left a slab
+   of dead space below the panel on any window taller than that. Doug asked
+   for it to always reach the bottom of the window instead, so the pane is
+   now a flex column (body -> .wrap -> #pane-brief -> .panel -> #formpane)
+   and #formpane takes whatever is left after the dropdown bar and the
+   panel header, scrolling internally once the products list outgrows it. */
+#pane-brief{display:flex;flex-direction:column;min-height:0;flex:1;overflow-y:visible}
+#pane-brief .panel{flex:1;display:flex;flex-direction:column;min-height:0}
+#pane-brief .panel h2{flex:none}
+.formpane{flex:1;min-height:0;overflow-y:auto;padding:15px 17px}
 .fsec{margin-bottom:18px}
 .fsec>h3{margin:0 0 9px;font:600 10.5px var(--sans);letter-spacing:.07em;
   text-transform:uppercase;color:var(--muted)}
@@ -326,6 +339,10 @@ button[disabled]{opacity:.4;cursor:not-allowed}
   color:var(--muted);margin:0 0 11px;padding:0;border:0;background:none;
   display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
 .flowscroll{overflow-x:auto}
+.flowinfo{margin-top:10px;padding:10px 12px;background:var(--g75);
+  border:1px solid var(--g300);border-radius:var(--r);
+  font:12px var(--sans);color:var(--g700);line-height:1.5}
+.flowinfo b{color:var(--g900)}
 svg.flow{display:block}
 
 /* ---------- run log ---------- */
@@ -479,16 +496,18 @@ a.loc1.link{text-decoration:none;cursor:pointer;font-weight:600;
 a.loc1.link:hover{background:var(--accent);color:#fff}
 
 /* ---------- modals ---------- */
-#assetmodal,#librarymodal,#postmodal{
+#assetmodal,#librarymodal,#postmodal,#assetpreview,#perfpost{
   position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.66);
   display:flex;align-items:center;justify-content:center;padding:26px;
   backdrop-filter:blur(2px);
 }
-#assetmodal[hidden],#librarymodal[hidden],#postmodal[hidden]{display:none}
+#assetmodal[hidden],#librarymodal[hidden],#postmodal[hidden],#assetpreview[hidden],#perfpost[hidden]{display:none}
 .amcard{background:var(--g100);border:1px solid var(--g400);border-radius:var(--r2);
   max-width:960px;width:100%;max-height:100%;overflow:auto;box-shadow:var(--shadow-lg)}
 #librarymodal .amcard{max-width:780px}
 #postmodal .amcard{max-width:720px}
+#assetpreview .amcard{max-width:820px}
+#perfpost .amcard{max-width:860px}
 .amhead{display:flex;align-items:center;gap:11px;padding:13px 16px;
   border-bottom:1px solid var(--g300);background:var(--g75)}
 .amhead b{font-size:13.5px;color:var(--g900)}
@@ -514,6 +533,16 @@ a.loc1.link:hover{background:var(--accent);color:#fff}
   color:var(--ink);cursor:pointer;text-decoration:none}
 .amact .go{background:var(--accent);border-color:var(--accent);color:#fff}
 .amact button:hover{background:var(--g300)}
+.ftchip{display:inline-flex;flex-direction:column;align-items:center;gap:4px;
+  border:0;background:transparent;padding:4px 6px;text-decoration:none;
+  cursor:pointer}
+.ftwrap{position:relative;width:34px;height:34px}
+.ftico{width:100%;height:100%;object-fit:contain}
+.ftdl{position:absolute;right:-4px;bottom:-4px;width:15px;height:15px;
+  border-radius:50%;background:var(--accent);color:#fff;font-size:10px;
+  line-height:15px;text-align:center}
+.ftsize{font:500 10px var(--mono);color:var(--g500)}
+.ftchip:hover .ftsize{color:var(--g800)}
 .amnote{font:11px var(--mono);color:var(--g500);line-height:1.6;margin-top:6px}
 .libbody{padding:15px;max-height:62vh;overflow-y:auto}
 .libgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(124px,1fr));gap:10px}
@@ -637,6 +666,13 @@ a.loc1.link:hover{background:var(--accent);color:#fff}
 .grplab{font:700 9.5px var(--sans);fill:var(--accent-hi);letter-spacing:.08em;
   text-transform:uppercase}
 @keyframes dash{to{stroke-dashoffset:-14}}
+
+.infob{cursor:pointer}
+.infob circle{fill:var(--g300);stroke:none}
+.infob:hover circle{fill:var(--accent)}
+.infob text{font:700 10px var(--mono);fill:var(--g700);text-anchor:middle;
+  dominant-baseline:middle;pointer-events:none}
+.infob:hover text{fill:#fff}
 
 
 /* ==========================================================================
@@ -870,7 +906,25 @@ a.loc1.link:hover{background:var(--accent);color:#fff}
 header.topbar .ghlink{margin-left:0;align-self:center;flex:none}
 @media (max-width:1080px){ .topact{margin-left:auto} }
 
-.pane{padding-top:18px}
+/* Every pane owns its own scrollbar rather than the window owning one --
+   see the body rule in new-style.css. #pane-brief overrides this back to
+   visible because it lays out its own children (.bar, then .panel) and it
+   is .panel > #formpane specifically that should scroll, not the pane
+   around it -- otherwise Brief would grow a second, redundant scrollbar. */
+.pane{padding-top:18px;flex:1;min-height:0;overflow-y:auto}
+/* Results wants the window, not the 1560px column everything else
+   reads comfortably at -- it is a grid of image cards, and a grid
+   scrolls less and reads better the wider it gets. Escaping .wrap's
+   max-width is the standard full-bleed trick: cancel the constraint,
+   size to the viewport, and pull back to center with negative margins. */
+#pane-results{max-width:none;width:100vw;
+  margin-left:calc(50% - 50vw);margin-right:calc(50% - 50vw);
+  padding-left:24px;padding-right:24px;box-sizing:border-box}
+/* Pipeline's own content is already bounded -- the flow diagram sizes
+   itself and the run log is a fixed-height box with its own scrollbar
+   (.console). It never needs a scrollbar of its own on top of that. */
+#pane-pipeline{overflow-y:visible}
+
 .pane[hidden]{display:none}
 
 /* ==========================================================================
@@ -1053,8 +1107,22 @@ header.topbar .ghlink{margin-left:0;align-self:center;flex:none}
 /* ---------- look-alikes ---------- */
 .lals{display:flex;flex-direction:column;gap:1px;background:var(--g300);
   border:1px solid var(--g300);border-radius:var(--r);overflow:hidden}
-.lal{display:grid;grid-template-columns:minmax(0,1fr) 74px 62px 58px 74px;
+.lal{display:grid;
+  grid-template-columns:52px minmax(0,1fr) 74px 62px 58px 74px;
   gap:11px;align-items:center;background:var(--g100);padding:9px 12px}
+
+/* The competitor's own cover. The only part of their CREATIVE this tool ever
+   sees -- everything else is numbers and caption text -- so it earns the
+   left-hand column rather than a hover. */
+.lalthumb{width:52px;height:52px;border-radius:var(--r);overflow:hidden;
+  background:var(--g50);position:relative;display:flex;
+  align-items:center;justify-content:center}
+.lalthumb img{width:100%;height:100%;object-fit:cover;display:block}
+.lalthumb .none{font:8px var(--mono);color:var(--g500);text-align:center;
+  line-height:1.3}
+.lalthumb i{position:absolute;bottom:0;left:0;right:0;font:normal 7px var(--mono);
+  letter-spacing:.06em;text-align:center;background:var(--review);
+  color:#1b1004;padding:1px 0}
 .lal .who{min-width:0}
 .lal .h{font:600 11.5px var(--sans);color:var(--g900);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1151,6 +1219,115 @@ header.topbar .ghlink{margin-left:0;align-self:center;flex:none}
 .genok b{color:var(--pass)}
 .genok code{font:10px var(--mono);background:var(--g200);color:var(--g700);
   border-radius:3px;padding:1px 5px;word-break:break-all}
+
+/* ---------- why this prompt ---------- */
+/* The prompt is assembled from four slots and each slot has a reason. This
+   is that assembly shown as rows: the words, where they came from, and the
+   number that decided it. Four columns on a wide pane; on a narrow one the
+   reason drops under the clause rather than being squeezed to three words a
+   line, because the reason is the whole point of the panel. */
+.whyprompt{border:1px solid var(--g200);border-radius:var(--r);
+  background:var(--g75);margin:0 0 13px;overflow:hidden}
+.wph{padding:8px 12px;border-bottom:1px solid var(--g200);
+  font:600 11px var(--sans);color:var(--g800);background:var(--g100)}
+.wph .sub{font:400 10.5px var(--sans);color:var(--muted);margin-left:8px}
+/* 84px was too narrow for "our history · syn": nowrap made it run under the
+   reason column instead of wrapping, so the badge and the sentence collided.
+   The column is sized to the longest label now and the badge may wrap. */
+.wprow{display:grid;grid-template-columns:66px minmax(120px,1.05fr) 104px minmax(170px,1.55fr);
+  gap:12px;align-items:baseline;padding:9px 12px;
+  border-bottom:1px solid var(--g100)}
+.wprow:last-child{border-bottom:0}
+.wpslot{font:9px var(--mono);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted)}
+.wptext{font:11.5px/1.5 var(--sans);color:var(--g900)}
+.wpsrc{font:9px/1.5 var(--mono);letter-spacing:.05em;text-transform:uppercase;
+  border-radius:9px;padding:3px 7px;text-align:center;overflow-wrap:break-word}
+.wpsrc.external{background:rgba(38,128,235,.16);color:#7db4f5}
+.wpsrc.internal{background:var(--pass-soft);color:var(--pass)}
+.wpsrc.agreement{background:var(--g200);color:var(--g700)}
+.wpwhy{font:10.5px/1.6 var(--sans);color:var(--muted)}
+.wpwhy b{color:var(--g800);font-weight:600}
+.wpwhy a{color:var(--accent);text-decoration:none}
+.wpwhy a:hover{text-decoration:underline}
+@media (max-width:1000px){
+  .wprow{grid-template-columns:64px 1fr 84px}
+  .wpwhy{grid-column:2/4}
+}
+
+/* ---------- assets tab ---------- */
+.asset-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));
+  gap:12px;margin-top:14px}
+.asset-card{background:var(--g100);border:1px solid var(--g300);
+  border-radius:var(--r2);overflow:hidden;display:flex;flex-direction:column}
+.asset-thumb{aspect-ratio:1/1;background:var(--g50);display:flex;
+  align-items:center;justify-content:center;overflow:hidden;
+  position:relative;cursor:pointer}
+.asset-thumb .asset-psd-badge{position:absolute;right:6px;bottom:6px;
+  width:26px;height:26px;border-radius:6px;background:rgba(255,255,255,.92);
+  padding:3px;box-shadow:0 1px 4px rgba(0,0,0,.35);pointer-events:none;
+  object-fit:contain}
+.asset-thumb img,.asset-thumb video{width:100%;height:100%;object-fit:cover}
+.asset-genthumb{font:600 13px var(--mono);letter-spacing:.04em;color:var(--g500)}
+.asset-body{padding:10px 11px;display:flex;flex-direction:column;gap:5px}
+.asset-name{font:500 12px var(--sans);color:var(--ink2);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.asset-meta{font:11px var(--sans);color:var(--g500);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.asset-meta.mono{font:10.5px var(--mono)}
+.asset-row{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.asset-s3{margin-top:2px}
+.apbody{padding:16px;display:flex;flex-direction:column;gap:12px;align-items:center}
+.apbody img,.apbody video{max-width:100%;max-height:65vh;border-radius:var(--r);
+  border:1px solid var(--g300);background:var(--g50)}
+.apmeta{font:11px var(--mono);color:var(--g500);word-break:break-all;text-align:center}
+.apactions{display:flex;gap:8px}
+
+.lalhead{display:grid;
+  grid-template-columns:52px minmax(0,1fr) 74px 62px 58px 74px;
+  gap:11px;padding:5px 12px;font:600 9.5px var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;color:var(--muted)}
+.lalhead span:nth-child(3),.lalhead span:nth-child(4){text-align:right;
+  cursor:help;border-bottom:1px dotted var(--g400)}
+.lalhead span:nth-child(5){text-align:center}
+
+/* ---------- performance analytics (Internal Engine) ---------- */
+.perfsec{margin-top:4px}
+.perfkpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:11px;margin-bottom:16px}
+.perfcard{background:var(--g100);border:1px solid var(--g300);border-radius:var(--r);
+  padding:12px 14px}
+.perfcard-h{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.perfcard-h b{font:600 12.5px var(--sans);color:var(--g900)}
+.perfgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px 6px}
+.perfstat{min-width:0}
+.perfstat .k{font:9px var(--sans);letter-spacing:.05em;text-transform:uppercase;
+  color:var(--muted)}
+.perfstat .v{font:600 13px var(--mono);color:var(--g800);font-variant-numeric:tabular-nums}
+.perfcalwrap{background:var(--g100);border:1px solid var(--g300);border-radius:var(--r);
+  padding:14px}
+.perfcalhead{display:flex;align-items:baseline;gap:10px;margin-bottom:11px;flex-wrap:wrap}
+.perfcalhead b{font:600 13px var(--sans);color:var(--g900)}
+.perfcalgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.perfcaldow{font:9px var(--sans);letter-spacing:.05em;text-transform:uppercase;
+  color:var(--muted);text-align:center;padding-bottom:4px}
+.perfcalcell{background:var(--g50);border:1px solid var(--g200);border-radius:6px;
+  min-height:78px;padding:5px;display:flex;flex-direction:column;gap:4px}
+.perfcalcell.empty{background:transparent;border-color:transparent}
+.perfcalcell.today{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.perfcalcell.future{opacity:.42}
+.perfcalnum{font:10px var(--mono);color:var(--g500)}
+.perfcalposts{display:flex;flex-wrap:wrap;gap:3px;align-items:center}
+.perfchip{width:20px;height:20px;border-radius:4px;overflow:hidden;cursor:pointer;
+  border:2px solid var(--g400);flex:none}
+.perfchip img,.perfchip video{width:100%;height:100%;object-fit:cover;display:block}
+.perfchip.tier-high{border-color:var(--pass)}
+.perfchip.tier-mid{border-color:var(--review)}
+.perfchip.tier-low{border-color:var(--block)}
+.perfcalmore{font:9px var(--mono);color:var(--g500)}
+.perfstatgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;
+  margin-top:2px}
+.perfstatgrid .perfstat{text-align:center}
 </style>
 </head><body>
 <!-- Four panes, one visible at a time, switched by the tabs in the top bar.
@@ -1188,28 +1365,25 @@ header.topbar .ghlink{margin-left:0;align-self:center;flex:none}
 
 <header class="topbar">
 <!-- The bar spans the window; .topinner holds its contents to the same width
-     and padding as .wrap, so the brandmark lines up with the panels below.
+     and padding as .wrap, so the tabs line up with the panels below.
      Doing that with a negative margin on the header itself is what put a
      horizontal scrollbar on the page. -->
 <div class="topinner">
 
-  <!-- Text only. The mark is the window's icon -- in the tab, the taskbar and
-       on the splash -- and repeating it two centimetres away from itself in
-       the header adds nothing but width. The title bar of an application
-       names the application and its version; that is the whole job. -->
-  <div class="brandmark" title="campaign brief in &rarr; on-spec, checked creatives out">
-    <div class="txt">
-      <b>FDE Social Content Agentic Automation &amp; Analytics</b>
-      <span id="appver">Version 1.0</span>
-    </div>
-  </div>
-
+  <!-- The mark, not the title. The window's own title bar used to carry
+       the Firefly icon; Doug asked for that removed from there and put here
+       instead, beside the tabs it introduces. Still no text -- the splash
+       and the window's OWN title (document.title, unaffected by the blanked
+       favicon) already say the name once each. -->
+  <img class="topmark" src="/appicon.png" width="22" height="22" alt="FDE">
   <nav class="apptabs" id="apptabs" role="tablist">
     <button role="tab" data-pane="brief" class="on">Brief</button
-    ><button role="tab" data-pane="analytics">Engine</button
+    ><button role="tab" data-pane="analytics">Viral Engine</button
+    ><button role="tab" data-pane="internal">Internal Engine</button
     ><button role="tab" data-pane="pipeline">Pipeline</button
     ><button role="tab" data-pane="results">Results<span class="cnt"
-        id="rescount" hidden>0</span></button>
+        id="rescount" hidden>0</span></button
+    ><button role="tab" data-pane="assets">Assets</button>
   </nav>
 
   <div class="topact">
@@ -1236,6 +1410,8 @@ header.topbar .ghlink{margin-left:0;align-self:center;flex:none}
      a pane switch, and a modal that unmounts when you change tab behind it is
      a bug waiting to be filed. -->
 <div id="assetmodal" hidden></div>
+<div id="assetpreview" hidden></div>
+<div id="perfpost" hidden></div>
 <div id="librarymodal" hidden></div>
 <div id="postmodal" hidden></div>
 <!-- One file input, reused by every product card. Rendering one per card
@@ -1262,18 +1438,19 @@ header.topbar .ghlink{margin-left:0;align-self:center;flex:none}
     <div class="f" id="modelwrap" hidden><label for="model">Image model</label>
       <select id="model"></select></div>
 
+    <div class="f" id="vmodelwrap"><label for="vmodel">Video model</label>
+      <select id="vmodel"></select></div>
+
+    <div class="f"><label for="storage">Asset storage</label>
+      <select id="storage"></select></div>
+
     <div class="f"><label for="regen">Generation</label>
       <label class="chk" title="Ignore the asset on disk and the cache. Every product is
 generated fresh from its current subject and surface, with a seed salted by the run id.">
         <input type="checkbox" id="regen"><span>Regenerate every run</span></label></div>
     <div id="surfacebox"></div>
 
-    <button id="plan">Plan &mdash; what would this cost?</button>
-    <div class="spacer"></div>
-    <button id="save">Save brief</button>
   </div>
-
-  <div id="planout"></div>
 
   <div class="panel">
     <h2>Brief <span id="briefname" class="tag"></span>
@@ -1289,8 +1466,17 @@ generated fresh from its current subject and surface, with a seed salted by the 
 </section>
 
 <!-- ========================== ANALYTICS ========================== -->
+<!-- Two engines, one implementation. They differ only in which evidence gets
+     to choose the art direction: what comparable products are doing in the
+     market, or what our own posts have measurably done. Same three steps,
+     same master tabs, same strategy document -- so a second copy of the code
+     would have been two things to keep in step for no reason. -->
 <section class="pane" id="pane-analytics" hidden>
   <div id="anpane"></div>
+</section>
+
+<section class="pane" id="pane-internal" hidden>
+  <div id="inpane"></div>
 </section>
 
 <!-- ========================== PIPELINE =========================== -->
@@ -1300,8 +1486,9 @@ generated fresh from its current subject and surface, with a seed salted by the 
     <h2>Pipeline flow
       <span class="hint">driven by real pipeline events &mdash; the same records written to run.log.jsonl</span>
     </h2>
-    <div class="flowscroll"><svg class="flow" id="flow" width="1180" height="544"
-         viewBox="0 0 1180 544" role="img" aria-label="pipeline flow diagram"></svg></div>
+    <div class="flowscroll"><svg class="flow" id="flow" width="1340" height="544"
+         viewBox="0 0 1340 544" role="img" aria-label="pipeline flow diagram"></svg></div>
+    <div class="flowinfo" id="flowinfo">Click the <b>&#9432;</b> on any stage to read what it does.</div>
   </div>
 
   <div class="panel logpanel">
@@ -1319,6 +1506,10 @@ and produces the same pixels every time.</pre>
      as it lands, so the newest is the leftmost and the row grows right. -->
 <section class="pane" id="pane-results" hidden>
   <div id="results"></div>
+</section>
+
+<section class="pane" id="pane-assets" hidden>
+  <div id="assetspane"></div>
 </section>
 
 </div>
@@ -1359,6 +1550,11 @@ const NODES = [
   // creatives is how an off-brand asset gets picked up by someone who assumes
   // it was approved.
   {id:'store',     x:794, y:392, ic:'☁',  t:'AWS S3',           s:'mirror + manifest', c:'#FF9900'},
+  // Also after the gate, same reasoning as store: a video slot is only ever
+  // animated from a still that already carries a verdict, never generated
+  // fresh from a text prompt, so it belongs downstream of checks/verdict --
+  // not beside "Generate hero", which is where a text-to-video step would go.
+  {id:'video',     x:1106, y:300, ic:'🎬', t:'Video',           s:'image-to-video', c:'#8a5cf6'},
 ];
 NODES.forEach(n=>{ n.y += DY; });
 const NMAP = Object.fromEntries(NODES.map(n=>[n.id,n]));
@@ -1368,8 +1564,30 @@ const EDGES = [
   ['master','crop','wrap'],
   ['crop','scrim'], ['scrim','message'], ['message','logo'], ['logo','measure'],
   ['measure','checks'], ['checks','verdict'], ['verdict','report','down'],
-  ['checks','store','down'],
+  ['checks','store','down'], ['verdict','video'],
 ];
+
+// What each stage's info badge explains. Written to name the actual vendor
+// behind a step where there is one -- "a provider" is true but is not what
+// somebody clicking for an explanation is asking.
+const NODE_INFO = {
+  brief:     "The campaign brief YAML -- products, markets, aspect ratios and rules -- loaded and expanded into every planned variant before anything is spent.",
+  preflight: "Free structural checks against the brief before any paid call: duplicate product IDs, a single-product campaign, and anything else worth catching for nothing.",
+  src_disk:  "An approved product photo already on disk, reused byte-for-byte. No model is called and nothing is spent.",
+  src_gen:   "A brand-new hero image, generated once per product via the selected image provider -- Nano Banana on Cloudflare's Gateway by default, or Gemini / Firefly / Cloudflare's native catalog if chosen instead.",
+  src_cache: "An identical generation request seen before -- same product, same prompt, same seed -- served from the local cache instead of paying for it again.",
+  master:    "The one full-resolution master this product's campaign is built from. Every market, ratio and caption downstream is composed from this single image locally, which is why adding one is free.",
+  crop:      "The master cropped to each deliverable's exact aspect ratio, subject-aware rather than a blind centre crop.",
+  scrim:     "A gradient laid behind the message so localized text stays legible over any background.",
+  message:   "The market's message, localized per market, set in a font that can actually render that market's script.",
+  logo:      "The brand mark placed and scaled to the brand kit's own rules.",
+  measure:   "The finished creative measured against the brief's spec: exact delivery dimensions, palette tolerance, legible type.",
+  checks:    "Brand and legal rules run against the actual rendered pixels -- prohibited terms, a missing logo, an off-brand palette -- and the creative is scored.",
+  verdict:   "Sorted into pass / review / block from the checks above. Nothing is auto-approved past this point.",
+  report:    "A JSON + HTML report of the whole run, for handoff or audit.",
+  store:     "Every deliverable lands in two places, not one: the local output folder AND mirrored to AWS S3 alongside it, with a manifest linking them. Nothing here is S3-only.",
+  video:     "A video slot animates the SAME still that already has a verdict -- image-to-video via Google Veo (Cloudflare's Gateway), never a fresh text-to-video generation, so the checks above have already seen every pixel the video starts from. Falls back to free local ffmpeg motion when no video model is selected.",
+};
 const SVGNS = 'http://www.w3.org/2000/svg';
 const el = (n,a={}) => { const e=document.createElementNS(SVGNS,n);
   for(const k in a) e.setAttribute(k,a[k]); return e; };
@@ -1445,9 +1663,29 @@ function drawFlow(graph){
       const b=el('text',{class:'badge-t',x:n.x+NW-8-w/2,y:n.y+NH-12.5,'text-anchor':'middle'});
       b.textContent=g.count; grp.appendChild(b);
     }
+    // The info badge: every stage explains itself on click rather than
+    // only through the terse on-canvas label. A fixed corner spot rather
+    // than a hover tooltip -- this is an SVG on a page people also touch
+    // on tablets, and hover states do not exist there.
+    if(NODE_INFO[n.id]){
+      const ig = el('g',{class:'infob', 'data-info-id':n.id});
+      ig.appendChild(el('circle',{cx:n.x+NW-11,cy:n.y+11,r:8}));
+      const it=el('text',{x:n.x+NW-11,y:n.y+14.5,'text-anchor':'middle'});
+      it.textContent='i'; ig.appendChild(it);
+      grp.appendChild(ig);
+    }
     svg.appendChild(grp);
   });
 }
+
+document.getElementById('flow').addEventListener('click', (e) => {
+  const badge = e.target.closest('[data-info-id]');
+  if (!badge) return;
+  const id = badge.dataset.infoId;
+  const n = NMAP[id];
+  const panel = $('#flowinfo');
+  panel.innerHTML = `<b>${esc(n ? n.t : id)}</b> — ${esc(NODE_INFO[id] || '')}`;
+});
 let running = false;
 
 
@@ -1469,7 +1707,7 @@ let running = false;
  * actually resolve.
  * ------------------------------------------------------------------ */
 
-const MIN_SPLASH = 950;
+const MIN_SPLASH = 3500;
 const SPLASH_T0 = Date.now();
 
 const STEPS = [
@@ -1567,11 +1805,10 @@ async function init(){
     step('server', 'err', 'no answer on this port');
     return splashFailed('The app could not reach its own server.');
   }
-  // Both from the server's APP_VERSION, so the header and the splash cannot
-  // drift apart or from the code that is actually running. The markup carries
-  // "Version 1.0" as a static fallback for the moment before this resolves.
+  // From the server's APP_VERSION, so the splash cannot drift from the code
+  // that is actually running. The header no longer repeats it -- the window's
+  // own title bar and the splash are where the version is said now.
   $('#splver').textContent = 'v' + (r.version || '1.0');
-  $('#appver').textContent = 'Version ' + (r.version || '1.0');
   step('server', 'ok', r.briefs.length + ' brief'
        + (r.briefs.length === 1 ? '' : 's') + ' found');
 
@@ -1598,6 +1835,8 @@ async function init(){
        : 'local only — nothing mirrored');
 
   paintProviders(r);
+  paintVModels();
+  $('#storage').innerHTML = '<option value="s3" selected>AWS S3</option>';
   paintStale(r.stale);
   if (r.app_window) startHeartbeat(r.ping_every || 4);
 
@@ -1900,8 +2139,7 @@ async function paintProductStates(){
     const why = card.querySelector(`[data-why-for="${i}"]`);
     if (why) {
       why.innerHTML = {
-        asis:   'The approved photograph is used byte for byte. '
-              + '<b>Neither prompt below is read</b> for this product, and no model is called.',
+        asis:   '',
         resurf: 'The approved photograph goes to the model as a reference. '
               + 'The <b>surface prompt</b> describes the new scene; the product prompt '
               + 'names what must not change. One paid call.',
@@ -1986,7 +2224,14 @@ async function generateProduct(i){
     r = await (await fetch('/api/generate-product', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({product: p.id || `product-${i}`, subject,
-                            surface: '', provider: currentProvider()})})).json();
+                            surface: '', provider: currentProvider(),
+                            // Without this the server fell back to each
+                            // provider's hardcoded default (phoenix-1.0 on
+                            // Cloudflare) no matter what the Image Model
+                            // dropdown showed -- so switching to Nano Banana
+                            // to dodge phoenix's NSFW classifier had no
+                            // effect from this button specifically.
+                            model: ($('#modelwrap').hidden ? '' : $('#model').value)})})).json();
   } catch { r = {error: 'the request failed'}; }
 
   btn.disabled = false;
@@ -2011,9 +2256,7 @@ async function generateProduct(i){
     &nbsp;·&nbsp; ${r.width}×${r.height} &nbsp;·&nbsp;
     ${Math.round((r.bytes || 0) / 1024)} KB &nbsp;·&nbsp;
     ${esc(r.provider || '')}${r.model ? ' · ' + esc(r.model) : ''}
-    <div class="gennote">This product now <b>reuses</b> that file, so it costs
-      nothing on the next run. The prompt it was made from:
-      <code>${esc((r.prompt || '').slice(0, 180))}</code></div>
+    <div class="gennote"><code>${esc((r.prompt || '').slice(0, 180))}</code></div>
   </div>`;
 }
 
@@ -2403,7 +2646,9 @@ function showPane(name){
   window.scrollTo(0, 0);
   // Fetched on first view rather than on load: a whole extra request for a
   // tab most sessions never open.
-  if (name === 'analytics') loadEngine();
+  if (name === 'analytics') loadEngine('viral');
+  if (name === 'internal')  loadEngine('internal');
+  if (name === 'assets')    loadAssets();
 }
 
 $('#apptabs').addEventListener('click', (e) => {
@@ -2450,7 +2695,16 @@ function showTab(which){
 const fmt = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M'
                  : n >= 1e3 ? Math.round(n / 1e3) + 'k' : String(n || 0);
 
-const ENG = {
+/* Two engines, one implementation.
+ *
+ * `ENGINES` holds a state object per mode and `ENG` points at whichever pane
+ * is being drawn. Everything below reads ENG, so the render code has no idea
+ * there are two of them -- which is the point: the tabs differ in the
+ * EVIDENCE they use, not in what they do with it, and two copies of this code
+ * would have been two things to keep in step for no benefit.
+ */
+const newEngine = (mode, host) => ({
+  mode, host,
   status: null,        // what this machine can do
   brief: null,         // {path, text, data}
   source: 'pick',      // pick | paste
@@ -2460,14 +2714,23 @@ const ENG = {
   data: null,          // last /api/engine/progress payload
   tab: '',             // which product's master tab is open
   chan: {},            // per product: which channel tab is open
-};
+  loc: '',
+});
 
-async function loadEngine(force){
+const ENGINES = {
+  viral:    newEngine('viral', '#anpane'),
+  internal: newEngine('internal', '#inpane'),
+};
+let ENG = ENGINES.viral;
+
+async function loadEngine(mode, force){
+  ENG = ENGINES[mode] || ENGINES.viral;
   if (ENG.status && !force) return paintEngine();
   try {
     ENG.status = await (await fetch('/api/engine/status')).json();
   } catch {
-    $('#anpane').innerHTML = `<div class="note err">The engine could not be reached.</div>`;
+    $(ENG.host).innerHTML =
+      `<div class="note err">The engine could not be reached.</div>`;
     return;
   }
   if (!ENG.brief) await engineUseBrief($('#brief').value);
@@ -2489,7 +2752,7 @@ async function engineUseBrief(path){
    parsers eventually disagree about what a brief says, and the one being
    edited is always the wrong one. */
 async function engineParsePasted(){
-  const text = $('#eyaml').value;
+  const text = (eq('eyaml') || {}).value || '';
   const r = await (await fetch('/api/brief?path=' +
       encodeURIComponent(ENG.brief?.path || $('#brief').value), {})).json()
       .catch(() => ({}));
@@ -2510,6 +2773,13 @@ async function engineParsePasted(){
   paintEngine();
 }
 
+/* Scoped element lookup.
+   Both engine panes render the same template, so `#edays` exists twice in
+   the document once you have opened both tabs. `$('#edays')` returns the
+   first one -- Viral's -- whichever engine you are actually typing into.
+   Everything the engine reads out of its own markup goes through `eq`. */
+const eq = (id) => { const h = $(ENG.host); return h ? h.querySelector('#' + id) : null; };
+
 const engProducts = () => (ENG.brief?.data?.products) || [];
 const engMarkets  = () => (ENG.brief?.data?.markets)  || [];
 
@@ -2522,11 +2792,11 @@ const engChanCount = () => engChannels().length || 1;
 
 function engSchedule(){
   const n = (id, d) => {
-    const v = parseInt(($('#' + id) || {}).value, 10);
+    const v = parseInt((eq(id) || {}).value, 10);
     return Number.isFinite(v) ? v : d;
   };
   return {days: n('edays', 7), ipd: n('eimg', 2), vpd: n('evid', 1),
-          start: ($('#estart') || {}).value || ''};
+          start: (eq('estart') || {}).value || ''};
 }
 
 function paintEngine(){
@@ -2540,7 +2810,7 @@ function paintEngine(){
   const live = (s.discovery || []).filter(d => d.configured && !d.synthetic);
   const backend = s.default_discovery || 'synthetic';
 
-  $('#anpane').innerHTML = `
+  $(ENG.host).innerHTML = `
     ${engHead(s, live, backend)}
     ${engStep1(b, prods)}
     ${engStep2(sc, perMarket, mkts, total, s)}
@@ -2554,23 +2824,42 @@ function paintEngine(){
           : 'select at least one product'}</span>
     </div>
     ${ENG.data ? engLog() : ''}
-    ${engMasters()}`;
+    ${engMasters()}
+    ${ENG.mode === 'internal' ? engPerfSection() : ''}`;
 
   wireEngine();
 }
 
+/* The two engines answer different questions, and the heading is where that
+   difference is stated -- before you press the button, not after you wonder
+   why the two tabs disagree.
+     Viral    : what is working for OTHER people right now, found by crawling.
+     Internal : what has worked for US, read off our own channel metrics.
+   Same products, same channels, same renderer. Different evidence, and so a
+   different prompt with a different reason attached to every clause. */
 function engHead(s, live, backend){
   const syn = backend === 'synthetic';
+  const viral = ENG.mode === 'viral';
   return `<div class="anwarn"><div>
-    <b>Where the evidence comes from.</b>
-    Channels: <b>${engChannels().map(c => esc(c.name)).join(', ')}</b>.
-    Facebook is not offered — its scraper needs named pages and Facebook has
-    no public keyword post search, so it could only ever have returned
-    invented data beside three channels of real posts.
-    Discovery is currently <b>${esc(backend)}</b>${syn
-      ? ' — every look-alike below is generated from a fixed seed, not observed. Set <code>APIFY_TOKEN</code> to crawl for real.'
-      : ' — look-alikes are real public posts, each carrying the link you can open and check.'}
-    Our own channel history is synthetic in every case and always says so.
+    <b>${viral ? 'Viral Engine — evidence from other people\u2019s posts.'
+               : 'Internal Engine — evidence from our own posts.'}</b>
+    ${viral
+      ? `Each channel is crawled for look-alike products in this market, and the
+         top performers decide the prompt. Discovery is currently
+         <b>${esc(backend)}</b>${syn
+           ? ' — every look-alike below is generated from a fixed seed, not observed. Set <code>APIFY_TOKEN</code> to crawl for real.'
+           : ' — look-alikes are real public posts, each carrying the link you can open and check.'}`
+      : `Nothing is crawled. The prompt is built from our own channel history —
+         impressions, CTR, engagement rate, saves, comments, shares and
+         watch-through — so it repeats what has already earned reach on our
+         accounts rather than copying a stranger\u2019s. That history is
+         synthetic sample data in this build and every row says so; a real
+         deployment swaps <code>_engine_history()</code> for the platform
+         Insights APIs named in <code>pipeline/insights.py</code>.`}
+    Channels: <b>${engChannels().map(c => esc(c.name)).join(', ')}</b>.${viral
+      ? ` Facebook is not offered — its scraper needs named pages and Facebook
+          has no public keyword post search, so it could only ever have
+          returned invented data beside three channels of real posts.` : ''}
     Video is rendered from the approved still${s.ffmpeg ? '' :
       ' — but ffmpeg is missing, so video slots will be planned and left unrendered'}.
   </div></div>`;
@@ -2728,11 +3017,75 @@ function engMaster(pid, p){
     ${engChannel(p, ENG.loc && locales.includes(ENG.loc) ? ENG.loc : loc, openCh)}`;
 }
 
+/* Why this prompt, clause by clause.
+ *
+ * The prompt above is not a sentence somebody wrote: it is assembled from
+ * four slots -- material, finish, light, framing -- and each slot was chosen
+ * by one specific piece of evidence. This table is that assembly, taken
+ * apart again: the words that went in, where they came from, and the number
+ * that decided it. It is the difference between "the AI suggested this" and
+ * "the top three posts in this market all shot wet-surface macro, and here
+ * are the links".
+ *
+ * Reading the labels:
+ *   look-alike   a competitor post the crawler found  (Viral Engine)
+ *   our history  our own metrics on this channel      (Internal Engine)
+ *   trend        the dominant theme across the set
+ *   channel      the aspect ratio this placement wants
+ *   brief        the product category, straight from the YAML
+ */
+const PART_SLOT = {material: 'Material', finish: 'Finish',
+                   light: 'Light', framing: 'Framing'};
+const PART_SRC  = {lookalike: 'look-alike', 'our-history': 'our history',
+                   trend: 'trend', channel: 'channel', brief: 'brief'};
+
+function engWhyPrompt(c){
+  const parts = c.surface_parts || [];
+  if (!parts.length) return '';
+  return `<div class="whyprompt">
+    <div class="wph">Why this prompt
+      <span class="sub">${parts.length} clause${parts.length > 1 ? 's' : ''},
+        each one traceable to something measured</span></div>
+    ${parts.map(x => `
+      <div class="wprow">
+        <span class="wpslot">${esc(PART_SLOT[x.slot] || x.slot)}</span>
+        <span class="wptext">${esc(x.text)}</span>
+        <span class="wpsrc ${x.source === 'lookalike' ? 'external'
+                           : x.source === 'our-history' ? 'internal' : 'agreement'}"
+          >${esc(PART_SRC[x.source] || x.source)}${x.synthetic ? ' · syn' : ''}</span>
+        <span class="wpwhy">${esc(x.because)}${x.metric
+          ? ` <b>${esc(x.metric)}</b>` : ''}${x.evidence_url
+          ? ` <a href="${esc(x.evidence_url)}" target="_blank" rel="noopener">↗</a>` : ''}</span>
+      </div>`).join('')}
+  </div>`;
+}
+
 function engChannel(p, loc, ch){
   const doc = p.plan.markets[loc];
   const c = doc.channels[ch];
   if (!c) return '';
   const disc = c.discovery || {};
+
+  // Internal mode has no crawl by design: its evidence is our own metrics,
+  // already shown clause by clause under the prompt. An empty "look-alikes
+  // found: none" strip here reads as a failed crawl instead of a deliberate
+  // absence, so the section states the difference instead.
+  if (ENG.mode === 'internal') return `
+    <div class="ansec">
+      <div class="ansech"><h3>Evidence</h3>
+        <span class="src">our own posting history on ${esc(c.name)} in ${esc(loc)}</span>
+        <span class="ebadge syn">SAMPLE DATA</span>
+      </div>
+      <div class="ansecb"><div class="gennote" style="max-width:none">
+        Nothing was crawled for this tab. Every clause of the prompt below is
+        traced to one of our own measurements — engagement rate, CTR,
+        watch-through, or placement performance — and the number that decided
+        it is printed beside it. Competitor look-alikes live on the
+        <b>Viral Engine</b> tab.
+      </div></div>
+    </div>
+
+    ${engStrategy(p, doc, c, loc)}`;
 
   return `
     <div class="ansec">
@@ -2746,8 +3099,21 @@ function engChannel(p, loc, ch){
         ${disc.fell_back_because ? `<div class="note err" style="margin:0 0 11px">
           Live discovery failed, so this fell back to generated data:
           <code>${esc(disc.fell_back_because)}</code></div>` : ''}
+        ${(c.lookalikes || []).length ? `<div class="lalhead">
+          <span></span><span>Account &amp; post</span>
+          <span title="Total views the platform reports for this post.">Views</span>
+          <span title="Engagement rate: (likes + comments + shares) \u00f7 views \u00d7 100.">Engmt.</span>
+          <span>Format</span><span></span>
+        </div>` : ''}
         <div class="lals">${(c.lookalikes || []).map(l => `
           <div class="lal">
+            <span class="lalthumb">${l.thumb
+              ? `<img src="/out/${esc(l.thumb)}" alt="" loading="lazy">
+                 ${l.synthetic ? '<i>SYN</i>' : ''}`
+              : `<span class="none" title="${l.thumb_url
+                    ? 'the network refused the cover image'
+                    : 'this post had no cover to fetch'}">no<br>cover</span>`}
+            </span>
             <div class="who"><div class="h">${esc(l.handle || l.brand || '—')}</div>
               <div class="t">${esc(l.title || '')}</div></div>
             <div class="n">${fmt(l.views || 0)}</div>
@@ -2761,6 +3127,17 @@ function engChannel(p, loc, ch){
       </div>
     </div>
 
+    ${engStrategy(p, doc, c, loc)}`;
+}
+
+
+/* Strategy and schedule: identical for both engines.
+   The two tabs differ in the EVIDENCE section above this -- crawled
+   look-alikes on Viral, our own metrics on Internal -- and in nothing else.
+   Sharing this tail is what makes that claim true rather than aspirational:
+   there is one renderer, so the two tabs cannot quietly drift apart. */
+function engStrategy(p, doc, c, loc){
+  return `
     <div class="ansec">
       <div class="ansech"><h3>Strategy</h3>
         <span class="src">${esc(c.placement)}</span>
@@ -2770,13 +3147,14 @@ function engChannel(p, loc, ch){
       <div class="ansecb"><div class="strat">
         <div>
           <div class="stratsurf">${esc(c.surface)}</div>
+          ${engWhyPrompt(c)}
           <div class="sampfacts" style="margin-bottom:12px">
             <span>${esc(c.positioning)}</span>
             <span>Produce in this order: <b>${(c.ratio_order || []).map(esc).join(' → ')}</b></span>
             <span><b>${c.cadence.images}</b> images and <b>${c.cadence.videos}</b> videos
               scheduled here, from <b>one</b> generative call.</span>
           </div>
-          <ol class="sugwhy">${(c.why || []).map(w => `
+          <ol class="sugwhy">${(c.why || []).filter(w => !w.slot).map(w => `
             <li><span class="tag ${w.source === 'lookalike' ? 'external'
                                  : w.source === 'our-history' ? 'internal'
                                  : w.source === 'warning' ? 'conflict' : 'agreement'}"
@@ -2803,27 +3181,48 @@ function engChannel(p, loc, ch){
         <span class="src">${(c.slots || []).length} posts · ${esc(loc)} · ${esc(c.name)}</span>
       </div>
       <div class="ansecb">
-        <div class="slotgrid">${(c.slots || []).map(engSlot).join('')}</div>
+        <div class="slotgrid">${(c.slots || []).map(s => engSlot(s,
+          p.output_dir || (p.summary && p.summary.output_dir) || '')).join('')}</div>
       </div>
     </div>`;
 }
 
-function engSlot(s){
+/* A slot's `produced`/`video` paths are relative to THIS run's own output
+   folder, same convention the Results tab's cards use -- see cardHtml().
+   The folder name carries a timestamp decided inside engine.run(), so it
+   cannot be known at plan time; the server fires it as its own event the
+   moment the run starts (see _engine_event's "output_dir" branch) and it
+   is threaded down from there. Before it arrives -- the first instant of a
+   run -- there is nothing correct to point at, so the placeholder stays up
+   rather than requesting a URL that 404s and renders as a broken image. */
+function engThumbError(el){
+  const shot = el.closest('.shot');
+  if (shot) shot.innerHTML = '<span class="ph">not produced yet</span>';
+}
+
+function engSlot(s, outDir){
   const badge = {pass: 'b-pass', review: 'b-review', block: 'b-block'}[s.verdict] || '';
+  const pre = outDir ? `/out/${outDir}/` : '';
   return `<div class="slot" data-slot="${esc(s.id)}"
                title="open — locations and downloads">
     <div class="sh"><span>${esc(s.date)}</span><span>${esc(s.ratio)}</span>
       <span class="kind ${s.kind === 'video' ? 'video' : ''}">${esc(s.kind)}</span></div>
     <div class="shot">${
-      s.video
-        // #t=2 so the poster frame is two seconds in. Frame 0 is inside the
-        // fade-in, so without it every video tile is a black rectangle.
-        ? `<video src="/out/${esc(s.video)}#t=2" muted loop playsinline
-             preload="metadata"
-             onmouseover="this.play()" onmouseout="this.pause()"></video>
-           <span class="vbadge">${s.video_seconds || 0}s</span>`
-        : s.produced
-          ? `<img src="/out/${esc(s.produced)}" alt="" loading="lazy">`
+      s.video && pre
+        // The STILL is the poster. `#t=2` was the first attempt and it does
+        // not work with preload="metadata" -- metadata does not decode a
+        // frame, so every tile sat black until you hovered it. The clip is
+        // rendered FROM this jpeg, so it is not merely a stand-in for the
+        // first frame, it is the first frame, and it paints instantly because
+        // the browser already has it.
+        ? `<video src="${pre}${esc(s.video)}" poster="${pre}${esc(s.produced)}"
+             muted loop playsinline preload="none"
+             onmouseover="this.play()" onmouseout="this.pause()"
+             onerror="engThumbError(this)"></video>
+           <span class="vbadge">▶ ${s.video_seconds || 0}s</span>`
+        : s.produced && pre
+          ? `<img src="${pre}${esc(s.produced)}" alt="" loading="lazy"
+               onerror="engThumbError(this)">`
           : `<span class="ph">${s.error ? esc(s.error)
                : s.video_error ? esc(s.video_error) : 'not produced yet'}</span>`
     }</div>
@@ -2834,10 +3233,274 @@ function engSlot(s){
   </div>`;
 }
 
+/* ------------------------------------------------------------------ *
+ * Performance analytics -- Internal Engine only.
+ *
+ * There is no posting history in this build (see _engine_history's own
+ * comment: a real deployment reads the platform Insights APIs; this one
+ * reads a fixed synthetic table). This section is the same honesty applied
+ * to a calendar instead of a paragraph: it takes real local files -- actual
+ * generated or reference assets, via the same /api/assets/browse endpoint
+ * the Assets tab uses -- and lays deterministic, clearly-labelled DEMO
+ * metrics over them so the KPI layout can be reviewed with something more
+ * concrete than a lorem-ipsum grid. The numbers are seeded from each
+ * asset's own path, so they are stable across reloads without a database:
+ * the same file always gets the same fake performance.
+ * ------------------------------------------------------------------ */
+
+const PERF_CHANNELS = [
+  {id: 'tiktok',    name: 'TikTok'},
+  {id: 'instagram', name: 'Instagram'},
+  {id: 'youtube',   name: 'YouTube'},
+  {id: 'facebook',  name: 'Facebook'},
+];
+const PERF_CHANNEL_NAME = Object.fromEntries(PERF_CHANNELS.map(c => [c.id, c.name]));
+
+let PERF_DEMO = null;
+
+function perfHash(s){
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+// Mulberry32 -- small, seedable, good enough for demo-data jitter.
+function perfRng(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const perfLerp = (a, b, t) => a + (b - a) * t;
+
+// tier -> [views range, engagement-rate% range]. High/mid/low bands are
+// deliberately non-overlapping so the color coding and the numbers agree --
+// a "High" chip should never sit on a smaller view count than a "Mid" one.
+const PERF_TIERS = {
+  high: {views: [18000, 140000], er: [7, 16]},
+  mid:  {views: [2500, 18000],   er: [2.5, 7]},
+  low:  {views: [200, 2500],     er: [0.4, 2.5]},
+};
+// How the engagement total splits across the metrics Doug asked for.
+// Clicks dominate (the cheapest action); tags are the rarest.
+const PERF_SPLIT = {clicks: 0.42, shares: 0.18, comments: 0.15, reposts: 0.13, tags: 0.12};
+
+function buildDemoPosts(items){
+  const today = new Date();
+  return items.slice(0, 28).map(a => {
+    const rng = perfRng(perfHash(a.path));
+    const channel = (a.channel && PERF_CHANNEL_NAME[a.channel])
+      ? a.channel : PERF_CHANNELS[Math.floor(rng() * PERF_CHANNELS.length)].id;
+    const dayOffset = Math.floor(rng() * 25);            // spread over ~last 25 days
+    const d = new Date(today); d.setDate(d.getDate() - dayOffset);
+    const date = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+      + '-' + String(d.getDate()).padStart(2, '0');
+    const roll = rng();
+    const tier = roll < 0.22 ? 'high' : roll < 0.70 ? 'mid' : 'low';
+    const band = PERF_TIERS[tier];
+    const views = Math.round(perfLerp(band.views[0], band.views[1], rng()));
+    const engRate = perfLerp(band.er[0], band.er[1], rng());
+    const engTotal = Math.round(views * engRate / 100);
+    const metrics = {};
+    let used = 0;
+    const keys = Object.keys(PERF_SPLIT);
+    keys.forEach((k, i) => {
+      if (i === keys.length - 1) { metrics[k] = Math.max(0, engTotal - used); return; }
+      const v = Math.round(engTotal * PERF_SPLIT[k] * perfLerp(0.85, 1.15, rng()));
+      metrics[k] = Math.max(0, v);
+      used += metrics[k];
+    });
+    return {
+      id: a.path, path: a.path, name: a.name, kind: a.kind, channel, date, tier,
+      views, engRate: +engRate.toFixed(2),
+      clicks: metrics.clicks, shares: metrics.shares, comments: metrics.comments,
+      reposts: metrics.reposts, tags: metrics.tags,
+    };
+  });
+}
+
+function loadPerfDemo(){
+  if (PERF_DEMO) return;
+  PERF_DEMO = {loading: true};
+  fetch('/api/assets/browse').then(r => r.json()).then(r => {
+    const raw = (r.items || []).filter(a => a.kind === 'image' || a.kind === 'video');
+    PERF_DEMO = {loading: false, posts: buildDemoPosts(raw)};
+  }).catch(e => {
+    PERF_DEMO = {loading: false, error: String(e)};
+  }).finally(() => {
+    // Only the Internal Engine instance repaints itself -- a slow fetch that
+    // resolves after the user has switched to Viral must not overwrite
+    // whatever that tab is showing.
+    if (ENG === ENGINES.internal) paintEngine();
+  });
+}
+
+function perfAggregate(posts){
+  const byCh = {};
+  PERF_CHANNELS.forEach(c => { byCh[c.id] = {
+    views: 0, clicks: 0, shares: 0, comments: 0, reposts: 0, tags: 0, count: 0,
+    tiers: {high: 0, mid: 0, low: 0}}; });
+  posts.forEach(p => {
+    const a = byCh[p.channel];
+    if (!a) return;
+    a.views += p.views; a.clicks += p.clicks; a.shares += p.shares;
+    a.comments += p.comments; a.reposts += p.reposts; a.tags += p.tags;
+    a.count++; a.tiers[p.tier]++;
+  });
+  return byCh;
+}
+const perfTopTier = (t) => Object.entries(t).sort((a, b) => b[1] - a[1])[0][0];
+const PERF_TIER_LABEL = {high: 'High', mid: 'Mid', low: 'Low'};
+const PERF_TIER_BADGE = {high: 'b-pass', mid: 'b-review', low: 'b-block'};
+
+function perfChannelCard(c, a){
+  if (!a || !a.count) return `<div class="perfcard">
+    <div class="perfcard-h"><b>${esc(c.name)}</b></div>
+    <div class="hint" style="padding:8px 2px 2px">no demo posts this window</div>
+  </div>`;
+  const tier = perfTopTier(a.tiers);
+  return `<div class="perfcard">
+    <div class="perfcard-h"><b>${esc(c.name)}</b>
+      <span class="badge ${PERF_TIER_BADGE[tier]}" style="margin-left:auto"
+        >${PERF_TIER_LABEL[tier]}</span></div>
+    <div class="perfgrid">
+      <div class="perfstat"><div class="k">Views</div><div class="v">${fmt(a.views)}</div></div>
+      <div class="perfstat"><div class="k">Clicks</div><div class="v">${fmt(a.clicks)}</div></div>
+      <div class="perfstat"><div class="k">Shares</div><div class="v">${fmt(a.shares)}</div></div>
+      <div class="perfstat"><div class="k">Comments</div><div class="v">${fmt(a.comments)}</div></div>
+      <div class="perfstat"><div class="k">Reposts</div><div class="v">${fmt(a.reposts)}</div></div>
+      <div class="perfstat"><div class="k">Tags</div><div class="v">${fmt(a.tags)}</div></div>
+    </div>
+    <div class="hint" style="padding:7px 2px 0">${a.count} post${a.count === 1 ? '' : 's'}
+      this window</div>
+  </div>`;
+}
+
+function perfPostChip(p){
+  const base = '/' + p.path;
+  const thumb = p.kind === 'video'
+    ? `<video src="${esc(base)}#t=0.5" muted preload="metadata"></video>`
+    : `<img src="${esc(base)}" alt="" loading="lazy">`;
+  return `<div class="perfchip tier-${p.tier}" data-perf-id="${esc(p.id)}"
+      title="${esc(p.name)} · ${esc(PERF_CHANNEL_NAME[p.channel] || p.channel)} · ${fmt(p.views)} views · ${PERF_TIER_LABEL[p.tier]}">
+    ${thumb}
+  </div>`;
+}
+
+function perfCalendar(posts){
+  const byDate = {};
+  posts.forEach(p => { (byDate[p.date] = byDate[p.date] || []).push(p); });
+
+  const today = new Date();
+  const y = today.getFullYear(), m = today.getMonth(), todayD = today.getDate();
+  const startDow = new Date(y, m, 1).getDay();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+
+  const cells = [];
+  for (let i = 0; i < startDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const monthLabel = today.toLocaleDateString('en-US', {month: 'long', year: 'numeric'});
+  const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const CAP = 4;
+
+  return `<div class="perfcalwrap">
+    <div class="perfcalhead"><b>${esc(monthLabel)}</b>
+      <span class="hint">${posts.length} demo posts · click a thumbnail for its numbers</span></div>
+    <div class="perfcalgrid">
+      ${dow.map(d => `<div class="perfcaldow">${d}</div>`).join('')}
+      ${cells.map(d => {
+        if (d === null) return `<div class="perfcalcell empty"></div>`;
+        const iso = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const dayPosts = byDate[iso] || [];
+        const cls = (d > todayD ? ' future' : '') + (d === todayD ? ' today' : '');
+        return `<div class="perfcalcell${cls}">
+          <div class="perfcalnum">${d}</div>
+          <div class="perfcalposts">${dayPosts.slice(0, CAP).map(perfPostChip).join('')}
+            ${dayPosts.length > CAP ? `<span class="perfcalmore">+${dayPosts.length - CAP}</span>` : ''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
+function engPerfSection(){
+  if (!PERF_DEMO || PERF_DEMO.loading) {
+    loadPerfDemo();
+    return `<div class="ansec perfsec">
+      <div class="ansech"><h3>Performance analytics</h3>
+        <span class="ebadge syn">DEMO DATA</span></div>
+      <div class="ansecb"><div class="anloading">Loading local assets to stand in as sample posts&hellip;</div></div>
+    </div>`;
+  }
+  if (PERF_DEMO.error || !PERF_DEMO.posts || !PERF_DEMO.posts.length) {
+    return `<div class="ansec perfsec">
+      <div class="ansech"><h3>Performance analytics</h3>
+        <span class="ebadge syn">DEMO DATA</span></div>
+      <div class="ansecb"><div class="hint">${PERF_DEMO.error
+          ? 'Could not load local assets: ' + esc(PERF_DEMO.error)
+          : 'No local image or video assets found yet to stand in as sample posts.'}</div></div>
+    </div>`;
+  }
+  const posts = PERF_DEMO.posts;
+  const byCh = perfAggregate(posts);
+  return `<div class="ansec perfsec">
+    <div class="ansech"><h3>Performance analytics</h3>
+      <span class="src">KPIs per channel and a posting calendar, built from
+        ${posts.length} of your own local assets</span>
+      <span class="ebadge syn">DEMO DATA</span></div>
+    <div class="ansecb">
+      <div class="note" style="margin-bottom:14px">Every number here is
+        synthetic, seeded from each file's own path so it stays put across
+        reloads -- this is a layout stand-in, not a report from TikTok,
+        Instagram, YouTube or Facebook. Real numbers come from the platform
+        Insights APIs named in <code>pipeline/insights.py</code>.</div>
+      <div class="perfkpis">${PERF_CHANNELS.map(c => perfChannelCard(c, byCh[c.id])).join('')}</div>
+      ${perfCalendar(posts)}
+    </div>
+  </div>`;
+}
+
+function openPerfPost(id){
+  const p = (PERF_DEMO && PERF_DEMO.posts || []).find(x => x.id === id);
+  if (!p) return;
+  const base = '/' + p.path;
+  const media = p.kind === 'video'
+    ? `<video src="${esc(base)}" controls preload="metadata"></video>`
+    : `<img src="${esc(base)}" alt="">`;
+  const chName = PERF_CHANNEL_NAME[p.channel] || p.channel;
+  $('#perfpost').innerHTML = `
+    <div class="amcard">
+      <div class="amhead"><b>${esc(p.name)}</b>
+        <span class="badge ${PERF_TIER_BADGE[p.tier]}" style="margin-left:8px"
+          >${PERF_TIER_LABEL[p.tier]}</span>
+        <button class="x" aria-label="Close">&times;</button>
+      </div>
+      <div class="apbody">
+        ${media}
+        <div class="apmeta">${esc(chName)} · posted ${esc(p.date)}</div>
+        <div class="perfstatgrid">
+          <div class="perfstat"><div class="k">Views</div><div class="v">${fmt(p.views)}</div></div>
+          <div class="perfstat"><div class="k">Clicks</div><div class="v">${fmt(p.clicks)}</div></div>
+          <div class="perfstat"><div class="k">Shares</div><div class="v">${fmt(p.shares)}</div></div>
+          <div class="perfstat"><div class="k">Comments</div><div class="v">${fmt(p.comments)}</div></div>
+          <div class="perfstat"><div class="k">Reposts</div><div class="v">${fmt(p.reposts)}</div></div>
+          <div class="perfstat"><div class="k">Tags</div><div class="v">${fmt(p.tags)}</div></div>
+        </div>
+        <div class="hint" style="text-align:center">${p.engRate}% engagement rate
+          · demo data, not a live platform metric</div>
+      </div>
+    </div>`;
+  $('#perfpost').hidden = false;
+}
+
 /* ---------------- interaction ---------------- */
 
 function wireEngine(){
-  const pane = $('#anpane');
+  const pane = $(ENG.host);
   const sel = pane.querySelector('#ebrief');
   if (sel) sel.addEventListener('change', async (e) => {
     await engineUseBrief(e.target.value); paintEngine();
@@ -2863,6 +3526,8 @@ function wireEngine(){
       if (f) engReadFile(f);
     });
   }
+  pane.querySelectorAll('[data-perf-id]').forEach(
+    el => el.addEventListener('click', () => openPerfPost(el.dataset.perfId)));
 }
 
 /* The YAML file input. Cleared after every read, or picking the same file
@@ -2879,14 +3544,15 @@ function engReadFile(file){
     ENG.source = 'paste';
     ENG.brief = {path: file.name, text: String(fr.result), data: null, error: ''};
     paintEngine();
-    const ta = $('#eyaml');
+    const ta = eq('eyaml');
     if (ta) { ta.value = String(fr.result); }
     engineParsePasted();
   };
   fr.readAsText(file);
 }
 
-$('#anpane').addEventListener('click', async (e) => {
+function engineClick(mode){ return async (e) => {
+  ENG = ENGINES[mode];
   const src = e.target.closest('[data-src]');
   if (src) { ENG.source = src.dataset.src; return paintEngine(); }
 
@@ -2910,22 +3576,37 @@ $('#anpane').addEventListener('click', async (e) => {
 
   const ec = e.target.closest('[data-ech]');
   if (ec) { ENG.chan[ENG.tab] = ec.dataset.ech; return paintEngine(); }
-});
+}; }
 
 async function engRun(){
   if (ENG.running || !ENG.products.length) return;
   const sc = engSchedule();
   ENG.running = true; ENG.data = null; paintEngine();
 
+  // The Pipeline tab's flow diagram and the Results tab are driven by the
+  // classic /api/progress poll -- the server now folds engine events into
+  // the same STATE a "Run pipeline" click uses, so starting that same poll
+  // here is what makes both tabs light up for a Viral/Internal Engine run
+  // too, live, instead of only after the fact.
+  $('#results').innerHTML = ''; SEEN.clear(); setResultCount(0); drawFlow({});
+  if (!poll) { poll = setInterval(tick, 400); tick(); }
+
   let r;
   try {
     r = await (await fetch('/api/engine/run', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
+        // The one field that decides which evidence the run is built from:
+        // 'viral' crawls the channels for look-alikes, 'internal' skips the
+        // crawl and reads our own posting history instead.
+        mode: ENG.mode,
         path: ENG.brief.path, text: ENG.source === 'paste' ? ENG.brief.text : '',
         products: ENG.products, days: sc.days,
         images_per_day: sc.ipd, videos_per_day: sc.vpd, start: sc.start,
         provider: currentProvider(), video: true,
+        // Empty means "local ffmpeg motion, free" -- the field only exists
+        // at all once /api/video-models has something to offer.
+        video_model: $('#vmodelwrap').hidden ? '' : $('#vmodel').value,
       })})).json();
   } catch { r = {error: 'the engine could not be started'}; }
 
@@ -2934,20 +3615,40 @@ async function engRun(){
     ENG.data = {lines: [r.error], order: [], products: {}};
     return paintEngine();
   }
-  ENG.poll = setInterval(engTick, 700);
-  engTick();
+  // The poller is handed the engine that started the run, not ENG. The user
+  // is free to switch tabs while it runs, and a timer that read ENG would
+  // start writing Viral's progress into whichever pane happened to be open.
+  const en = ENG;
+  en.poll = setInterval(() => engTick(en), 700);
+  engTick(en);
 }
 
-async function engTick(){
+async function engTick(en){
   let d;
   try { d = await (await fetch('/api/engine/progress')).json(); }
   catch { return; }
-  ENG.data = d;
-  ENG.running = d.running;
-  if (!d.running) { clearInterval(ENG.poll); ENG.poll = null; }
-  paintEngine();
-  const log = $('#elog');
+  // There is one server and one run at a time, and both engines poll the same
+  // endpoint. A payload stamped with the other mode belongs to the other tab:
+  // showing it here would put internal-history results under Viral Engine.
+  if (d.mode && d.mode !== en.mode) return;
+  en.data = d;
+  en.running = d.running;
+  if (!d.running) { clearInterval(en.poll); en.poll = null; }
+  paintInto(en);
+  const log = $(en.host).querySelector('#elog');
   if (log) log.scrollTop = log.scrollHeight;
+}
+
+/* Draw a specific engine, whichever tab is on screen.
+   paintEngine and everything under it read the module-level ENG, which is
+   what keeps one renderer serving two tabs. Repainting a BACKGROUND engine
+   -- a run still finishing in the tab you left -- means pointing ENG at it
+   for the duration. JS is single-threaded and paintEngine is synchronous, so
+   nothing can observe the swap. */
+function paintInto(en){
+  const prev = ENG;
+  ENG = en;
+  try { paintEngine(); } finally { ENG = prev; }
 }
 
 document.querySelectorAll('.panel .tab').forEach(t =>
@@ -2958,41 +3659,6 @@ document.querySelectorAll('.panel .tab').forEach(t =>
 $('#text').addEventListener('input', () => { BRIEF = null; });
 
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-
-async function doPlan(){
-  const r = await (await fetch('/api/plan',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({path:$('#brief').value})})).json();
-  if(r.error){ $('#planout').innerHTML = `<div class="note err"><b>Brief error.</b> ${esc(r.error)}</div>`; return; }
-  // "reuse" here means costs nothing, which a resurfaced product does not --
-  // it has an asset on disk AND spends a call.
-  const reuse = r.products.filter(p=>p.reuse).length;
-  const resurf = r.products.filter(p=>p.mode === 'resurfaced').length;
-  let html = `<div class="kpis">
-    <div class="kpi"><div class="n">${r.deliverables}</div><div class="l">Deliverables</div></div>
-    <div class="kpi"><div class="n">${r.generative}</div><div class="l">Generative calls</div></div>
-    <div class="kpi"><div class="n">${r.products.length}</div><div class="l">Products</div></div>
-    <div class="kpi"><div class="n">${r.markets.length}</div><div class="l">Markets</div></div>
-    <div class="kpi"><div class="n">${r.ratios.length}</div><div class="l">Aspect ratios</div></div>
-  </div>
-  <div class="note"><b>Nothing has been spent yet.</b> ${r.deliverables} deliverables would cost
-  <b>${r.generative}</b> generative call(s)${
-    reuse ? ` — ${reuse} product(s) reused exactly as shot, costing nothing` : ''}${
-    resurf ? `; ${resurf} keeping its approved photo but regenerating the surface` : ''}.
-  Every product that costs a call is generated <b>once</b> at master resolution, and every
-  market and ratio is composed from that master locally — which is why adding a market
-  or a spec is free.</div>`;
-  if(r.preflight.length){
-    html += `<div class="note"><b>Pre-flight.</b><br>` + r.preflight.map(f=>
-      `<code>${esc(f.rule)}</code> [${esc(f.severity)}] ${esc(f.message)}`).join('<br>') + `</div>`;
-  }
-  $('#planout').innerHTML = html;
-}
-
-async function doSave(){
-  await fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({path:$('#brief').value, text:$('#text').value})});
-  $('#planout').innerHTML = `<div class="note">Brief saved. Press <b>Plan</b> to re-cost it.</div>`;
-}
 
 async function doRun(){
   // Deliberately does NOT save first.
@@ -3378,8 +4044,6 @@ $('#results').addEventListener('click', (e) => {
 
 drawFlow({});
 $('#brief').addEventListener('change', loadBrief);
-$('#plan').addEventListener('click', doPlan);
-$('#save').addEventListener('click', doSave);
 $('#run').addEventListener('click', doRun);
 /* ------------------------------------------------------------------ *
  * Where a creative lives
@@ -3453,19 +4117,51 @@ function assetFromSlot(s){
 /* Every file this creative produced, as something you can actually take.
    `download` on a same-origin link is enough -- no extra route, and the saved
    filename is the one on disk rather than a query string. */
+function humanSize(bytes){
+  if (bytes == null || isNaN(bytes)) return '';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let n = bytes, i = 0;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+  return (i === 0 ? n : n.toFixed(1)) + ' ' + units[i];
+}
+
 function downloadRow(a){
-  const items = [];
-  if (a.video) items.push(['Video (.mp4)', a.video]);
-  if (a.src) items.push([a.video ? 'Still frame (.jpg)' : 'Flattened (.jpg)', a.src]);
-  if (a.layered) items.push(['Layered (.psd)', a.layered]);
-  if (!items.length) return '';
+  const chips = [];
+  if (a.src) chips.push([a.video ? 'Still frame (.jpg)' : 'Flattened (.jpg)', a.src, '/jpg-icon.png']);
+  if (a.layered) chips.push(['Layered (.psd)', a.layered, '/psd-icon.png']);
+  // The one link with no supplied icon keeps the earlier plain-button look
+  // rather than inventing a video glyph nobody asked for.
+  const plain = a.video ? [['Video (.mp4)', a.video]] : [];
+  if (!chips.length && !plain.length) return '';
   return `<div class="amrow"><h4>Download</h4>
-    <div class="amact">${items.map(([label, href]) =>
-      `<a class="go" href="${esc(href)}" download>${esc(label)}</a>`).join('')}</div>
+    <div class="amact">${plain.map(([label, href]) =>
+        `<a class="go" href="${esc(href)}" download>${esc(label)}</a>`).join('')}${
+      chips.map(([label, href, icon]) =>
+        `<a class="ftchip" href="${esc(href)}" download title="${esc(label)}">
+          <span class="ftwrap"><img class="ftico" src="${icon}" alt="${esc(label)}">
+            <span class="ftdl">&#8595;</span></span>
+          <span class="ftsize" data-size-href="${esc(href)}">&nbsp;</span>
+        </a>`).join('')}</div>
     ${a.layered ? `<div class="amnote">The .psd carries the product, the scrim,
       the message and the logo as separate layers, so the copy can be re-set
       without rebuilding the creative. Its flattened composite is the same
       image as the JPEG.</div>` : ''}</div>`;
+}
+
+/* File sizes are not part of the result data the server already sent --
+   asking for them up front would mean the server os.stat()-ing every
+   deliverable on every run just for a number the modal may never show. A
+   HEAD request per chip, only when the modal that needs it actually opens,
+   reads the same Content-Length the browser's own download would use. */
+function paintChipSizes(root){
+  root.querySelectorAll('.ftsize[data-size-href]').forEach(async (el) => {
+    const href = el.dataset.sizeHref;
+    try {
+      const r = await fetch(href, {method: 'HEAD'});
+      const len = r.headers.get('Content-Length');
+      el.textContent = len ? humanSize(Number(len)) : '';
+    } catch { el.textContent = ''; }
+  });
 }
 
 function openAsset(a){
@@ -3487,8 +4183,8 @@ function openAsset(a){
       </div>
       <div class="ambody">
         ${a.video
-          ? `<video src="${esc(a.video)}#t=2" controls loop muted
-                    playsinline preload="metadata"></video>`
+          ? `<video src="${esc(a.video)}" poster="${esc(a.src)}" controls loop
+                    muted playsinline preload="metadata"></video>`
           : `<img src="${esc(a.src)}" alt="">`}
         <div>
           <div class="amrow">
@@ -3536,6 +4232,7 @@ function openAsset(a){
       </div>
     </div>`;
   m.hidden = false;
+  paintChipSizes(m);
 }
 
 $('#results').addEventListener('click', (e) => {
@@ -3546,7 +4243,8 @@ $('#results').addEventListener('click', (e) => {
 /* The engine's schedule grid opens the same modal. Its slots carry their paths
    in ENG's data rather than in the DOM, so the tile only needs to say which
    slot it is. */
-$('#anpane').addEventListener('click', (e) => {
+function engineSlotClick(mode){ return (e) => {
+  ENG = ENGINES[mode];
   const tile = e.target.closest('[data-slot]');
   if (!tile || !ENG.data) return;
   const want = tile.dataset.slot;
@@ -3559,7 +4257,17 @@ $('#anpane').addEventListener('click', (e) => {
       }
     }
   }
-});
+}; }
+
+/* Both engine panes get the same two handlers, bound once per mode.
+   The mode is captured in the closure rather than read from the DOM: a click
+   that lands on the pane background has no [data-*] to tell us which engine
+   it belongs to, and the wrong ENG would repaint the other tab. */
+for (const m of ['viral', 'internal']) {
+  const host = $(ENGINES[m].host);
+  host.addEventListener('click', engineClick(m));
+  host.addEventListener('click', engineSlotClick(m));
+}
 
 $('#assetmodal').addEventListener('click', async (e) => {
   if (e.target.id === 'assetmodal' || e.target.classList.contains('x')) {
@@ -3593,7 +4301,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   // Every overlay, not just the first one written. A modal that ignores Esc
   // is the kind of thing nobody files a bug about and everybody resents.
-  for (const id of ['#assetmodal', '#librarymodal', '#postmodal'])
+  for (const id of ['#assetmodal', '#librarymodal', '#postmodal', '#assetpreview', '#perfpost'])
     $(id).hidden = true;
 });
 
@@ -3602,8 +4310,8 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
-  const panes = ['brief', 'analytics', 'pipeline', 'results'];
-  const i = ['1', '2', '3', '4'].indexOf(e.key);
+  const panes = ['brief', 'analytics', 'internal', 'pipeline', 'results'];
+  const i = ['1', '2', '3', '4', '5'].indexOf(e.key);
   if (i >= 0) showPane(panes[i]);
 });
 
@@ -3703,6 +4411,20 @@ async function paintModels(){
    dropdown back where it was, open the panel, and focus the field that is
    actually missing -- there is no state in which the select should be left
    holding a provider that cannot run. */
+let VMODELS_HTML = '';
+async function paintVModels(){
+  const sel = $('#vmodel');
+  if (VMODELS_HTML) { sel.innerHTML = VMODELS_HTML; return; }
+  try {
+    const r = await (await fetch('/api/video-models')).json();
+    if (!r.models || !r.models.length) { $('#vmodelwrap').hidden = true; return; }
+    VMODELS_HTML = r.models.map(m =>
+      `<option value="${m.name}"${m.name === r.default ? ' selected' : ''}>${
+        m.label}${m.name === r.default ? ' — default' : ''}</option>`).join('');
+    sel.innerHTML = VMODELS_HTML;
+  } catch { $('#vmodelwrap').hidden = true; }
+}
+
 $('#provider').addEventListener('change', (e) => {
   const v = e.target.value;
   if (!v.startsWith('__add:')) {
@@ -3785,6 +4507,200 @@ $('#keypanel').addEventListener('click', async (e) => {
   paintKeys();
   $('#keymsg').innerHTML =
     `<span style="color:var(--pass)">Saved. ${esc(btn.dataset.save)} is ready — no restart needed.</span>`;
+});
+
+/* ------------------------------------------------------------------ *
+ * Assets tab -- every local deliverable and reference photo, as cards,
+ * with each one's S3 backup status. Loaded on first view of the tab
+ * (same lazy pattern as the engine panes) and re-scanned on Refresh.
+ * ------------------------------------------------------------------ */
+let ASSETS = null;
+let ASSETS_FILTER = { q: '', s3: 'all' };
+
+async function loadAssets(force){
+  if (ASSETS && !force) { paintAssets(); return; }
+  $('#assetspane').innerHTML =
+    `<div class="hint" style="padding:24px 4px">Scanning local files&hellip;</div>`;
+  try {
+    ASSETS = await (await fetch('/api/assets/browse')).json();
+  } catch (e) {
+    $('#assetspane').innerHTML = `<div class="hint" style="padding:24px 4px;
+      color:var(--block)">Could not load assets: ${esc(String(e))}</div>`;
+    return;
+  }
+  paintAssets();
+}
+
+function assetCard(a){
+  const base = '/' + a.path;
+  const isLayered = a.kind === 'layered';
+  const siblingImg = isLayered ? a.path.replace(/\.psd$/i, '.jpg') : '';
+  const thumb = a.kind === 'image'
+    ? `<img loading="lazy" src="${esc(base)}" alt="">`
+    : a.kind === 'video'
+      ? `<video src="${esc(base)}#t=0.5" muted preload="metadata"></video>`
+      : isLayered
+        ? `<img loading="lazy" src="${esc('/' + siblingImg)}" alt=""
+             onerror="handlePsdThumbError(this)">
+           <img class="asset-psd-badge" src="/psd-icon.png" alt="PSD">`
+        : `<div class="asset-genthumb">${esc((a.path.split('.').pop() || '').toUpperCase())}</div>`;
+  const meta = [a.product, a.locale, a.channel, a.ratio].filter(Boolean).join(' \u00b7 ');
+  const s3pill = a.s3 === 'synced'
+    ? `<span class="badge b-pass">Backed up</span>`
+    : a.s3 === 'not_synced'
+      ? `<span class="badge b-review">Not backed up</span>
+         <button class="go" data-sync="${esc(a.path)}"
+           style="padding:3px 9px;font-size:11px">Sync</button>`
+      : `<span class="hint">S3 not configured</span>`;
+  return `<div class="asset-card">
+    <div class="asset-thumb ${esc(a.kind)}" data-preview="${esc(a.path)}">${thumb}</div>
+    <div class="asset-body">
+      <div class="asset-name" title="${esc(a.path)}">${esc(a.name)}</div>
+      ${meta ? `<div class="asset-meta">${esc(meta)}</div>` : ''}
+      <div class="asset-meta mono" title="${esc(a.path)}">${esc(a.path)}</div>
+      <div class="asset-row">
+        <span class="hint">${humanSize(a.bytes)}</span>
+        ${a.verdict ? `<span class="badge b-${esc(a.verdict)}">${esc(a.verdict)}</span>` : ''}
+      </div>
+      <div class="asset-row asset-s3" data-s3-row="${esc(a.path)}">${s3pill}</div>
+    </div>
+  </div>`;
+}
+
+function handlePsdThumbError(img){
+  const div = document.createElement('div');
+  div.className = 'asset-genthumb';
+  div.textContent = 'PSD';
+  img.replaceWith(div);
+}
+
+function openAssetPreview(path){
+  const a = (ASSETS && ASSETS.items || []).find(x => x.path === path);
+  if (!a) return;
+  const base = '/' + a.path;
+  const isLayered = a.kind === 'layered';
+  const previewSrc = isLayered
+    ? '/' + a.path.replace(/\.psd$/i, '.jpg') : base;
+  const media = a.kind === 'video'
+    ? `<video src="${esc(base)}" controls preload="metadata"></video>`
+    : `<img src="${esc(previewSrc)}" alt="" onerror="this.style.display='none'">`;
+  $('#assetpreview').innerHTML = `
+    <div class="amcard">
+      <div class="amhead"><b>${esc(a.name)}</b>
+        ${isLayered ? `<span class="badge b-review" style="margin-left:2px">PSD</span>` : ''}
+        <button class="x" aria-label="Close">&times;</button>
+      </div>
+      <div class="apbody">
+        ${media}
+        <div class="apmeta">${esc(a.path)} &middot; ${humanSize(a.bytes)}</div>
+        <div class="apactions">
+          <a class="go" href="${esc(base)}" download="${esc(a.name)}">Download</a>
+          <a class="go" href="${esc(base)}" target="_blank" rel="noopener">Open in new tab</a>
+        </div>
+      </div>
+    </div>`;
+  $('#assetpreview').hidden = false;
+}
+
+function paintAssets(){
+  const host = $('#assetspane');
+  if (!ASSETS) return;
+  const q = ASSETS_FILTER.q.trim().toLowerCase();
+  const items = (ASSETS.items || []).filter(a => {
+    if (ASSETS_FILTER.s3 === 'missing' && a.s3 !== 'not_synced') return false;
+    if (ASSETS_FILTER.s3 === 'synced' && a.s3 !== 'synced') return false;
+    if (!q) return true;
+    return [a.name, a.product, a.locale, a.channel, a.path]
+      .some(v => (v || '').toLowerCase().includes(q));
+  });
+  const missing = (ASSETS.items || []).filter(a => a.s3 === 'not_synced').length;
+
+  host.innerHTML = `
+    <div class="panel">
+      <h2>Assets <span class="tag">${ASSETS.shown}${ASSETS.truncated
+          ? ' of ' + ASSETS.total : ''}</span>
+        <span class="hint" style="margin-left:auto">${ASSETS.s3_configured
+          ? `mirrors to <b>${esc(ASSETS.s3_bucket)}</b>`
+          : `S3 is not configured -- set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+             and S3_BUCKET`}</span>
+      </h2>
+      <div class="body" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input id="assetsq" type="text" placeholder="Filter by name, product, locale&hellip;"
+          value="${esc(ASSETS_FILTER.q)}" style="flex:1 1 220px">
+        <select id="assetss3filter">
+          <option value="all"${ASSETS_FILTER.s3 === 'all' ? ' selected' : ''}>All files</option>
+          <option value="missing"${ASSETS_FILTER.s3 === 'missing' ? ' selected' : ''}
+            >Not backed up (${missing})</option>
+          <option value="synced"${ASSETS_FILTER.s3 === 'synced' ? ' selected' : ''}>Backed up</option>
+        </select>
+        ${ASSETS.s3_configured && missing
+          ? `<button id="assetssyncall" class="go">Sync all missing (${missing})</button>` : ''}
+        <button id="assetsrefresh" class="go">Refresh</button>
+      </div>
+    </div>
+    ${ASSETS.truncated ? `<div class="hint" style="padding:6px 2px">Showing the
+      ${ASSETS.shown} most recently modified of ${ASSETS.total} local files.</div>` : ''}
+    <div class="asset-grid">${items.map(assetCard).join('')
+      || '<div class="hint" style="padding:20px">No files match.</div>'}</div>
+  `;
+
+  $('#assetsq').addEventListener('input', (e) => {
+    ASSETS_FILTER.q = e.target.value; paintAssets(); });
+  $('#assetss3filter').addEventListener('change', (e) => {
+    ASSETS_FILTER.s3 = e.target.value; paintAssets(); });
+  $('#assetsrefresh').addEventListener('click', () => loadAssets(true));
+  const syncAllBtn = $('#assetssyncall');
+  if (syncAllBtn) syncAllBtn.addEventListener('click', () => syncAllMissing(syncAllBtn));
+  host.querySelectorAll('button[data-sync]').forEach(
+    b => b.addEventListener('click', () => syncAsset(b.dataset.sync, b)));
+  host.querySelectorAll('[data-preview]').forEach(
+    el => el.addEventListener('click', () => openAssetPreview(el.dataset.preview)));
+}
+
+async function syncAsset(path, btn){
+  if (btn) { btn.disabled = true; btn.textContent = 'Syncing\u2026'; }
+  try {
+    const r = await (await fetch('/api/assets/sync', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({path})})).json();
+    if (r.error) throw new Error(r.error);
+    const item = (ASSETS.items || []).find(x => x.path === path);
+    if (item) item.s3 = 'synced';
+    const row = host_row(path);
+    if (row) row.innerHTML = `<span class="badge b-pass">Backed up</span>`;
+    return true;
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Retry'; btn.title = String(e); }
+    return false;
+  }
+}
+
+function host_row(path){
+  return Array.from(document.querySelectorAll('[data-s3-row]'))
+    .find(el => el.dataset.s3Row === path);
+}
+
+async function syncAllMissing(btn){
+  const missing = (ASSETS.items || []).filter(a => a.s3 === 'not_synced').map(a => a.path);
+  if (btn) btn.disabled = true;
+  for (const path of missing) {
+    await syncAsset(path, null);
+  }
+  paintAssets();
+}
+
+$('#assetpreview').addEventListener('click', (e) => {
+  if (e.target.id === 'assetpreview' || e.target.classList.contains('x')) {
+    const v = $('#assetpreview video'); if (v) v.pause();
+    $('#assetpreview').hidden = true;
+  }
+});
+
+$('#perfpost').addEventListener('click', (e) => {
+  if (e.target.id === 'perfpost' || e.target.classList.contains('x')) {
+    const v = $('#perfpost video'); if (v) v.pause();
+    $('#perfpost').hidden = true;
+  }
 });
 
 init();

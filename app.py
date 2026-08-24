@@ -15,6 +15,7 @@ the product cannot drift apart.
 from __future__ import annotations
 
 import base64
+import concurrent.futures
 import glob
 import io
 import json
@@ -96,6 +97,28 @@ def _newest_loaded_mtime() -> float:
             continue
     return newest
 
+
+# `pipeline.providers` registers its adapters LAZILY (see the comment on
+# `_register()` there): importing this module does not import cloudflare.py,
+# gemini.py or firefly.py -- that only happens the first time something calls
+# `available_providers()` / `provider_status()` / `get_provider()`, which in
+# this app is the first request that hits /api/init or /api/providers.
+#
+# That is exactly the gap that broke this check. `_LOADED_AT` used to be
+# captured here, before any of those adapters were ever imported, so their
+# mtimes were absent from the baseline entirely. The first request then
+# imported them for real, `_newest_loaded_mtime()` suddenly included files
+# that were on disk (and unchanged) before the process even started, and the
+# comparison read that as "something changed after boot" -- a false positive
+# on every single startup, not just after an edit. Caught by watching a
+# genuinely fresh restart still claim to be stale with nothing touched since.
+#
+# The fix is to force the lazy registration to happen NOW, before the
+# baseline is taken, so every adapter this process could ever serve is
+# already accounted for in `_LOADED_AT` -- the same fix in spirit as the
+# comment above already applies to `sys.modules` in general, just extended to
+# cover imports this module defers on purpose.
+provider_status()
 
 _LOADED_AT = _newest_loaded_mtime()
 
@@ -219,6 +242,48 @@ def _reduce(rec: dict) -> None:
             cur["state"] = "done"
         return
 
+    # Engine-run events (viral/internal tabs) -- named differently from the
+    # classic runner because engine.py's on_event vocabulary predates this
+    # wiring. Folded into the SAME graph as the classic runner rather than a
+    # parallel one: /api/engine/run already takes STATE["running"] alongside
+    # ENGINE["running"], so the two never light the diagram at once.
+    if ev == "begin":
+        bump("brief"); bump("preflight")
+        return
+    if ev == "mastered":
+        bump("master")
+        src = {"disk": "src_disk", "reused": "src_disk", "cache": "src_cache",
+               "generated": "src_gen", "resurfaced": "src_gen"
+               }.get(rec.get("origin", ""))
+        if src:
+            bump(src)
+        return
+    if ev == "slot":
+        for downstream in ("crop", "scrim", "message", "logo", "measure", "checks"):
+            bump(downstream)
+        bump("verdict")
+        v = rec.get("verdict")
+        if v:
+            key = "verdict_" + v
+            cur = g.setdefault(key, {"state": "idle", "count": 0})
+            cur["count"] += 1
+            cur["state"] = "done"
+        # Same "store" node the classic runner lights up on a `variant` event
+        # carrying `stored_uri` -- an engine slot can mirror up to three
+        # objects (still, layered, video), so any one of them landing counts.
+        if rec.get("stored_uri") or rec.get("layered_uri") or rec.get("video_stored_uri"):
+            bump("store")
+        return
+    if ev == "slot_error":
+        bump("checks", "err", 0)
+        return
+    if ev == "video":
+        bump("video")
+        return
+    if ev == "video_error":
+        bump("video", "err", 0)
+        return
+
     node = EVENT_NODE.get(ev)
     if node:
         bump(node)
@@ -333,7 +398,13 @@ def _render_sample(brief, product, market, ratio, surface: str,
 # that has been run, because the UI gives every product its own master tab and
 # those tabs have to survive the next product being processed.
 ENGINE: dict = {"running": False, "lines": [], "products": {}, "order": [],
-                "current": "", "error": None, "events": [], "seq": 0}
+                "current": "", "error": None, "events": [], "seq": 0,
+                # Which engine produced what is in here. The two tabs share
+                # one worker and one lock -- they compete for the same
+                # provider quota and the same output folder -- so the pane
+                # checks this before drawing, rather than showing the Viral
+                # engine's campaign under the Internal tab.
+                "mode": "viral"}
 ENGINE_LOCK = threading.Lock()
 
 
@@ -348,6 +419,40 @@ def _engine_event(rec: dict) -> None:
         line = _engine_line(rec)
         if line:
             ENGINE["lines"].append(line)
+        if rec.get("event") == "output_dir":
+            # Lands before the product's first slot -- the master tab
+            # can build a correct /out/ URL immediately instead of
+            # showing broken thumbnails for however long the run takes.
+            ENGINE["products"].setdefault(rec.get("product", ""), {})[
+                "output_dir"] = rec.get("output_dir", "")
+
+    # Same records, folded into STATE too -- the classic runner's lock, not
+    # the engine's, because /api/progress (the flow diagram and the results
+    # gallery) reads STATE regardless of which of the three run buttons
+    # produced the events.
+    with LOCK:
+        _reduce(rec)
+        if rec.get("event") == "slot":
+            # variant id is namespaced by product/locale/channel/slot: engine
+            # slot ids repeat across markets and channels within one run, and
+            # paintLanded() dedupes globally by this field.
+            vid = "{}_{}_{}_{}".format(rec.get("product", ""), rec.get("locale", ""),
+                                       rec.get("channel", ""), rec.get("slot", ""))
+            STATE["landed"].insert(0, {
+                "variant": vid, "verdict": rec.get("verdict", ""),
+                "score": rec.get("score", 0), "product": rec.get("product", ""),
+                "locale": rec.get("locale", ""), "ratio": rec.get("ratio", ""),
+                "message": rec.get("message", ""), "path": rec.get("path", ""),
+                "out_dir": rec.get("out_dir", ""), "findings": [],
+                # These used to be hardcoded empty -- the engine did not
+                # mirror to S3 at all when this was written, so there was
+                # nothing to read. Now that it does (see engine.py's
+                # _mirror), the slot event actually carries them.
+                "stored_uri": rec.get("stored_uri", ""),
+                "share_url": rec.get("share_url", ""),
+                "layered": rec.get("layered", ""),
+                "layered_uri": rec.get("layered_uri", ""),
+                "layered_share": rec.get("layered_share", "")})
 
 
 def _engine_line(rec: dict) -> str:
@@ -427,15 +532,59 @@ def _engine_history(brief) -> dict:
                 er = sum(x["engagement_rate"] * x["impressions"] for x in posts) / tot
                 if er > best_er:
                     best_ratio, best_er = r, round(er, 2)
+            # Per-treatment performance, which is what the Internal engine
+            # actually decides the art direction on. Impression-weighted for
+            # the same reason everywhere else is: a 6% rate on 900 views must
+            # not outrank 2% on 900,000.
+            by_treat: dict[str, list] = {}
+            for p in cal["posts"]:
+                by_treat.setdefault(p["treatment"], []).append(p)
+            treatments = []
+            for t, posts in by_treat.items():
+                imp = sum(x["impressions"] for x in posts) or 1
+                treatments.append({
+                    "treatment": t, "posts": len(posts), "impressions": imp,
+                    "engagement_rate": round(
+                        sum(x["engagement_rate"] * x["impressions"]
+                            for x in posts) / imp, 2),
+                    "ctr": round(sum(x["ctr"] * x["impressions"]
+                                     for x in posts) / imp, 2),
+                    "saves": sum(x["saves"] for x in posts),
+                    "comments": sum(x["comments"] for x in posts),
+                    "shares": sum(x["shares"] for x in posts),
+                })
+            treatments.sort(key=lambda t: t["engagement_rate"], reverse=True)
+            top_t = treatments[0] if treatments else {}
+
+            vids = [p for p in cal["posts"] if p["watch_through"]]
+            watch = (round(sum(p["watch_through"] * p["impressions"] for p in vids)
+                           / (sum(p["impressions"] for p in vids) or 1), 1)
+                     if vids else 0.0)
+
             per_channel[ch] = {
                 "synthetic": True,
-                "best_treatment": sug.get("surface", ""),
+                # The Internal engine uses OUR measurement, not the blended
+                # suggestion -- `suggest()` already folds in external trends,
+                # and letting that leak in here would make the Internal tab
+                # quietly external.
+                "best_treatment": top_t.get("treatment", "") or sug.get("surface", ""),
+                "best_treatment_er": top_t.get("engagement_rate", 0),
+                "best_treatment_ctr": top_t.get("ctr", 0),
+                "best_treatment_posts": top_t.get("posts", 0),
+                "treatments": treatments[:6],
                 "best_ratio": best_ratio,
                 "best_ratio_er": best_er,
                 "posts": cal["totals"]["posts"],
+                "impressions": cal["totals"]["impressions"],
                 "engagement_rate": cal["totals"]["engagement_rate"],
+                "ctr": cal["totals"]["ctr"],
+                "saves": cal["totals"]["saves"],
+                "comments": sum(p["comments"] for p in cal["posts"]),
+                "shares": sum(p["shares"] for p in cal["posts"]),
+                "watch_through": watch,
                 "top_term": ext.get("top_term", ""),
                 "virality": ext.get("virality", 0),
+                "top_trend": (ext.get("trends") or [{}])[0],
             }
         out[m.locale] = per_channel
     return out
@@ -443,7 +592,8 @@ def _engine_history(brief) -> dict:
 
 def _do_engine(path: str, product_ids: list, days: int, ipd: int, vpd: int,
                start: str, backend: str, provider: str,
-               render_video: bool) -> None:
+               render_video: bool, mode: str = "viral",
+               video_model: str = "", storage: str = "") -> None:
     """Plan then run, per product, on a worker thread.
 
     Products are processed one after another and each is published to
@@ -467,7 +617,8 @@ def _do_engine(path: str, product_ids: list, days: int, ipd: int, vpd: int,
                 planned = engine.plan(
                     brief, pid, days=days, images_per_day=ipd,
                     videos_per_day=vpd, root=ROOT, start=start,
-                    backend=backend, history=history, on_event=_engine_event)
+                    backend=backend, mode=mode, history=history,
+                    on_event=_engine_event)
                 with ENGINE_LOCK:
                     ENGINE["products"][pid] = {"plan": planned, "summary": None}
                     if pid not in ENGINE["order"]:
@@ -476,7 +627,8 @@ def _do_engine(path: str, product_ids: list, days: int, ipd: int, vpd: int,
                     brief, planned,
                     out_root=os.path.join(ROOT, "output", brief.campaign_id),
                     root=ROOT, provider_name=provider,
-                    render_video=render_video, on_event=_engine_event)
+                    render_video=render_video, video_model=video_model,
+                    storage_name=storage, on_event=_engine_event)
                 with ENGINE_LOCK:
                     ENGINE["products"][pid] = {"plan": planned,
                                                "summary": summary}
@@ -544,6 +696,157 @@ def _do_run(brief_path: str, provider: str, regen: bool = False,
 
 
 # --------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------
+# Assets tab: every local deliverable and reference photo the project has
+# on disk, with each one's S3 backup status. Reads manifests rather than
+# re-deriving product/locale/channel from folder names -- a renamed folder
+# should not silently blank out a card's metadata.
+
+_ASSET_KINDS = {".png": "image", ".jpg": "image", ".jpeg": "image",
+               ".psd": "layered", ".mp4": "video"}
+_ASSET_SCAN_ROOTS = ("campaigns/assets", "output")
+# A hard cap so a long-lived project's output/ tree cannot turn one tab
+# click into a multi-minute scan -- this repo alone has 3000+ generated
+# stills after a session of testing. Newest files are kept, per
+# _scan_assets, and the S3 check below is parallelised, not just capped:
+# even 200 sequential HEAD requests at network latency is a real wait.
+_ASSET_SCAN_LIMIT = 200
+_ASSET_S3_WORKERS = 24
+
+_S3_EXISTS_CACHE: dict[str, tuple] = {}   # rel path -> (mtime, size, exists)
+
+
+def _asset_backup_key(rel: str) -> str:
+    """Deterministic, not the classic runner's random share-token prefix --
+    this exists so a local file can be found again in the bucket, not to
+    hand out a reviewable link, so nothing here needs to be unguessable."""
+    return f"backups/{rel}"
+
+
+def _load_asset_manifest_index(root: str) -> dict:
+    """rel-path -> metadata, read from every manifest.json under output/.
+
+    The classic runner and the engine write slightly different shapes
+    (VariantResult vs. the engine's slot dicts); normalised here so the
+    Assets tab does not have to know which one produced a given file.
+    """
+    index: dict[str, dict] = {}
+    out_root = os.path.join(root, "output")
+    if not os.path.isdir(out_root):
+        return index
+    for dirpath, dirnames, filenames in os.walk(out_root):
+        dirnames[:] = [d for d in dirnames if d != "_stages"]
+        if "manifest.json" not in filenames:
+            continue
+        try:
+            with open(os.path.join(dirpath, "manifest.json"), encoding="utf-8") as fh:
+                man = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        product_top = man.get("product", "")
+        for res in man.get("results") or []:
+            meta = {
+                "product": res.get("product_id") or product_top or "",
+                "locale": res.get("locale", ""),
+                "channel": res.get("channel", ""),
+                "ratio": res.get("ratio", ""),
+                "verdict": res.get("verdict", ""),
+                "score": res.get("score", 0),
+                "message": res.get("message", ""),
+            }
+            for rel_in_run in (res.get("produced") or res.get("path") or "",
+                              res.get("layered") or "",
+                              res.get("video") or ""):
+                if not rel_in_run:
+                    continue
+                full = os.path.normpath(os.path.join(dirpath, rel_in_run))
+                index[os.path.relpath(full, root).replace("\\", "/")] = meta
+    return index
+
+
+def _check_asset_s3(rel: str, abspath: str, configured: bool) -> str:
+    """'synced' / 'not_synced' / 'unavailable'. Cached per (rel, mtime,
+    size) so a repeat listing does not re-HEAD every unchanged file -- each
+    check is a real S3 round trip."""
+    if not configured:
+        return "unavailable"
+    try:
+        st = os.stat(abspath)
+    except OSError:
+        return "unavailable"
+    cached = _S3_EXISTS_CACHE.get(rel)
+    if cached and cached[0] == st.st_mtime and cached[1] == st.st_size:
+        return "synced" if cached[2] else "not_synced"
+    try:
+        exists = get_storage("s3").exists(_asset_backup_key(rel))
+    except StorageError:
+        exists = False
+    _S3_EXISTS_CACHE[rel] = (st.st_mtime, st.st_size, exists)
+    return "synced" if exists else "not_synced"
+
+
+def _scan_assets(root: str) -> dict:
+    statuses = {s["name"]: s for s in storage_status()}
+    s3_configured = bool(statuses.get("s3", {}).get("configured"))
+    manifest_index = _load_asset_manifest_index(root)
+
+    candidates: list[str] = []
+    for rel_root in _ASSET_SCAN_ROOTS:
+        base = os.path.join(root, *rel_root.split("/"))
+        if not os.path.isdir(base):
+            continue
+        for dirpath, dirnames, filenames in os.walk(base):
+            dirnames[:] = [d for d in dirnames if d != "_stages"]
+            for fn in filenames:
+                if os.path.splitext(fn)[1].lower() in _ASSET_KINDS:
+                    candidates.append(os.path.join(dirpath, fn))
+
+    candidates.sort(key=lambda fp: os.path.getmtime(fp), reverse=True)
+    truncated = len(candidates) > _ASSET_SCAN_LIMIT
+    shown = candidates[:_ASSET_SCAN_LIMIT]
+
+    # The S3 status check is a real network round trip per file (cache
+    # hits aside), so it runs on a thread pool rather than one file at a
+    # time -- sequential HEAD requests against 200 files is a wait
+    # measured in tens of seconds; the point of the cache in
+    # _check_asset_s3 is defeated if the first load of the tab still has
+    # to pay that cost serially.
+    rels = [os.path.relpath(ap, root).replace("\\", "/") for ap in shown]
+
+    def _status_for(pair):
+        rel, abspath = pair
+        return rel, _check_asset_s3(rel, abspath, s3_configured)
+
+    statuses: dict[str, str] = {}
+    if shown:
+        with concurrent.futures.ThreadPoolExecutor(
+                max_workers=_ASSET_S3_WORKERS) as ex:
+            for rel, status in ex.map(_status_for, zip(rels, shown)):
+                statuses[rel] = status
+
+    items = []
+    for abspath, rel in zip(shown, rels):
+        try:
+            st = os.stat(abspath)
+        except OSError:
+            continue
+        meta = manifest_index.get(rel, {})
+        items.append({
+            "path": rel, "name": os.path.basename(abspath),
+            "kind": _ASSET_KINDS.get(os.path.splitext(abspath)[1].lower(), "file"),
+            "origin": "reference" if rel.startswith("campaigns/assets/") else "output",
+            "bytes": st.st_size, "mtime": int(st.st_mtime),
+            "product": meta.get("product", ""), "locale": meta.get("locale", ""),
+            "channel": meta.get("channel", ""), "ratio": meta.get("ratio", ""),
+            "verdict": meta.get("verdict", ""), "message": meta.get("message", ""),
+            "s3": statuses.get(rel, "unavailable"),
+        })
+
+    return {"items": items, "total": len(candidates), "shown": len(items),
+           "truncated": truncated, "s3_configured": s3_configured,
+           "s3_bucket": (get_storage("s3").bucket if s3_configured else "")}
+
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
@@ -634,6 +937,7 @@ class Handler(SimpleHTTPRequestHandler):
                     "lines": ENGINE["lines"][-400:],
                     "error": ENGINE["error"],
                     "current": ENGINE["current"],
+                    "mode": ENGINE["mode"],
                     "order": list(ENGINE["order"]),
                     "products": ENGINE["products"],
                     "seq": ENGINE["seq"],
@@ -767,6 +1071,25 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(data)
             return
 
+        if route in ("/psd-icon.png", "/jpg-icon.png"):
+            """File-type marks for the results modal's Download row -- Doug's
+            own icons, not a generic pair picked to match. Same reasoning as
+            /appicon.png above: a fixed route rather than static serving, so
+            it does not depend on the server's working directory.
+            """
+            p = os.path.join(ROOT, "webui", route.lstrip("/"))
+            if not os.path.isfile(p):
+                self.send_error(404)
+                return
+            data = open(p, "rb").read()
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "max-age=86400")
+            self.end_headers()
+            self.wfile.write(data)
+            return
+
         if route == "/api/ping":
             """The page saying it is still on screen.
 
@@ -833,6 +1156,28 @@ class Handler(SimpleHTTPRequestHandler):
                                "models": list_image_models(),
                                "default": DEFAULT_MODEL,
                                "current": os.environ.get(env_key, "")})
+
+        if route == "/api/video-models":
+            """The video half of /api/models. Cloudflare-only -- Veo is only
+            reachable through the Gateway catalog, and no other adapter in
+            this app implements generate_video() at all, so there is no
+            provider query param to branch on here."""
+            from pipeline.providers.cloudflare import (DEFAULT_VIDEO_MODEL,
+                                                       list_video_models)
+            return self._json({"models": list_video_models(),
+                               "default": DEFAULT_VIDEO_MODEL})
+
+        if route == "/api/assets/browse":
+            """Every local deliverable and reference photo, one flat list,
+            for the Assets tab -- thumbnail, file location, size, whatever
+            product/locale/channel metadata a manifest recorded for it, and
+            whether a copy already exists in S3.
+
+            Not /api/assets -- that name is already the "Choose existing"
+            picker's feed (campaigns/assets only, no S3 status). This is a
+            different, broader listing, so it gets its own path rather than
+            overloading that one's response shape."""
+            return self._json(_scan_assets(ROOT))
 
         if route == "/api/assetcheck":
             """Does this product's asset actually exist on disk?
@@ -934,6 +1279,37 @@ class Handler(SimpleHTTPRequestHandler):
             with open(p, "w", encoding="utf-8") as fh:
                 fh.write(body.get("text", ""))
             return self._json({"ok": True})
+
+        if route == "/api/assets/sync":
+            """Upload one local file to S3 now -- the Assets tab's per-card
+            Sync button, for anything an automatic mirror missed: it existed
+            before S3 was wired up, or a run finished before credentials
+            were added. Same deterministic key an automatic mirror would
+            have used, so a later listing recognises it as synced either way.
+            """
+            rel = str(body.get("path", ""))
+            ap = self._safe(rel)
+            if not ap or not os.path.isfile(ap):
+                return self._json({"error": "no such local file"}, 400)
+            try:
+                store = get_storage("s3")
+            except StorageError as exc:
+                return self._json({"error": f"s3 is not configured: {exc}"}, 400)
+            ext = os.path.splitext(ap)[1].lower()
+            ctype = {"image/jpeg": (".jpg", ".jpeg"), "image/png": (".png",),
+                    "video/mp4": (".mp4",),
+                    "image/vnd.adobe.photoshop": (".psd",)}
+            content_type = next((k for k, exts in ctype.items() if ext in exts),
+                               "application/octet-stream")
+            try:
+                with open(ap, "rb") as fh:
+                    data = fh.read()
+                obj = store.put(_asset_backup_key(rel), data, content_type)
+            except StorageError as exc:
+                return self._json({"error": str(exc)}, 502)
+            st = os.stat(ap)
+            _S3_EXISTS_CACHE[rel] = (st.st_mtime, st.st_size, True)
+            return self._json({"ok": True, "uri": obj.uri, "path": rel})
 
         if route == "/api/credentials":
             """Write provider credentials into .env.
@@ -1169,7 +1545,20 @@ class Handler(SimpleHTTPRequestHandler):
                     return self._json({"error": "a run is in progress"}, 409)
 
             try:
-                prov = get_provider(body.get("provider") or default_provider())
+                # The dropdown's model choice was silently ignored here --
+                # `get_provider()` took no model kwarg, so every "Generate
+                # now" click used each provider's hardcoded DEFAULT_MODEL
+                # (phoenix-1.0 for Cloudflare) no matter what the Image Model
+                # picker showed on screen. That is the actual bug behind the
+                # NSFW-classifier 400: picking Nano Banana in the dropdown to
+                # avoid phoenix's classifier did nothing on this button,
+                # because this button never told the provider which model to
+                # use. `/api/run` already threaded `model` through correctly;
+                # this endpoint just never matched it.
+                model = (body.get("model") or "").strip()
+                kwargs = {"model": model} if model else {}
+                prov = get_provider(body.get("provider") or default_provider(),
+                                    **kwargs)
                 # A neutral surface on purpose. This is the SOURCE photograph,
                 # the thing every later scene is built from -- baking a
                 # dramatic set into it would mean every market inherits a
@@ -1260,10 +1649,13 @@ class Handler(SimpleHTTPRequestHandler):
             with LOCK:
                 if STATE["running"] or ENGINE["running"]:
                     return self._json({"error": "a run is already in progress"}, 409)
-                STATE["running"] = True
+                STATE.update(running=True, lines=[], summary=None, error=None,
+                             report=None, graph={}, seq=0, landed=[], stages={})
+            mode = "internal" if body.get("mode") == "internal" else "viral"
             with ENGINE_LOCK:
                 ENGINE.update(running=True, lines=[], products={}, order=[],
-                              current="", error=None, events=[], seq=0)
+                              current="", error=None, events=[], seq=0,
+                              mode=mode)
 
             p = self._safe(body.get("path", ""))
             text = body.get("text")
@@ -1332,8 +1724,11 @@ class Handler(SimpleHTTPRequestHandler):
                 backend=str(body.get("discovery", "")),
                 provider=str(body.get("provider", "")),
                 render_video=bool(body.get("video", True)),
+                video_model=str(body.get("video_model", "") or ""),
+                storage=str(body.get("storage", "") or ""),
+                mode=mode,
             ), daemon=True).start()
-            return self._json({"ok": True, "days": days,
+            return self._json({"ok": True, "mode": mode, "days": days,
                                "images_per_day": ipd, "videos_per_day": vpd})
 
         if route == "/api/run":

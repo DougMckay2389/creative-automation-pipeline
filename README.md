@@ -28,32 +28,7 @@ brief.yaml
 
 ---
 
-## What this covers
-
-Every requirement, and the code and test that carries it.
-
-| Requirement | Where | Proved by |
-|---|---|---|
-| Brief in YAML, **two or more products** | `campaigns/aurora-spring.yaml` · `pipeline/brief.py` | `test_brief_loads_and_expands`, `test_brief_rejects_single_product` |
-| Target region / market | `Market.region` — a required field, not optional | `test_brief_loads_and_expands` |
-| Target audience | `Market.audience` — likewise required | `test_brief_loads_and_expands` |
-| Campaign message | `Market.message`, falling back to `default_message` | `test_brief_loads_and_expands` |
-| **Reuse** input assets when present | `pipeline/assets.py` · `AssetResolver` | `test_existing_asset_is_never_generated`, `test_cache_prevents_a_second_generation` |
-| **Generate** when missing, via a GenAI model | `AssetResolver` · `pipeline/providers/{cloudflare,gemini,firefly,mock}.py` | `test_generation_count_is_per_product_not_per_variant` |
-| Three or more aspect ratios | `aspect_ratios:` in the brief · `compose.crop_to_ratio` | `test_crop_hits_exact_delivery_dimensions` |
-| Campaign message on the final creative | `compose.Composer` · rule `SPEC-002` | `test_clean_creative_passes_with_no_findings` |
-| Localized message *(the "plus")* | `pipeline/localize.py` · `font_for` — ja-JP ships in Japanese | `test_japanese_resolves_a_font_that_can_draw_japanese` |
-| Runs locally | `run.py` (CLI) · `app.py` (local app) — no credentials needed | `test_mock_provider_needs_no_credentials` |
-| Output organised by product and ratio | `runner.output_path_for` | `test_full_run_produces_every_deliverable` |
-| **Storage** for generated / transient assets | `pipeline/storage/` · `local.py` (always) + `s3.py` (mirror) | `test_local_storage_round_trips_and_refuses_to_escape`, `test_sigv4_matches_the_published_aws_vector`, `test_a_storage_failure_does_not_lose_the_run` |
-| Documentation | this file | — |
-| *Bonus* — brand compliance | `checks.py` · `BRAND-001` palette, `-002` logo, `-003` clearspace | `test_missing_logo_blocks_and_routes_to_brand`, `test_palette_tolerance_survives_a_jpeg_round_trip` |
-| *Bonus* — legal content checks | `checks.py` · `LEGAL-001`, run pre-flight **and** per creative | `test_prohibited_term_blocks_and_routes_to_legal` |
-| *Bonus* — logging / reporting | `runner.JsonLogger` → `run.log.jsonl` · `report.write_report` → `report.html` · `manifest.json` | — |
-
----
-
-## Run it — the app
+## How to run it — the app
 
 Double-click **`start.bat`** (Windows) or **`start.sh`** (macOS/Linux). It
 checks the three dependencies, starts a local server on
@@ -186,7 +161,10 @@ needs.
 > Sharing it: zip the folder. Anyone with Python 3.10+ can run it, offline,
 > with no credentials.
 
-## Run it — the command line
+
+---
+
+## How to run it — the command line
 
 No API key required. The default provider renders real pixels offline and
 deterministically, so a reviewer can clone and run this in under a minute.
@@ -743,9 +721,12 @@ provider  cloudflare        model  @cf/leonardo/phoenix-1.0
 pass 17   review 1   block 0
 ```
 
+
 ---
 
-## Example input
+## Example of input and output
+
+### Input
 
 `campaigns/aurora-spring.yaml` (abridged):
 
@@ -773,7 +754,7 @@ aspect_ratios:
 prohibited_terms: [clinically proven, guaranteed, miracle, cures, anti-aging]
 ```
 
-## Example output
+### Output
 
 ```
 output/aurora-spring-2026/20260821-170138/
@@ -791,6 +772,7 @@ output/aurora-spring-2026/20260821-170138/
 Organized by product, then aspect ratio, with the locale in the filename — so
 a reviewer can see all three languages of one spec side by side rather than
 opening three folders.
+
 
 ---
 
@@ -847,23 +829,6 @@ Seeds are derived from the variant id, not random. Six months from now
 somebody will ask why an asset looks the way it does; the same brief must
 regenerate the same pixels.
 
----
-
-## What it checks
-
-| Rule | Checks | Severity | Routes to |
-|---|---|---|---|
-| `SPEC-001` | Delivered pixels match the requested spec | blocker | engineering |
-| `SPEC-002` | Campaign message present | blocker | creative |
-| `SPEC-003` | Message type size at or above the legibility floor | major | creative |
-| `BRAND-001` | Dominant colors within the approved palette (redmean tolerance) | minor | brand |
-| `BRAND-002` | Logo present | blocker | brand |
-| `BRAND-003` | Logo clearspace meets the brand minimum | minor | brand |
-| `LEGAL-001` | No prohibited terms in campaign copy | blocker | legal |
-| `SYS-00x` | A check could not complete / composer warning | major | engineering |
-
-`LEGAL-001` also runs **pre-flight**, against the brief, before a single
-generative credit is spent.
 
 ---
 
@@ -901,6 +866,52 @@ go next.
   composition is fast enough that it has not been worth it. A worker pool
   behind the existing `RateLimiter` is the path if a brief grows to thousands
   of variants.
+
+
+---
+
+## What this covers
+
+Every requirement, and the code and test that carries it.
+
+| Requirement | Where | Proved by |
+|---|---|---|
+| Brief in YAML, **two or more products** | `campaigns/aurora-spring.yaml` · `pipeline/brief.py` | `test_brief_loads_and_expands`, `test_brief_rejects_single_product` |
+| Target region / market | `Market.region` — a required field, not optional | `test_brief_loads_and_expands` |
+| Target audience | `Market.audience` — likewise required | `test_brief_loads_and_expands` |
+| Campaign message | `Market.message`, falling back to `default_message` | `test_brief_loads_and_expands` |
+| **Reuse** input assets when present | `pipeline/assets.py` · `AssetResolver` | `test_existing_asset_is_never_generated`, `test_cache_prevents_a_second_generation` |
+| **Generate** when missing, via a GenAI model | `AssetResolver` · `pipeline/providers/{cloudflare,gemini,firefly,mock}.py` | `test_generation_count_is_per_product_not_per_variant` |
+| Three or more aspect ratios | `aspect_ratios:` in the brief · `compose.crop_to_ratio` | `test_crop_hits_exact_delivery_dimensions` |
+| Campaign message on the final creative | `compose.Composer` · rule `SPEC-002` | `test_clean_creative_passes_with_no_findings` |
+| Localized message *(the "plus")* | `pipeline/localize.py` · `font_for` — ja-JP ships in Japanese | `test_japanese_resolves_a_font_that_can_draw_japanese` |
+| Runs locally | `run.py` (CLI) · `app.py` (local app) — no credentials needed | `test_mock_provider_needs_no_credentials` |
+| Output organised by product and ratio | `runner.output_path_for` | `test_full_run_produces_every_deliverable` |
+| **Storage** for generated / transient assets | `pipeline/storage/` · `local.py` (always) + `s3.py` (mirror) | `test_local_storage_round_trips_and_refuses_to_escape`, `test_sigv4_matches_the_published_aws_vector`, `test_a_storage_failure_does_not_lose_the_run` |
+| Documentation | this file | — |
+| *Bonus* — brand compliance | `checks.py` · `BRAND-001` palette, `-002` logo, `-003` clearspace | `test_missing_logo_blocks_and_routes_to_brand`, `test_palette_tolerance_survives_a_jpeg_round_trip` |
+| *Bonus* — legal content checks | `checks.py` · `LEGAL-001`, run pre-flight **and** per creative | `test_prohibited_term_blocks_and_routes_to_legal` |
+| *Bonus* — logging / reporting | `runner.JsonLogger` → `run.log.jsonl` · `report.write_report` → `report.html` · `manifest.json` | — |
+
+
+---
+
+## What it checks
+
+| Rule | Checks | Severity | Routes to |
+|---|---|---|---|
+| `SPEC-001` | Delivered pixels match the requested spec | blocker | engineering |
+| `SPEC-002` | Campaign message present | blocker | creative |
+| `SPEC-003` | Message type size at or above the legibility floor | major | creative |
+| `BRAND-001` | Dominant colors within the approved palette (redmean tolerance) | minor | brand |
+| `BRAND-002` | Logo present | blocker | brand |
+| `BRAND-003` | Logo clearspace meets the brand minimum | minor | brand |
+| `LEGAL-001` | No prohibited terms in campaign copy | blocker | legal |
+| `SYS-00x` | A check could not complete / composer warning | major | engineering |
+
+`LEGAL-001` also runs **pre-flight**, against the brief, before a single
+generative credit is spent.
+
 
 ---
 
@@ -943,6 +954,7 @@ tests/test_pipeline.py       47 tests, runnable without pytest
 tools/make_placeholders.py   regenerates the committed logo and input asset
 tools/make_public.py         scopes the S3 bucket policy to public/ (dry-run)
 ```
+
 
 ---
 
