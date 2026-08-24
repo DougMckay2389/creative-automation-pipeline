@@ -955,6 +955,177 @@ header.topbar .ghlink{margin-left:0;align-self:center;flex:none}
 .splretry{background:var(--accent);border:0;color:#fff;border-radius:var(--r);
   padding:5px 13px;font:500 11.5px var(--sans);cursor:pointer}
 .splretry:hover{background:var(--accent-hi)}
+
+/* ==========================================================================
+   The engine
+
+   Three numbered steps, then a master tab per product. The steps are numbered
+   because the order is load-bearing -- you cannot pick a product before there
+   is a brief, and the schedule decides how much the product step will cost.
+   ========================================================================== */
+
+.estep{background:var(--g100);border:1px solid var(--g300);
+  border-radius:var(--r2);margin:0 0 14px;overflow:hidden}
+.estep.done{border-color:rgba(51,171,132,.4)}
+.esteph{display:flex;align-items:center;gap:11px;padding:11px 15px;
+  background:var(--g75);border-bottom:1px solid var(--g200)}
+.estepn{width:21px;height:21px;border-radius:50%;flex:none;display:flex;
+  align-items:center;justify-content:center;background:var(--g300);
+  color:var(--g800);font:600 11px var(--mono)}
+.estep.done .estepn{background:var(--pass);color:#08130f}
+.esteph h3{margin:0;font:600 12.5px var(--sans);color:var(--g900)}
+.esteph .sub{font:11px var(--sans);color:var(--muted)}
+.esteph .right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.estepb{padding:15px}
+
+/* ---------- step 1: the brief ---------- */
+.esrc{display:flex;gap:8px;margin-bottom:12px}
+.esrc button{background:var(--g200);border:1px solid var(--g400);
+  color:var(--g700);border-radius:var(--r);padding:6px 13px;cursor:pointer;
+  font:500 12px var(--sans)}
+.esrc button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+#eyaml{width:100%;min-height:190px;resize:vertical;
+  background:var(--g50);color:var(--g800);border:1px solid var(--g400);
+  border-radius:var(--r);padding:11px 13px;font:12px/1.6 var(--mono)}
+.edrop{border:1px dashed var(--g400);border-radius:var(--r);padding:22px;
+  text-align:center;color:var(--muted);font:12px var(--sans);cursor:pointer}
+.edrop.over{border-color:var(--accent);background:var(--accent-soft);
+  color:var(--g900)}
+
+/* ---------- step 2: the schedule ---------- */
+.esched{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end}
+.enum{display:flex;flex-direction:column;gap:5px}
+.enum label{font:10px var(--sans);letter-spacing:.05em;color:var(--muted);
+  text-transform:uppercase}
+.enum input{width:104px;background:var(--g200);border:1px solid var(--g400);
+  color:var(--ink);border-radius:var(--r);padding:7px 10px;
+  font:13px var(--mono);font-variant-numeric:tabular-nums}
+.enum input[type=date]{width:150px;font-size:12px}
+.emath{margin-left:auto;text-align:right;font:11px/1.7 var(--mono);
+  color:var(--muted);max-width:50%}
+.emath b{color:var(--g900);font-weight:600}
+.emath .warn{color:var(--review)}
+
+/* ---------- step 3: products ---------- */
+.eprods{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));
+  gap:11px}
+.eprod{background:var(--g75);border:1px solid var(--g300);
+  border-radius:var(--r);padding:11px 13px;cursor:pointer;
+  display:flex;gap:11px;align-items:flex-start}
+.eprod:hover{border-color:var(--g400)}
+.eprod.on{border-color:var(--accent);background:var(--accent-soft)}
+.eprod .tick{width:15px;height:15px;border-radius:3px;flex:none;margin-top:1px;
+  border:1px solid var(--g400);display:flex;align-items:center;
+  justify-content:center;font-size:10px;color:transparent}
+.eprod.on .tick{background:var(--accent);border-color:var(--accent);color:#fff}
+.eprod b{display:block;font:600 12.5px var(--sans);color:var(--g900)}
+.eprod .cat{font:10px var(--mono);color:var(--g500)}
+.eprod .mkts{margin-top:7px;display:flex;flex-direction:column;gap:3px}
+.eprod .mkt{font:10.5px var(--sans);color:var(--ink2);
+  display:flex;gap:6px;align-items:baseline}
+.eprod .mkt code{font:9.5px var(--mono);background:var(--g200);
+  color:var(--g700);border-radius:3px;padding:1px 4px;flex:none}
+
+/* ---------- master tabs, one per product ---------- */
+.mtabs{display:flex;gap:2px;border-bottom:1px solid var(--g300);
+  margin:22px 0 0;overflow-x:auto}
+.mtabs button{background:transparent;border:0;border-bottom:2px solid transparent;
+  color:var(--g600);font:500 13px var(--sans);padding:9px 15px;cursor:pointer;
+  white-space:nowrap;display:flex;align-items:center;gap:8px}
+.mtabs button:hover{color:var(--g800)}
+.mtabs button.on{color:var(--g900);border-bottom-color:var(--accent)}
+.mtabs .n{font:600 10px var(--mono);background:var(--g200);color:var(--g700);
+  border-radius:99px;padding:1px 6px}
+.mtabs button.on .n{background:var(--accent);color:#fff}
+.mtabs .busy{width:9px;height:9px;border-radius:50%;
+  border:2px solid var(--g400);border-top-color:var(--accent);
+  animation:sp .7s linear infinite}
+
+.mkpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(116px,1fr));
+  gap:1px;background:var(--g300);border:1px solid var(--g300);
+  border-radius:var(--r);overflow:hidden;margin:15px 0}
+.mkpi{background:var(--g100);padding:10px 13px}
+.mkpi .k{font:9.5px var(--sans);letter-spacing:.04em;color:var(--muted);
+  text-transform:uppercase}
+.mkpi .v{font:600 18px var(--mono);color:var(--g900);
+  font-variant-numeric:tabular-nums;line-height:1.35}
+
+/* ---------- look-alikes ---------- */
+.lals{display:flex;flex-direction:column;gap:1px;background:var(--g300);
+  border:1px solid var(--g300);border-radius:var(--r);overflow:hidden}
+.lal{display:grid;grid-template-columns:minmax(0,1fr) 74px 62px 58px 74px;
+  gap:11px;align-items:center;background:var(--g100);padding:9px 12px}
+.lal .who{min-width:0}
+.lal .h{font:600 11.5px var(--sans);color:var(--g900);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lal .t{font:10.5px var(--sans);color:var(--muted);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lal .n{font:11px var(--mono);text-align:right;color:var(--g800);
+  font-variant-numeric:tabular-nums}
+.lal .fmt{font:9px var(--mono);letter-spacing:.05em;text-transform:uppercase;
+  text-align:center;border-radius:99px;padding:2px 0;
+  background:var(--g200);color:var(--g600)}
+.lal .fmt.video{background:var(--accent-soft);color:var(--accent-hi)}
+.lal a.ev{font:10px var(--mono);color:var(--accent-hi);text-decoration:none;
+  text-align:right}
+.lal a.ev:hover{text-decoration:underline}
+.lal .noev{font:10px var(--mono);color:var(--g500);text-align:right}
+
+/* ---------- strategy ---------- */
+.strat{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;
+  margin:15px 0}
+@media (max-width:1100px){.strat{grid-template-columns:minmax(0,1fr)}}
+.stratbox{background:var(--g75);border:1px solid var(--g300);
+  border-radius:var(--r);padding:13px 15px}
+.stratbox h4{margin:0 0 9px;font:600 11px var(--sans);letter-spacing:.05em;
+  text-transform:uppercase;color:var(--g700)}
+.stratsurf{background:var(--g50);border-left:3px solid var(--accent);
+  border-radius:var(--r);padding:11px 13px;font:13px/1.55 var(--mono);
+  color:var(--g900);margin-bottom:11px}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chips code{font:10.5px var(--mono);background:var(--g200);color:var(--g700);
+  border-radius:3px;padding:2px 7px}
+.hooklist{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;
+  list-style:none}
+.hooklist li{font:11.5px/1.5 var(--sans);color:var(--ink2);
+  border-left:2px solid var(--g300);padding-left:9px}
+.hooklist .m{display:block;font:10px var(--mono);color:var(--g500);margin-top:2px}
+.hooklist a{color:var(--accent-hi);text-decoration:none}
+
+/* ---------- the schedule grid ---------- */
+.slotgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));
+  gap:11px;margin-top:13px}
+.slot{background:var(--g100);border:1px solid var(--g300);
+  border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column}
+.slot .sh{display:flex;align-items:center;gap:7px;padding:7px 9px;
+  border-bottom:1px solid var(--g200);font:10px var(--mono);color:var(--g600)}
+.slot .sh .kind{margin-left:auto;font:9px var(--mono);letter-spacing:.05em;
+  text-transform:uppercase;border-radius:99px;padding:1px 7px;
+  background:var(--g200);color:var(--g600)}
+.slot .sh .kind.video{background:var(--accent-soft);color:var(--accent-hi)}
+.slot .shot{background:var(--g50);min-height:118px;display:flex;
+  align-items:center;justify-content:center;position:relative;overflow:hidden}
+.slot .shot img,.slot .shot video{max-width:100%;max-height:190px;display:block}
+.slot .shot .ph{font:10px var(--mono);color:var(--g500);padding:22px 8px;
+  text-align:center;line-height:1.6}
+.slot .vbadge{position:absolute;top:6px;right:6px;font:9px var(--mono);
+  background:rgba(0,0,0,.66);color:#fff;border-radius:3px;padding:2px 6px}
+.slot .cap{padding:8px 9px;font:10.5px/1.5 var(--sans);color:var(--ink2);
+  flex:1}
+.slot .sf{display:flex;align-items:center;gap:7px;padding:6px 9px;
+  border-top:1px solid var(--g200);font:10px var(--mono);color:var(--g500)}
+.slot .sf .sc{margin-left:auto;font-variant-numeric:tabular-nums;
+  color:var(--g700)}
+
+/* ---------- engine log ---------- */
+.elog{background:var(--g50);border:1px solid var(--g300);border-radius:var(--r);
+  padding:11px 13px;max-height:230px;overflow:auto;margin:14px 0;
+  font:11px/1.65 var(--mono);color:var(--g700);white-space:pre-wrap}
+.ebadge{font:9px var(--mono);letter-spacing:.06em;text-transform:uppercase;
+  border-radius:99px;padding:2px 8px}
+.ebadge.live{background:var(--pass-soft);color:var(--pass)}
+.ebadge.syn{background:var(--review);color:#1b1004}
+.ebadge.off{background:var(--g200);color:var(--muted)}
 </style>
 </head><body>
 <!-- Four panes, one visible at a time, switched by the tabs in the top bar.
@@ -1012,7 +1183,7 @@ header.topbar .ghlink{margin-left:0;align-self:center;flex:none}
 
   <nav class="apptabs" id="apptabs" role="tablist">
     <button role="tab" data-pane="brief" class="on">Brief</button
-    ><button role="tab" data-pane="analytics">Analytics</button
+    ><button role="tab" data-pane="analytics">Engine</button
     ><button role="tab" data-pane="pipeline">Pipeline</button
     ><button role="tab" data-pane="results">Results<span class="cnt"
         id="rescount" hidden>0</span></button>
@@ -1048,6 +1219,7 @@ header.topbar .ghlink{margin-left:0;align-self:center;flex:none}
      would mean N hidden inputs to keep in sync for no benefit; the card that
      opened it is remembered on the element itself. -->
 <input type="file" id="filepick" accept="image/png,image/jpeg,image/webp" hidden>
+<input type="file" id="filepick2" accept=".yaml,.yml,text/yaml" hidden>
 
 <div class="wrap">
 
@@ -2125,7 +2297,7 @@ function showPane(name){
   window.scrollTo(0, 0);
   // Fetched on first view rather than on load: a whole extra request for a
   // tab most sessions never open.
-  if (name === 'analytics') loadInsights();
+  if (name === 'analytics') loadEngine();
 }
 
 $('#apptabs').addEventListener('click', (e) => {
@@ -2144,407 +2316,521 @@ function showTab(which){
 }
 
 /* ------------------------------------------------------------------ *
- * Analytics — SYNTHETIC, and it says so in four places
+ * The social content engine
  *
- * Every figure on this tab is generated from a fixed seed. Nothing connects
- * to Google, Meta, TikTok or YouTube. That is laboured on purpose: a
- * fabricated metric that escapes a demo as a real one is the worst thing
- * this tool could do, and an unlabelled dashboard is exactly how that
- * happens. The `api` string on each channel names the endpoint a real
- * integration would call, so the shape of the work is visible even though
- * the work is not done.
+ * This tab used to be Analytics -- a per-channel calendar of our own posts,
+ * a virality meter, and one suggested surface prompt. All of that still
+ * exists; it moved. It is now EVIDENCE the engine cites rather than a
+ * destination you visit, which is what it was always actually for: our own
+ * history is one of the two inputs to a strategy, and on its own it can only
+ * ever rank treatments we have already tried.
  *
- * The reason the tab exists at all is the exercise's fifth business goal --
- * "learn what content, creative and localization drives the best business
- * outcomes". A pipeline that only pushes creative out answers four of five.
- * So this does not stop at charts. Two sources go in:
+ * The flow is three numbered steps and then a master tab per product:
  *
- *   INTERNAL  what our own posts did, per channel, laid out as a calendar,
- *             because posting is periodic and so are the questions you ask
- *             about it -- "what were we doing in week three", not "which
- *             row is highest".
- *   EXTERNAL  what the market is doing regardless of us: trending terms
- *             with a velocity, a virality score, where the audience is and
- *             who they are.
+ *   1  a brief          pick one, paste YAML, or drop a file
+ *   2  a schedule       duration and how many images/videos a day
+ *   3  products         each showing the regions and audiences it will target
  *
- * and one thing comes out: a surface prompt, with the evidence for it, that
- * you can render ONE sample from and then adopt into the brief. A dashboard
- * that produces a feeling is decoration; one that produces a diff is a tool.
+ *   -> per product, per channel:  discover -> strategy -> generate -> render
+ *
+ * The steps are numbered because the order is load-bearing. You cannot pick a
+ * product before there is a brief to pick it from, and the schedule decides
+ * what the product step is going to cost -- so the cost is on screen before
+ * the button that spends it, which is the same rule `Plan` follows.
  * ------------------------------------------------------------------ */
 
-const AN = {path:'', channel:'', locale:'', d:null, sample:null, busy:false};
+/* Reach numbers are the most repeated thing on this tab and 1200000 is
+   unreadable at a glance. Lived in the analytics code this replaced. */
+const fmt = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M'
+                 : n >= 1e3 ? Math.round(n / 1e3) + 'k' : String(n || 0);
 
-async function loadInsights(force){
-  const pane = $('#anpane');
-  const path = $('#brief').value;
-  if (AN.d && AN.path === path && !force) return;
-  if (AN.path !== path) { AN.channel = ''; AN.locale = ''; AN.sample = null; }
-  AN.path = path;
-  pane.innerHTML = `<div class="anloading">Reading channel history…</div>`;
+const ENG = {
+  status: null,        // what this machine can do
+  brief: null,         // {path, text, data}
+  source: 'pick',      // pick | paste
+  products: [],        // selected ids
+  running: false,
+  poll: null,
+  data: null,          // last /api/engine/progress payload
+  tab: '',             // which product's master tab is open
+  chan: {},            // per product: which channel tab is open
+};
 
-  const q = new URLSearchParams({path});
-  if (AN.channel) q.set('channel', AN.channel);
-  if (AN.locale)  q.set('locale',  AN.locale);
-
-  let r;
-  try { r = await (await fetch('/api/insights?' + q)).json(); }
-  catch { r = {error:'could not load'}; }
-  if (r.error) { pane.innerHTML = `<div class="note err">${esc(r.error)}</div>`; return; }
-
-  AN.d = r; AN.channel = r.channel; AN.locale = r.locale;
-  paintInsights();
+async function loadEngine(force){
+  if (ENG.status && !force) return paintEngine();
+  try {
+    ENG.status = await (await fetch('/api/engine/status')).json();
+  } catch {
+    $('#anpane').innerHTML = `<div class="note err">The engine could not be reached.</div>`;
+    return;
+  }
+  if (!ENG.brief) await engineUseBrief($('#brief').value);
+  paintEngine();
 }
 
-const fmt = (n) => n >= 1e6 ? (n/1e6).toFixed(1) + 'M'
-                 : n >= 1e3 ? Math.round(n/1e3) + 'k' : String(n);
-
-function spark(vals, up){
-  // Inline SVG rather than a chart library: this page has no build step and
-  // eight points do not need 90KB of dependency to be drawn.
-  if (!vals || vals.length < 2) return '';
-  const w = 56, h = 16, max = Math.max(...vals), min = Math.min(...vals);
-  const span = Math.max(1, max - min);
-  const pts = vals.map((v,i) =>
-    `${(i/(vals.length-1)*w).toFixed(1)},${(h-(v-min)/span*h).toFixed(1)}`);
-  const rising = up === undefined ? vals[vals.length-1] >= vals[0] : up;
-  return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"
-    aria-hidden="true"><polyline points="${pts.join(' ')}" fill="none"
-    stroke="${rising ? '#33ab84' : '#e34850'}" stroke-width="1.5"
-    stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+async function engineUseBrief(path){
+  try {
+    const r = await (await fetch('/api/brief?path=' + encodeURIComponent(path))).json();
+    ENG.brief = {path, text: r.text || '', data: r.data || null,
+                 error: r.parse_error || ''};
+  } catch {
+    ENG.brief = {path, text: '', data: null, error: 'could not load'};
+  }
+  ENG.products = [];
 }
 
-function paintInsights(){
-  const d = AN.d, rep = d.report, cal = rep.calendar, ex = rep.external;
-  const ch = d.channels.find(c => c.id === d.channel) || d.channels[0];
+/* Parsing is the server's job, here as everywhere else in this app. Two
+   parsers eventually disagree about what a brief says, and the one being
+   edited is always the wrong one. */
+async function engineParsePasted(){
+  const text = $('#eyaml').value;
+  const r = await (await fetch('/api/brief?path=' +
+      encodeURIComponent(ENG.brief?.path || $('#brief').value), {})).json()
+      .catch(() => ({}));
+  // The paste is validated by asking the server to plan against it, which is
+  // the same path a run takes -- so "it parsed" here means the same thing it
+  // will mean when Run is pressed.
+  try {
+    const v = await (await fetch('/api/engine/validate', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text})})).json();
+    ENG.brief = {path: 'pasted.yaml', text, data: v.data || null,
+                 error: v.error || ''};
+  } catch {
+    ENG.brief = {path: 'pasted.yaml', text, data: null,
+                 error: 'could not validate'};
+  }
+  ENG.products = [];
+  paintEngine();
+}
+
+const engProducts = () => (ENG.brief?.data?.products) || [];
+const engMarkets  = () => (ENG.brief?.data?.markets)  || [];
+
+function engSchedule(){
+  const n = (id, d) => {
+    const v = parseInt(($('#' + id) || {}).value, 10);
+    return Number.isFinite(v) ? v : d;
+  };
+  return {days: n('edays', 7), ipd: n('eimg', 2), vpd: n('evid', 1),
+          start: ($('#estart') || {}).value || ''};
+}
+
+function paintEngine(){
+  const s = ENG.status || {};
+  const b = ENG.brief || {};
+  const prods = engProducts(), mkts = engMarkets();
+  const sc = engSchedule();
+  const perMarket = sc.days * (sc.ipd + sc.vpd);
+  const total = perMarket * Math.max(mkts.length, 1) * Math.max(ENG.products.length, 1);
+
+  const live = (s.discovery || []).filter(d => d.configured && !d.synthetic);
+  const backend = s.default_discovery || 'synthetic';
 
   $('#anpane').innerHTML = `
-    <div class="anwarn"><div><b>Sample data.</b> Every figure on this tab is
-      synthetic, generated from a fixed seed so it is identical on every
-      machine. Nothing here is connected to Google, Meta, TikTok or YouTube.
-      Each channel names the API a real integration would call
-      (<code>${esc(ch.api)}</code> for this one) &mdash; all per-market, all
-      rate-limited, all returning a different shape for the same idea, which
-      is the argument for an adapter layer like <code>providers/</code> and
-      <code>storage/</code>.</div></div>
+    ${engHead(s, live, backend)}
+    ${engStep1(b, prods)}
+    ${engStep2(sc, perMarket, mkts, total, s)}
+    ${engStep3(prods, mkts)}
+    <div class="sugacts" style="margin:0 0 6px">
+      <button id="erun" class="primary" ${ENG.running || !ENG.products.length ? 'disabled' : ''}
+        >${ENG.running ? '<span class="spin"></span>Running…' : 'Run engine'}</button>
+      <span class="sampfacts" style="align-self:center">${
+        ENG.products.length
+          ? `${ENG.products.length} product${ENG.products.length > 1 ? 's' : ''} × ${mkts.length} market${mkts.length > 1 ? 's' : ''} × 4 channels`
+          : 'select at least one product'}</span>
+    </div>
+    ${ENG.data ? engLog() : ''}
+    ${engMasters()}`;
+
+  wireEngine();
+}
+
+function engHead(s, live, backend){
+  const syn = backend === 'synthetic';
+  return `<div class="anwarn"><div>
+    <b>Where the evidence comes from.</b>
+    Discovery is currently <b>${esc(backend)}</b>${syn
+      ? ' — every look-alike below is generated from a fixed seed, not observed. Set <code>APIFY_TOKEN</code> to crawl for real.'
+      : ' — look-alikes are real public posts, each carrying the link you can open and check.'}
+    Our own channel history is synthetic in every case and always says so.
+    Video is rendered from the approved still${s.ffmpeg ? '' :
+      ' — but ffmpeg is missing, so video slots will be planned and left unrendered'}.
+  </div></div>`;
+}
+
+function engStep1(b, prods){
+  const ok = !!prods.length;
+  return `<div class="estep ${ok ? 'done' : ''}">
+    <div class="esteph"><span class="estepn">1</span>
+      <div><h3>Campaign brief</h3>
+        <span class="sub">${ok
+          ? `${prods.length} products, ${engMarkets().length} markets`
+          : 'pick one, paste YAML, or drop a file'}</span></div>
+      <div class="right">${b.error
+        ? `<span class="ebadge syn">will not parse</span>` : ''}</div>
+    </div>
+    <div class="estepb">
+      <div class="esrc">
+        <button data-src="pick"  class="${ENG.source === 'pick' ? 'on' : ''}">Use a brief in the repo</button>
+        <button data-src="paste" class="${ENG.source === 'paste' ? 'on' : ''}">Paste / upload YAML</button>
+      </div>
+      ${ENG.source === 'pick'
+        ? `<select id="ebrief" style="min-width:320px">${
+            [...$('#brief').options].map(o =>
+              `<option value="${esc(o.value)}"${o.value === b.path ? ' selected' : ''}>${esc(o.value)}</option>`).join('')
+          }</select>`
+        : `<div class="edrop" id="edrop">Drop a .yaml file here, or click to choose one</div>
+           <textarea id="eyaml" spellcheck="false"
+             placeholder="paste a campaign brief in YAML…">${esc(b.text || '')}</textarea>
+           <div class="sugacts"><button id="eparse">Use this YAML</button></div>`}
+      ${b.error ? `<div class="note err" style="margin-top:10px">${esc(b.error)}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+function engStep2(sc, perMarket, mkts, total, s){
+  const heavy = total > 400;
+  return `<div class="estep ${perMarket ? 'done' : ''}">
+    <div class="esteph"><span class="estepn">2</span>
+      <div><h3>Schedule</h3><span class="sub">how long, and how much per day</span></div>
+      <div class="right">
+        <span class="ebadge ${s.ffmpeg ? 'live' : 'off'}"
+          >${s.ffmpeg ? 'ffmpeg ready' : 'no ffmpeg'}</span>
+      </div>
+    </div>
+    <div class="estepb"><div class="esched">
+      <div class="enum"><label for="edays">Duration (days)</label>
+        <input id="edays" type="number" min="1" max="90" value="${sc.days}"></div>
+      <div class="enum"><label for="eimg">Images / day</label>
+        <input id="eimg" type="number" min="0" max="12" value="${sc.ipd}"></div>
+      <div class="enum"><label for="evid">Videos / day</label>
+        <input id="evid" type="number" min="0" max="12" value="${sc.vpd}"></div>
+      <div class="enum"><label for="estart">Starts</label>
+        <input id="estart" type="date" value="${esc(sc.start)}"></div>
+      <div class="emath">
+        <div><b>${perMarket}</b> posts per market per product
+          &nbsp;·&nbsp; <b>${total}</b> in total</div>
+        <div>Counts are the publishing rate <b>across</b> all four channels,
+          not per channel.</div>
+        <div>Generative calls: <b>${Math.max(ENG.products.length, 1) * mkts.length * 4}</b>
+          at most — one master per channel, every date and crop composed from it.</div>
+        ${heavy ? `<div class="warn">That is a lot of files. Consider a shorter window first.</div>` : ''}
+      </div>
+    </div></div>
+  </div>`;
+}
+
+function engStep3(prods, mkts){
+  if (!prods.length) return '';
+  return `<div class="estep ${ENG.products.length ? 'done' : ''}">
+    <div class="esteph"><span class="estepn">3</span>
+      <div><h3>Products</h3><span class="sub">each gets its own master tab,
+        across every market in the brief</span></div>
+      <div class="right"><button id="eall">${
+        ENG.products.length === prods.length ? 'Clear all' : 'Select all'}</button></div>
+    </div>
+    <div class="estepb"><div class="eprods">
+      ${prods.map(p => `
+        <div class="eprod ${ENG.products.includes(p.id) ? 'on' : ''}" data-prod="${esc(p.id)}">
+          <span class="tick">✓</span>
+          <div style="min-width:0">
+            <b>${esc(p.name || p.id)}</b>
+            <span class="cat">${esc(p.id)}</span>
+            <div class="mkts">${mkts.map(m => `
+              <div class="mkt"><code>${esc(m.locale)}</code>
+                <span>${esc(m.region || '')}${m.audience ? ' · ' + esc(m.audience) : ''}</span>
+              </div>`).join('')}</div>
+          </div>
+        </div>`).join('')}
+    </div></div>
+  </div>`;
+}
+
+function engLog(){
+  const d = ENG.data || {};
+  return `<div class="elog" id="elog">${esc((d.lines || []).join('\n'))}</div>`;
+}
+
+/* ---------------- master tabs, one per product ---------------- */
+
+function engMasters(){
+  const d = ENG.data;
+  if (!d || !(d.order || []).length) return '';
+  if (!ENG.tab || !d.order.includes(ENG.tab)) ENG.tab = d.order[0];
+  const cur = d.products[ENG.tab] || {};
+
+  return `
+    <div class="mtabs" id="mtabs">${d.order.map(pid => {
+      const p = d.products[pid] || {};
+      const n = p.summary ? p.summary.slots : (p.plan ? p.plan.totals.slots : 0);
+      const busy = d.current === pid && d.running;
+      return `<button data-mtab="${esc(pid)}" class="${pid === ENG.tab ? 'on' : ''}">
+        ${busy ? '<span class="busy"></span>' : ''}${esc(pid)}
+        <span class="n">${n}</span></button>`;
+    }).join('')}</div>
+    ${engMaster(ENG.tab, cur)}`;
+}
+
+function engMaster(pid, p){
+  if (p.error) return `<div class="note err" style="margin-top:14px">${esc(p.error)}</div>`;
+  if (!p.plan) return `<div class="anloading">Planning ${esc(pid)}…</div>`;
+
+  const s = p.summary;
+  const t = p.plan.totals;
+  const locales = Object.keys(p.plan.markets);
+  const loc = locales[0];
+  const doc = p.plan.markets[loc];
+  const chans = Object.keys(doc.channels);
+  const openCh = ENG.chan[pid] && chans.includes(ENG.chan[pid]) ? ENG.chan[pid] : chans[0];
+
+  return `
+    <div class="mkpis">
+      <div class="mkpi"><div class="k">Slots</div><div class="v">${s ? s.slots : t.slots}</div></div>
+      <div class="mkpi"><div class="k">Images</div><div class="v">${s ? s.images : t.images}</div></div>
+      <div class="mkpi"><div class="k">Videos</div><div class="v">${s ? s.videos + '/' + s.videos_planned : t.videos}</div></div>
+      <div class="mkpi"><div class="k">Generative calls</div><div class="v">${s ? s.generative_calls : t.generative_calls}</div></div>
+      ${s ? `<div class="mkpi"><div class="k">Clean</div>
+        <div class="v" style="color:var(--pass)">${(s.counts||{}).pass || 0}</div></div>
+      <div class="mkpi"><div class="k">Review</div>
+        <div class="v" style="color:var(--review)">${(s.counts||{}).review || 0}</div></div>
+      <div class="mkpi"><div class="k">Seconds</div><div class="v">${s.seconds}</div></div>` : ''}
+    </div>
 
     <div class="anbar">
-      <div class="chtabs">${d.channels.map(c => `
-        <button data-ch="${esc(c.id)}" class="${c.id===d.channel?'on':''}"
-          ><span class="cdot"></span>${esc(c.name)}</button>`).join('')}
+      <div class="chtabs" id="echans">${chans.map(c => `
+        <button data-ech="${esc(c)}" class="${c === openCh ? 'on' : ''}"
+          ><span class="cdot"></span>${esc(doc.channels[c].name)}</button>`).join('')}
       </div>
-      <div class="anmkt"><label for="anlocale">Market</label>
-        <select id="anlocale">${d.locales.map(l =>
-          `<option${l===d.locale?' selected':''}>${esc(l)}</option>`).join('')}
+      <div class="anmkt"><label for="eloc">Market</label>
+        <select id="eloc">${locales.map(l =>
+          `<option${l === (ENG.loc || loc) ? ' selected' : ''}>${esc(l)}</option>`).join('')}
         </select></div>
-      <span class="ansyn">SYNTHETIC</span>
-      <span class="anapi">${esc(ch.api)}</span>
     </div>
 
-    ${internalHtml(cal, ch)}
-    ${externalHtml(ex)}
-    ${suggestHtml(rep.suggestion)}`;
-
-  $('#anlocale').addEventListener('change', (e) => {
-    AN.locale = e.target.value; AN.sample = null; loadInsights(true);
-  });
+    ${engChannel(p, ENG.loc && locales.includes(ENG.loc) ? ENG.loc : loc, openCh)}`;
 }
 
-/* ---------------- internal: our own posts, as a calendar --------------- */
+function engChannel(p, loc, ch){
+  const doc = p.plan.markets[loc];
+  const c = doc.channels[ch];
+  if (!c) return '';
+  const disc = c.discovery || {};
 
-function internalHtml(cal, ch){
-  const t = cal.totals;
-  return `<div class="ansec">
-    <div class="ansech"><h3>Internal &mdash; what we posted</h3>
-      <span class="src">${esc(ch.name)} · ${esc(cal.start)} → ${esc(cal.end)}
-        · ${cal.days} days</span></div>
-    <div class="ankpis">
-      <div class="ankpi"><div class="k">Posts</div>
-        <div class="v">${t.posts}</div><div class="d">in ${cal.days} days</div></div>
-      <div class="ankpi"><div class="k">${esc(ch.metric)}</div>
-        <div class="v">${fmt(t.impressions)}</div><div class="d">total</div></div>
-      <div class="ankpi"><div class="k">Engagement</div>
-        <div class="v">${t.engagement_rate}%</div>
-        <div class="d">impression-weighted</div></div>
-      <div class="ankpi"><div class="k">CTR</div>
-        <div class="v">${t.ctr}%</div><div class="d">impression-weighted</div></div>
-      <div class="ankpi"><div class="k">Saves</div>
-        <div class="v">${fmt(t.saves)}</div><div class="d">total</div></div>
-    </div>
-    <div class="ansecb">${calendarHtml(cal)}</div>
-  </div>`;
-}
-
-function calendarHtml(cal){
-  const byDate = {};
-  for (const p of cal.posts) (byDate[p.date] ||= []).push(p);
-
-  // Pad to a Monday so the columns are weekdays. Without this the grid is
-  // seven cells wide but tells you nothing about weekday vs weekend, which
-  // is most of the reason to draw a calendar rather than a list.
-  const start = new Date(cal.start + 'T00:00:00');
-  const end   = new Date(cal.end   + 'T00:00:00');
-  const lead  = (start.getDay() + 6) % 7;
-
-  const cells = [];
-  for (let i = 0; i < lead; i++) cells.push(`<div class="calday pad"></div>`);
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const iso = d.toISOString().slice(0, 10);
-    const posts = byDate[iso] || [];
-    const hot = posts.some(p => p.id === cal.best_id);
-    cells.push(`<div class="calday${hot ? ' hot' : ''}">
-      <span class="dnum">${d.getDate()}</span>
-      ${posts.map(p => `
-        <button class="calpost${p.id === cal.best_id ? ' best' : ''}"
-                data-post="${esc(p.id)}" title="${esc(p.caption)}">
-          ${p.thumb ? `<img src="/out/${esc(p.thumb)}" alt="" loading="lazy">`
-                    : `<img alt="">`}
-          <span class="cpt"><span class="cpr">${esc(p.ratio)}</span>
-            <span class="cpv">${fmt(p.impressions)}</span></span>
-        </button>`).join('')}
-    </div>`);
-  }
-
-  return `<div class="calgrid">
-    ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
-       .map(x => `<div class="caldow">${x}</div>`).join('')}
-    ${cells.join('')}
-  </div>`;
-}
-
-/* ---------------- external: the market, regardless of us --------------- */
-
-function dial(v){
-  // 0-100 on a 64px ring. An arc rather than a bar because a virality score
-  // is a single bounded reading, and a bar invites comparison against the
-  // bars next to it that the number does not support.
-  const r = 26, c = 2 * Math.PI * r;
-  const hue = v >= 66 ? '#e34850' : v >= 33 ? '#e68619' : '#2680eb';
-  return `<div class="vdial"><svg width="64" height="64" viewBox="0 0 64 64">
-    <circle cx="32" cy="32" r="${r}" fill="none" stroke="#3b3b3b" stroke-width="6"/>
-    <circle cx="32" cy="32" r="${r}" fill="none" stroke="${hue}" stroke-width="6"
-      stroke-linecap="round" stroke-dasharray="${(c*v/100).toFixed(1)} ${c.toFixed(1)}"/>
-  </svg><span class="vnum">${v}</span></div>`;
-}
-
-function externalHtml(ex){
-  const maxVol = Math.max(...ex.trends.map(t => t.volume), 1);
-  const top = ex.trends[0] || {};
-  return `<div class="ansec">
-    <div class="ansech"><h3>External &mdash; what the market is doing</h3>
-      <span class="src">public APIs + scraping · ${esc(ex.locale)}</span></div>
-    <div class="ansecb"><div class="excols">
-
-      <div>
-        <div class="vmeter">${dial(ex.virality)}
-          <div class="vtext">
-            <div class="vlab">Virality meter</div>
-            <div class="vterm">${esc(top.term || '—')}</div>
-            <div class="vsub">Velocity ${top.velocity > 0 ? '+' : ''}${top.velocity}×
-              week over week on ${fmt(top.volume || 0)} searches. The score is
-              velocity normalised against the range seen across all markets,
-              not raw volume &mdash; a term everyone already uses is not a
-              trend.</div>
-          </div>
-        </div>
-        ${ex.trends.map(t => `
-          <div class="trend">
-            <div><span class="tterm">${esc(t.term)}</span>
-              <span class="tkind">${esc(t.kind)}</span>
-              <div class="tbar"><i style="width:${(t.volume/maxVol*100).toFixed(0)}%"></i></div>
-            </div>
-            <span class="tvol">${fmt(t.volume)}</span>
-            <span class="tvel ${t.velocity >= 0 ? 'up' : 'dn'}"
-              >${t.velocity > 0 ? '+' : ''}${t.velocity}×</span>
-            ${spark(t.spark, t.velocity >= 0)}
+  return `
+    <div class="ansec">
+      <div class="ansech"><h3>Look-alikes found</h3>
+        <span class="src">${esc(disc.backend || '')}${disc.cached ? ' · cached' : ''}
+          · ${disc.count} comparable posts in ${esc(loc)}</span>
+        <span class="ebadge ${disc.synthetic ? 'syn' : 'live'}"
+          >${disc.synthetic ? 'SYNTHETIC' : 'OBSERVED'}</span>
+      </div>
+      <div class="ansecb">
+        ${disc.fell_back_because ? `<div class="note err" style="margin:0 0 11px">
+          Live discovery failed, so this fell back to generated data:
+          <code>${esc(disc.fell_back_because)}</code></div>` : ''}
+        <div class="lals">${(c.lookalikes || []).map(l => `
+          <div class="lal">
+            <div class="who"><div class="h">${esc(l.handle || l.brand || '—')}</div>
+              <div class="t">${esc(l.title || '')}</div></div>
+            <div class="n">${fmt(l.views || 0)}</div>
+            <div class="n">${l.engagement_rate || 0}%</div>
+            <div class="fmt ${esc(l.format)}">${esc(l.format)}</div>
+            ${l.evidence_url
+              ? `<a class="ev" href="${esc(l.evidence_url)}" target="_blank" rel="noopener">open ↗</a>`
+              : `<span class="noev">no link</span>`}
           </div>`).join('')}
+        </div>
       </div>
-
-      <div>
-        <div class="samphead" style="margin-bottom:9px">Where</div>
-        <div class="exlist">${ex.locations.map(l => `
-          <div class="exrow"><span class="n">${esc(l.city)}</span>
-            <span class="p">${l.share}%</span>
-            <span class="exbar"><i style="width:${Math.min(100,l.share*3).toFixed(0)}%"></i></span>
-          </div>`).join('')}</div>
-
-        <div class="samphead" style="margin:18px 0 9px">Who</div>
-        <div class="exlist">${ex.audience.map(a => `
-          <div class="exrow"><span class="n">${esc(a.bucket)}</span>
-            <span class="p">${a.share}%</span>
-            <span class="exbar"><i style="width:${Math.min(100,a.share*2).toFixed(0)}%"></i></span>
-          </div>`).join('')}</div>
-        <div class="sampfacts" style="margin-top:11px">
-          <span>${ex.female_share}% female · skew from channel norms, not
-            declared demographics</span></div>
-      </div>
-
-    </div></div>
-  </div>`;
-}
-
-/* ---------------- the thing the two sources are for -------------------- */
-
-function suggestHtml(s){
-  const samp = AN.sample;
-  return `<div class="ansec">
-    <div class="ansech"><h3>Suggested surface</h3>
-      <span class="src">internal history × external trend</span>
-      <span class="sugconf ${esc(s.confidence)}">${esc(s.confidence)} confidence</span>
     </div>
-    <div class="ansecb"><div class="sug">
 
-      <div>
-        <div class="sugprompt">${esc(s.surface)}</div>
-        <ol class="sugwhy">${s.why.map(w => `
-          <li><span class="tag ${esc(w.source)}">${esc(w.source)}</span>
-            <span>${esc(w.text)}</span></li>`).join('')}
-        </ol>
-        <div class="sampfacts" style="margin-top:12px">
-          <span>Produce in this order:
-            <b>${s.ratio_order.map(esc).join(' → ')}</b></span>
-          <span>Adopting rewrites every product's surface prompt, turns
-            <b>regenerate_surface</b> on so the prompt actually reaches the
-            model, and reorders the placements. Nothing is written to disk
-            until you press Save, so reloading the brief undoes it.</span>
-        </div>
-        <div class="sugacts">
-          <button id="ansample" ${AN.busy ? 'disabled' : ''}
-            >${AN.busy ? '<span class="spin"></span>Rendering…'
-                       : 'Render one sample'}</button>
-          <button id="anadopt" class="primary">Adopt into brief</button>
-        </div>
+    <div class="ansec">
+      <div class="ansech"><h3>Strategy</h3>
+        <span class="src">${esc(c.placement)}</span>
+        <span class="sugconf ${c.discovery.synthetic ? 'medium' : 'high'}"
+          >${esc(c.dominant_format)}-led</span>
       </div>
+      <div class="ansecb"><div class="strat">
+        <div>
+          <div class="stratsurf">${esc(c.surface)}</div>
+          <div class="sampfacts" style="margin-bottom:12px">
+            <span>${esc(c.positioning)}</span>
+            <span>Produce in this order: <b>${(c.ratio_order || []).map(esc).join(' → ')}</b></span>
+            <span><b>${c.cadence.images}</b> images and <b>${c.cadence.videos}</b> videos
+              scheduled here, from <b>one</b> generative call.</span>
+          </div>
+          <ol class="sugwhy">${(c.why || []).map(w => `
+            <li><span class="tag ${w.source === 'lookalike' ? 'external'
+                                 : w.source === 'our-history' ? 'internal'
+                                 : w.source === 'warning' ? 'conflict' : 'agreement'}"
+              >${esc(w.source)}</span>
+              <span>${esc(w.text)}${w.url
+                ? ` <a href="${esc(w.url)}" target="_blank" rel="noopener">↗</a>` : ''}</span></li>`).join('')}
+          </ol>
+        </div>
+        <div class="stratbox">
+          <h4>Hooks worth borrowing</h4>
+          <ul class="hooklist">${(c.hooks || []).map(h => `
+            <li>${esc(h.text)}
+              <span class="m">${esc(h.from)} · ${fmt(h.views)} views · ${h.engagement_rate}%
+                ${h.url ? `<a href="${esc(h.url)}" target="_blank" rel="noopener">↗</a>` : ''}</span>
+            </li>`).join('')}</ul>
+          <h4 style="margin-top:15px">Hashtags</h4>
+          <div class="chips">${(c.hashtags || []).map(t => `<code>${esc(t)}</code>`).join('')}</div>
+        </div>
+      </div></div>
+    </div>
 
-      <div class="sampbox">
-        <div class="samphead">Sample &mdash; one creative</div>
-        <div class="sampshot">${
-          samp && samp.path
-            ? `<img src="/out/${esc(samp.path)}?t=${Date.now()}" alt="sample creative">`
-            : `<span class="ph">${AN.busy
-                 ? 'rendering one product × one market × one ratio…'
-                 : samp && samp.error ? esc(samp.error)
-                 : 'Nothing rendered yet.\nOne product, one market, one ratio —\nnot the eighteen a full run makes.'}</span>`
-        }</div>
-        ${samp && samp.path ? `<div class="sampfacts">
-          <span>origin <b>${esc(samp.origin)}</b> · provider
-            <b>${esc(samp.provider)}</b></span>
-          <span>compliance <b>${samp.score}</b>/100 ·
-            <b>${esc(samp.verdict)}</b></span>
-          <span>${samp.seconds}s · written to <b>.cache/samples/</b>, never
-            to output/</span></div>` : ''}
+    <div class="ansec">
+      <div class="ansech"><h3>Schedule</h3>
+        <span class="src">${(c.slots || []).length} posts · ${esc(loc)} · ${esc(c.name)}</span>
       </div>
+      <div class="ansecb">
+        <div class="slotgrid">${(c.slots || []).map(engSlot).join('')}</div>
+      </div>
+    </div>`;
+}
 
-    </div></div>
+function engSlot(s){
+  const badge = {pass: 'b-pass', review: 'b-review', block: 'b-block'}[s.verdict] || '';
+  return `<div class="slot">
+    <div class="sh"><span>${esc(s.date)}</span><span>${esc(s.ratio)}</span>
+      <span class="kind ${s.kind === 'video' ? 'video' : ''}">${esc(s.kind)}</span></div>
+    <div class="shot">${
+      s.video
+        // #t=2 so the poster frame is two seconds in. Frame 0 is inside the
+        // fade-in, so without it every video tile is a black rectangle.
+        ? `<video src="/out/${esc(s.video)}#t=2" muted loop playsinline
+             preload="metadata"
+             onmouseover="this.play()" onmouseout="this.pause()"></video>
+           <span class="vbadge">${s.video_seconds || 0}s</span>`
+        : s.produced
+          ? `<img src="/out/${esc(s.produced)}" alt="" loading="lazy">`
+          : `<span class="ph">${s.error ? esc(s.error)
+               : s.video_error ? esc(s.video_error) : 'not produced yet'}</span>`
+    }</div>
+    <div class="cap">${esc(s.caption || '')}</div>
+    <div class="sf">${s.verdict
+      ? `<span class="badge ${badge}">${esc(s.verdict)}</span>` : ''}
+      <span class="sc">${s.score || ''}</span></div>
   </div>`;
 }
 
-/* ---------------- interaction ------------------------------------------ */
+/* ---------------- interaction ---------------- */
+
+function wireEngine(){
+  const pane = $('#anpane');
+  const sel = pane.querySelector('#ebrief');
+  if (sel) sel.addEventListener('change', async (e) => {
+    await engineUseBrief(e.target.value); paintEngine();
+  });
+  const loc = pane.querySelector('#eloc');
+  if (loc) loc.addEventListener('change', (e) => {
+    ENG.loc = e.target.value; paintEngine();
+  });
+  // Numbers repaint the cost line as you type. The whole point of putting the
+  // arithmetic on screen is that it is there BEFORE the button that spends it.
+  ['edays', 'eimg', 'evid', 'estart'].forEach(id => {
+    const el = pane.querySelector('#' + id);
+    if (el) el.addEventListener('input', () => paintEngine());
+  });
+  const drop = pane.querySelector('#edrop');
+  if (drop) {
+    drop.addEventListener('click', () => $('#filepick2').click());
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+    drop.addEventListener('drop', e => {
+      e.preventDefault(); drop.classList.remove('over');
+      const f = e.dataTransfer.files[0];
+      if (f) engReadFile(f);
+    });
+  }
+}
+
+/* The YAML file input. Cleared after every read, or picking the same file
+   twice in a row fires no change event and looks like the app ignored you. */
+$('#filepick2').addEventListener('change', (e) => {
+  const f = e.target.files[0];
+  if (f) engReadFile(f);
+  e.target.value = '';
+});
+
+function engReadFile(file){
+  const fr = new FileReader();
+  fr.onload = () => {
+    ENG.source = 'paste';
+    ENG.brief = {path: file.name, text: String(fr.result), data: null, error: ''};
+    paintEngine();
+    const ta = $('#eyaml');
+    if (ta) { ta.value = String(fr.result); }
+    engineParsePasted();
+  };
+  fr.readAsText(file);
+}
 
 $('#anpane').addEventListener('click', async (e) => {
-  const ch = e.target.closest('[data-ch]');
-  if (ch) {
-    if (ch.dataset.ch === AN.channel) return;
-    AN.channel = ch.dataset.ch; AN.sample = null;
-    return loadInsights(true);
+  const src = e.target.closest('[data-src]');
+  if (src) { ENG.source = src.dataset.src; return paintEngine(); }
+
+  const prod = e.target.closest('[data-prod]');
+  if (prod) {
+    const id = prod.dataset.prod;
+    const i = ENG.products.indexOf(id);
+    if (i >= 0) ENG.products.splice(i, 1); else ENG.products.push(id);
+    return paintEngine();
   }
+  if (e.target.closest('#eall')) {
+    const all = engProducts().map(p => p.id);
+    ENG.products = ENG.products.length === all.length ? [] : all;
+    return paintEngine();
+  }
+  if (e.target.closest('#eparse')) return engineParsePasted();
+  if (e.target.closest('#erun')) return engRun();
 
-  const post = e.target.closest('[data-post]');
-  if (post) return openPost(post.dataset.post);
+  const mt = e.target.closest('[data-mtab]');
+  if (mt) { ENG.tab = mt.dataset.mtab; return paintEngine(); }
 
-  if (e.target.closest('#ansample')) return renderSample();
-  if (e.target.closest('#anadopt'))  return adoptSuggestion();
+  const ec = e.target.closest('[data-ech]');
+  if (ec) { ENG.chan[ENG.tab] = ec.dataset.ech; return paintEngine(); }
 });
 
-/* One render, not eighteen. "Act on a suggestion" has to mean *see it*
-   first, and a full run is eighteen deliverables and two paid model calls;
-   this is one of each, so trying a suggestion costs about what looking at it
-   is worth. */
-async function renderSample(){
-  const s = AN.d && AN.d.report.suggestion;
-  if (!s || AN.busy) return;
-  AN.busy = true; AN.sample = null; paintInsights();
+async function engRun(){
+  if (ENG.running || !ENG.products.length) return;
+  const sc = engSchedule();
+  ENG.running = true; ENG.data = null; paintEngine();
 
-  const q = new URLSearchParams({
-    path: AN.path, surface: s.surface, locale: AN.locale,
-    ratio: s.ratio_order[0] || '', provider: currentProvider(),
-  });
   let r;
-  try { r = await (await fetch('/api/sample?' + q)).json(); }
-  catch { r = {error:'the render request failed'}; }
+  try {
+    r = await (await fetch('/api/engine/run', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        path: ENG.brief.path, text: ENG.source === 'paste' ? ENG.brief.text : '',
+        products: ENG.products, days: sc.days,
+        images_per_day: sc.ipd, videos_per_day: sc.vpd, start: sc.start,
+        provider: currentProvider(), video: true,
+      })})).json();
+  } catch { r = {error: 'the engine could not be started'}; }
 
-  AN.busy = false; AN.sample = r; paintInsights();
-}
-
-function adoptSuggestion(){
-  const s = AN.d && AN.d.report.suggestion;
-  if (!s || !BRIEF) return;
-
-  // Reorder, never drop. Removing a placement because four weeks of data
-  // disliked it is the over-fitting a media team would rightly refuse; the
-  // pipeline still produces every spec, just best-performing first.
-  const order = s.ratio_order || [];
-  BRIEF.aspect_ratios = (BRIEF.aspect_ratios || []).slice()
-    .sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
-
-  for (const p of (BRIEF.products || [])) {
-    p.surface = s.surface;
-    // Without this the prompt is written into a brief that never sends it:
-    // a product reused as-shot ignores its surface entirely. Adopting a
-    // suggestion that silently does nothing is worse than not offering one.
-    if (!p.regenerate_product) p.regenerate_surface = true;
+  if (r.error) {
+    ENG.running = false;
+    ENG.data = {lines: [r.error], order: [], products: {}};
+    return paintEngine();
   }
-
-  renderForm();
-  showPane('brief');
-  const b = $('#anadopt');
-  if (b) { b.textContent = 'Adopted'; b.classList.add('done'); }
+  ENG.poll = setInterval(engTick, 700);
+  engTick();
 }
 
-/* The modal is the second half of the calendar: the grid shows cadence and
-   one number, because 28 cells with six numbers each is unreadable. The rest
-   is one click away rather than crammed in. */
-function openPost(id){
-  const cal = AN.d && AN.d.report.calendar;
-  const p = cal && cal.posts.find(x => x.id === id);
-  if (!p) return;
-  const stat = (k, v) => `<div class="pmstat"><div class="k">${k}</div>
-    <div class="v">${v}</div></div>`;
-
-  $('#postmodal').innerHTML = `<div class="pmcard">
-    <div class="pmhead"><b>${esc(p.date)}</b>
-      <span class="tag">${esc(p.ratio)} · ${esc(p.placement)}</span>
-      <span class="ansyn">SYNTHETIC</span>
-      <button class="x" data-close aria-label="close">✕</button></div>
-    <div class="pmbody">
-      <div class="pmshot">${p.thumb
-        ? `<img src="/out/${esc(p.thumb)}" alt="post creative">`
-        : '<span class="ph">no image</span>'}</div>
-      <div>
-        <div class="pmstats">
-          ${stat('Impressions', fmt(p.impressions))}
-          ${stat('Engagement', p.engagement_rate + '%')}
-          ${stat('CTR', p.ctr + '%')}
-          ${stat('Saves', fmt(p.saves))}
-          ${stat('Comments', fmt(p.comments))}
-          ${stat('Shares', fmt(p.shares))}
-          ${p.watch_through ? stat('Watch-through', p.watch_through + '%')
-                              + '<div class="pmstat"></div>' : ''}
-        </div>
-        <div class="pmmeta">${esc(p.caption)}<br>
-          Treatment: <code>${esc(p.treatment)}</code><br>
-          ${p.id === cal.best_id
-            ? 'Best post of the period, by engagement × impressions.'
-            : ''}</div>
-      </div>
-    </div>
-  </div>`;
-  $('#postmodal').hidden = false;
+async function engTick(){
+  let d;
+  try { d = await (await fetch('/api/engine/progress')).json(); }
+  catch { return; }
+  ENG.data = d;
+  ENG.running = d.running;
+  if (!d.running) { clearInterval(ENG.poll); ENG.poll = null; }
+  paintEngine();
+  const log = $('#elog');
+  if (log) log.scrollTop = log.scrollHeight;
 }
-
-$('#postmodal').addEventListener('click', (e) => {
-  if (e.target.id === 'postmodal' || e.target.closest('[data-close]'))
-    $('#postmodal').hidden = true;
-});
 
 document.querySelectorAll('.panel .tab').forEach(t =>
   t.addEventListener('click', () => showTab(t.dataset.tab)));

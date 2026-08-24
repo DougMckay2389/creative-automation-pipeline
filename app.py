@@ -39,7 +39,9 @@ from urllib.parse import parse_qsl, unquote, urlparse
 from urllib.request import Request, urlopen
 
 from pipeline.brief import BriefError, load_brief
-from pipeline import insights
+from pipeline import engine, insights, motion
+from pipeline.discovery import CHANNELS, CHANNEL_NAMES, discovery_status
+from pipeline.discovery import default_discovery as _default_discovery
 from pipeline.env import load_dotenv
 from pipeline.checks import preflight_brief
 from pipeline.providers import (CREDENTIALS, default_provider,
@@ -317,6 +319,181 @@ def _render_sample(brief, product, market, ratio, surface: str,
         "seconds": round(time.monotonic() - t0, 1),
     }
 
+# --------------------------------------------------------------------------
+# The social content engine
+#
+# Kept alongside the pipeline run rather than replacing it: the CLI run is the
+# thing a scheduler calls, and the engine is a campaign planner that happens
+# to use it. They share STATE and the same "one run at a time" rule, because
+# they compete for the same provider quota and the same output folder.
+# --------------------------------------------------------------------------
+
+# `products` is keyed by product id and holds {plan, summary} for each one
+# that has been run, because the UI gives every product its own master tab and
+# those tabs have to survive the next product being processed.
+ENGINE: dict = {"running": False, "lines": [], "products": {}, "order": [],
+                "current": "", "error": None, "events": [], "seq": 0}
+ENGINE_LOCK = threading.Lock()
+
+
+def _engine_event(rec: dict) -> None:
+    """Collected for the UI, and trimmed so a long run cannot grow forever."""
+    with ENGINE_LOCK:
+        ENGINE["seq"] += 1
+        rec = dict(rec, seq=ENGINE["seq"])
+        ENGINE["events"].append(rec)
+        if len(ENGINE["events"]) > 4000:
+            del ENGINE["events"][:1000]
+        line = _engine_line(rec)
+        if line:
+            ENGINE["lines"].append(line)
+
+
+def _engine_line(rec: dict) -> str:
+    ev = rec.get("event")
+    if ev == "discover":
+        return f"discover  {rec['locale']:6} {rec['channel']}"
+    if ev == "discovered":
+        tag = "synthetic" if rec.get("synthetic") else rec.get("backend", "")
+        cache = " (cached)" if rec.get("cached") else ""
+        return (f"found     {rec['locale']:6} {rec['channel']:10} "
+                f"{rec['count']} look-alikes via {tag}{cache}")
+    if ev == "strategy":
+        return (f"strategy  {rec['locale']:6} {rec['slots']} slots, "
+                f"{rec['calls']} generative call(s)")
+    if ev == "master":
+        return f"master    {rec['locale']:6} {rec['channel']:10} {rec['surface'][:44]}"
+    if ev == "mastered":
+        return f"          {rec['locale']:6} {rec['channel']:10} {rec['origin']}"
+    if ev == "slot":
+        v = (rec.get("verdict") or "").upper()
+        vid = " +mp4" if rec.get("video") else ""
+        return (f"{v:8}  {rec['date']} {rec['channel']:10} "
+                f"{rec['kind']:5} {rec['ratio']:5} {rec.get('score', 0):3}{vid}")
+    if ev == "slot_error":
+        return f"ERROR     {rec.get('slot','')} {rec.get('error','')}"
+    return ""
+
+
+def _stage_brief(text: str, name: str) -> str:
+    """Write on-screen YAML to a scratch file, exactly as /api/run does.
+
+    Same reasoning: the engine must plan what is on screen without rewriting
+    the user's brief through the YAML emitter, which strips its comments.
+    """
+    scratch_dir = os.path.join(ROOT, ".cache")
+    os.makedirs(scratch_dir, exist_ok=True)
+    p = os.path.join(scratch_dir, f"engine-{os.path.basename(name) or 'brief.yaml'}")
+    with open(p, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    return p
+
+
+def _engine_history(brief) -> dict:
+    """Our own channel performance, folded in as evidence.
+
+    This is what the Analytics tab used to show on its own. It is not a
+    destination any more -- it is one of the two inputs the strategy cites,
+    which is what it was always actually for.
+    """
+    out: dict[str, dict] = {}
+    for m in brief.markets:
+        per_channel: dict[str, dict] = {}
+        for ch in ("tiktok", "instagram", "youtube", "facebook"):
+            # insights knows GA/facebook/tiktok/youtube; instagram rides with
+            # facebook, which is how Meta reports them anyway.
+            key = "facebook" if ch == "instagram" else ch
+            if key not in insights.CHANNEL_IDS:
+                continue
+            try:
+                cal = insights.calendar(m.locale, key, ROOT)
+                ext = insights.external(m.locale, key)
+                sug = insights.suggest(m.locale, key, ROOT)
+            except Exception:                                # noqa: BLE001
+                continue
+            best_ratio, best_er = "", 0.0
+            by_ratio: dict[str, list] = {}
+            for p in cal["posts"]:
+                by_ratio.setdefault(p["ratio"], []).append(p)
+            for r, posts in by_ratio.items():
+                tot = sum(x["impressions"] for x in posts) or 1
+                er = sum(x["engagement_rate"] * x["impressions"] for x in posts) / tot
+                if er > best_er:
+                    best_ratio, best_er = r, round(er, 2)
+            per_channel[ch] = {
+                "synthetic": True,
+                "best_treatment": sug.get("surface", ""),
+                "best_ratio": best_ratio,
+                "best_ratio_er": best_er,
+                "posts": cal["totals"]["posts"],
+                "engagement_rate": cal["totals"]["engagement_rate"],
+                "top_term": ext.get("top_term", ""),
+                "virality": ext.get("virality", 0),
+            }
+        out[m.locale] = per_channel
+    return out
+
+
+def _do_engine(path: str, product_ids: list, days: int, ipd: int, vpd: int,
+               start: str, backend: str, provider: str,
+               render_video: bool) -> None:
+    """Plan then run, per product, on a worker thread.
+
+    Products are processed one after another and each is published to
+    ENGINE["products"] the moment it finishes, so its master tab appears while
+    the next one is still working. Batching them all to the end would mean
+    staring at a log for several minutes with nothing to look at.
+
+    One product failing does not take the others with it. A brief with four
+    products and one bad asset path should give you three campaigns and one
+    clear error, not nothing.
+    """
+    try:
+        brief = load_brief(path)
+        history = _engine_history(brief)
+        for pid in product_ids:
+            with ENGINE_LOCK:
+                ENGINE["current"] = pid
+            _engine_event({"event": "begin", "product": pid,
+                           "days": days, "ipd": ipd, "vpd": vpd})
+            try:
+                planned = engine.plan(
+                    brief, pid, days=days, images_per_day=ipd,
+                    videos_per_day=vpd, root=ROOT, start=start,
+                    backend=backend, history=history, on_event=_engine_event)
+                with ENGINE_LOCK:
+                    ENGINE["products"][pid] = {"plan": planned, "summary": None}
+                    if pid not in ENGINE["order"]:
+                        ENGINE["order"].append(pid)
+                summary = engine.run(
+                    brief, planned,
+                    out_root=os.path.join(ROOT, "output", brief.campaign_id),
+                    root=ROOT, provider_name=provider,
+                    render_video=render_video, on_event=_engine_event)
+                with ENGINE_LOCK:
+                    ENGINE["products"][pid] = {"plan": planned,
+                                               "summary": summary}
+            except Exception as exc:                         # noqa: BLE001
+                traceback.print_exc()
+                msg = f"{type(exc).__name__}: {exc}"
+                _engine_event({"event": "slot_error", "slot": pid, "error": msg})
+                with ENGINE_LOCK:
+                    ENGINE["products"].setdefault(pid, {})["error"] = msg
+                    if pid not in ENGINE["order"]:
+                        ENGINE["order"].append(pid)
+    except Exception as exc:                                 # noqa: BLE001
+        traceback.print_exc()
+        with ENGINE_LOCK:
+            ENGINE["error"] = f"{type(exc).__name__}: {exc}"
+            ENGINE["lines"].append(f"ERROR     {ENGINE['error']}")
+    finally:
+        with ENGINE_LOCK:
+            ENGINE["running"] = False
+            ENGINE["current"] = ""
+        with LOCK:
+            STATE["running"] = False
+
+
 
 def _do_run(brief_path: str, provider: str, regen: bool = False,
             storage: str = "", model: str = "") -> None:
@@ -430,6 +607,30 @@ class Handler(SimpleHTTPRequestHandler):
                                "storages": storage_status(),
                                "stale": _is_stale(),
                                "cwd": ROOT})
+
+        if route == "/api/engine/status":
+            """What the engine can do on THIS machine, before anyone starts."""
+            return self._json({
+                "channels": [{"id": c, "name": CHANNEL_NAMES.get(c, c)}
+                             for c in CHANNELS],
+                "discovery": discovery_status(),
+                "default_discovery": _default_discovery(),
+                "ffmpeg": motion.available(),
+                "ffmpeg_note": motion.why_unavailable(),
+                "running": ENGINE["running"],
+            })
+
+        if route == "/api/engine/progress":
+            with ENGINE_LOCK:
+                return self._json({
+                    "running": ENGINE["running"],
+                    "lines": ENGINE["lines"][-400:],
+                    "error": ENGINE["error"],
+                    "current": ENGINE["current"],
+                    "order": list(ENGINE["order"]),
+                    "products": ENGINE["products"],
+                    "seq": ENGINE["seq"],
+                })
 
         if route == "/api/insights":
             """One channel's history for one market, plus what it suggests.
@@ -931,6 +1132,128 @@ class Handler(SimpleHTTPRequestHandler):
                 "generative": b.generation_count,
                 "preflight": [f.as_dict() for f in preflight_brief(b)],
             })
+
+        if route == "/api/engine/validate":
+            """Does this pasted YAML parse, and what is in it?
+
+            Validated by the SAME loader a run uses, against a scratch file
+            written the same way. "It parsed here" therefore means exactly
+            what it will mean when Run is pressed -- a second, more lenient
+            check in the browser would be a way to promise something the run
+            then refuses.
+            """
+            text = body.get("text") or ""
+            if not text.strip():
+                return self._json({"error": "nothing pasted"}, 200)
+            try:
+                p = _stage_brief(text, "pasted.yaml")
+                b = load_brief(p)
+            except BriefError as exc:
+                return self._json({"error": str(exc)}, 200)
+            except OSError as exc:
+                return self._json({"error": f"could not stage: {exc}"}, 200)
+            return self._json({"path": os.path.relpath(p, ROOT).replace("\\", "/"),
+                               "data": {
+                                   "campaign": {"id": b.campaign_id,
+                                                "name": b.campaign_name,
+                                                "brand": b.brand},
+                                   "products": [{"id": x.id, "name": x.name,
+                                                 "asset": x.asset,
+                                                 "surface": x.surface}
+                                                for x in b.products],
+                                   "markets": [{"locale": m.locale,
+                                                "region": m.region,
+                                                "audience": m.audience,
+                                                "message": m.message}
+                                               for m in b.markets],
+                                   "aspect_ratios": [{"id": r.id} for r in b.ratios],
+                               }})
+
+        if route == "/api/engine/run":
+            """Plan and execute a channel campaign for one product.
+
+            One at a time, and it takes the SAME lock the pipeline run uses:
+            both spend the same provider quota and write into the same output
+            folder, so 'a run is already in progress' has to mean either.
+            """
+            with LOCK:
+                if STATE["running"] or ENGINE["running"]:
+                    return self._json({"error": "a run is already in progress"}, 409)
+                STATE["running"] = True
+            with ENGINE_LOCK:
+                ENGINE.update(running=True, lines=[], products={}, order=[],
+                              current="", error=None, events=[], seq=0)
+
+            p = self._safe(body.get("path", ""))
+            text = body.get("text")
+            if isinstance(text, str) and text.strip():
+                try:
+                    p = _stage_brief(text, body.get("path", "brief.yaml"))
+                except OSError as exc:
+                    with LOCK:
+                        STATE["running"] = False
+                    with ENGINE_LOCK:
+                        ENGINE["running"] = False
+                    return self._json({"error": f"could not stage brief: {exc}"}, 200)
+            if not p or not os.path.isfile(p):
+                with LOCK:
+                    STATE["running"] = False
+                with ENGINE_LOCK:
+                    ENGINE["running"] = False
+                return self._json({"error": "bad path"}, 400)
+
+            def _int(key, default, lo, hi):
+                try:
+                    return max(lo, min(hi, int(body.get(key, default))))
+                except (TypeError, ValueError):
+                    return default
+
+            # Bounded, because the product of these three is how many files
+            # get written, and an unbounded number typed into a form is how a
+            # demo fills a disk.
+            days = _int("days", 7, 1, 90)
+            ipd = _int("images_per_day", 2, 0, 12)
+            vpd = _int("videos_per_day", 1, 0, 12)
+            if days * (ipd + vpd) == 0:
+                with LOCK:
+                    STATE["running"] = False
+                with ENGINE_LOCK:
+                    ENGINE["running"] = False
+                return self._json({"error": "that schedule produces nothing"}, 400)
+
+            # One product or several. "Every product in the brief" is the
+            # normal case for a campaign, and making that a four-click loop
+            # would be the wrong default.
+            wanted = body.get("products")
+            if not isinstance(wanted, list) or not wanted:
+                one = str(body.get("product", "")).strip()
+                wanted = [one] if one else []
+            try:
+                known = {pr.id for pr in load_brief(p).products}
+            except BriefError as exc:
+                with LOCK:
+                    STATE["running"] = False
+                with ENGINE_LOCK:
+                    ENGINE["running"] = False
+                return self._json({"error": str(exc)}, 200)
+            wanted = [str(x) for x in wanted if str(x) in known]
+            if not wanted:
+                with LOCK:
+                    STATE["running"] = False
+                with ENGINE_LOCK:
+                    ENGINE["running"] = False
+                return self._json({"error": "no known product selected"}, 400)
+
+            threading.Thread(target=_do_engine, kwargs=dict(
+                path=p, product_ids=wanted,
+                days=days, ipd=ipd, vpd=vpd,
+                start=str(body.get("start", "")),
+                backend=str(body.get("discovery", "")),
+                provider=str(body.get("provider", "")),
+                render_video=bool(body.get("video", True)),
+            ), daemon=True).start()
+            return self._json({"ok": True, "days": days,
+                               "images_per_day": ipd, "videos_per_day": vpd})
 
         if route == "/api/run":
             with LOCK:
